@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package icarus;
+package etcdserverpb;
 
 option go_package = "github.com/logbn/icarus/internal";
 

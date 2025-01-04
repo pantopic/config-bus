@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	KV_Range_FullMethodName       = "/icarus.KV/Range"
-	KV_Put_FullMethodName         = "/icarus.KV/Put"
-	KV_DeleteRange_FullMethodName = "/icarus.KV/DeleteRange"
-	KV_Txn_FullMethodName         = "/icarus.KV/Txn"
-	KV_Compact_FullMethodName     = "/icarus.KV/Compact"
+	KV_Range_FullMethodName       = "/etcdserverpb.KV/Range"
+	KV_Put_FullMethodName         = "/etcdserverpb.KV/Put"
+	KV_DeleteRange_FullMethodName = "/etcdserverpb.KV/DeleteRange"
+	KV_Txn_FullMethodName         = "/etcdserverpb.KV/Txn"
+	KV_Compact_FullMethodName     = "/etcdserverpb.KV/Compact"
 )
 
 // KVClient is the client API for KV service.
@@ -228,7 +228,7 @@ func _KV_Compact_Handler(srv interface{}, ctx context.Context, dec func(interfac
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var KV_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "icarus.KV",
+	ServiceName: "etcdserverpb.KV",
 	HandlerType: (*KVServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -257,7 +257,7 @@ var KV_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Watch_Watch_FullMethodName = "/icarus.Watch/Watch"
+	Watch_Watch_FullMethodName = "/etcdserverpb.Watch/Watch"
 )
 
 // WatchClient is the client API for Watch service.
@@ -364,7 +364,7 @@ func (x *watchWatchServer) Recv() (*WatchRequest, error) {
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Watch_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "icarus.Watch",
+	ServiceName: "etcdserverpb.Watch",
 	HandlerType: (*WatchServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
@@ -379,11 +379,11 @@ var Watch_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Lease_LeaseGrant_FullMethodName      = "/icarus.Lease/LeaseGrant"
-	Lease_LeaseRevoke_FullMethodName     = "/icarus.Lease/LeaseRevoke"
-	Lease_LeaseKeepAlive_FullMethodName  = "/icarus.Lease/LeaseKeepAlive"
-	Lease_LeaseTimeToLive_FullMethodName = "/icarus.Lease/LeaseTimeToLive"
-	Lease_LeaseLeases_FullMethodName     = "/icarus.Lease/LeaseLeases"
+	Lease_LeaseGrant_FullMethodName      = "/etcdserverpb.Lease/LeaseGrant"
+	Lease_LeaseRevoke_FullMethodName     = "/etcdserverpb.Lease/LeaseRevoke"
+	Lease_LeaseKeepAlive_FullMethodName  = "/etcdserverpb.Lease/LeaseKeepAlive"
+	Lease_LeaseTimeToLive_FullMethodName = "/etcdserverpb.Lease/LeaseTimeToLive"
+	Lease_LeaseLeases_FullMethodName     = "/etcdserverpb.Lease/LeaseLeases"
 )
 
 // LeaseClient is the client API for Lease service.
@@ -618,7 +618,7 @@ func _Lease_LeaseLeases_Handler(srv interface{}, ctx context.Context, dec func(i
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Lease_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "icarus.Lease",
+	ServiceName: "etcdserverpb.Lease",
 	HandlerType: (*LeaseServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -650,11 +650,11 @@ var Lease_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Cluster_MemberAdd_FullMethodName     = "/icarus.Cluster/MemberAdd"
-	Cluster_MemberRemove_FullMethodName  = "/icarus.Cluster/MemberRemove"
-	Cluster_MemberUpdate_FullMethodName  = "/icarus.Cluster/MemberUpdate"
-	Cluster_MemberList_FullMethodName    = "/icarus.Cluster/MemberList"
-	Cluster_MemberPromote_FullMethodName = "/icarus.Cluster/MemberPromote"
+	Cluster_MemberAdd_FullMethodName     = "/etcdserverpb.Cluster/MemberAdd"
+	Cluster_MemberRemove_FullMethodName  = "/etcdserverpb.Cluster/MemberRemove"
+	Cluster_MemberUpdate_FullMethodName  = "/etcdserverpb.Cluster/MemberUpdate"
+	Cluster_MemberList_FullMethodName    = "/etcdserverpb.Cluster/MemberList"
+	Cluster_MemberPromote_FullMethodName = "/etcdserverpb.Cluster/MemberPromote"
 )
 
 // ClusterClient is the client API for Cluster service.
@@ -859,7 +859,7 @@ func _Cluster_MemberPromote_Handler(srv interface{}, ctx context.Context, dec fu
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Cluster_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "icarus.Cluster",
+	ServiceName: "etcdserverpb.Cluster",
 	HandlerType: (*ClusterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -888,14 +888,14 @@ var Cluster_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Maintenance_Alarm_FullMethodName      = "/icarus.Maintenance/Alarm"
-	Maintenance_Status_FullMethodName     = "/icarus.Maintenance/Status"
-	Maintenance_Defragment_FullMethodName = "/icarus.Maintenance/Defragment"
-	Maintenance_Hash_FullMethodName       = "/icarus.Maintenance/Hash"
-	Maintenance_HashKV_FullMethodName     = "/icarus.Maintenance/HashKV"
-	Maintenance_Snapshot_FullMethodName   = "/icarus.Maintenance/Snapshot"
-	Maintenance_MoveLeader_FullMethodName = "/icarus.Maintenance/MoveLeader"
-	Maintenance_Downgrade_FullMethodName  = "/icarus.Maintenance/Downgrade"
+	Maintenance_Alarm_FullMethodName      = "/etcdserverpb.Maintenance/Alarm"
+	Maintenance_Status_FullMethodName     = "/etcdserverpb.Maintenance/Status"
+	Maintenance_Defragment_FullMethodName = "/etcdserverpb.Maintenance/Defragment"
+	Maintenance_Hash_FullMethodName       = "/etcdserverpb.Maintenance/Hash"
+	Maintenance_HashKV_FullMethodName     = "/etcdserverpb.Maintenance/HashKV"
+	Maintenance_Snapshot_FullMethodName   = "/etcdserverpb.Maintenance/Snapshot"
+	Maintenance_MoveLeader_FullMethodName = "/etcdserverpb.Maintenance/MoveLeader"
+	Maintenance_Downgrade_FullMethodName  = "/etcdserverpb.Maintenance/Downgrade"
 )
 
 // MaintenanceClient is the client API for Maintenance service.
@@ -1222,7 +1222,7 @@ func _Maintenance_Downgrade_Handler(srv interface{}, ctx context.Context, dec fu
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Maintenance_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "icarus.Maintenance",
+	ServiceName: "etcdserverpb.Maintenance",
 	HandlerType: (*MaintenanceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
