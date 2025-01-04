@@ -1,7 +1,6 @@
 package icarus
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,7 +68,6 @@ func TestKv(t *testing.T) {
 			var item2 kv
 			t.Run(`success`, func(t *testing.T) {
 				item2, err := item2.FromBytes(item.key, buf, next, false)
-				fmt.Println(item2.flags)
 				require.Nil(t, err)
 				assert.Equal(t, KV_FLAG_COMPRESSED, item2.flags&KV_FLAG_COMPRESSED)
 				assert.Equal(t, item.revision, item2.revision)

@@ -18,7 +18,8 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 
 func (db dbKv) first(txn *lmdb.Txn, key []byte) (found kv, err error) {
 	buf, err := txn.Get(db.i, key)
-	if err == lmdb.NotFound {
+	if lmdb.IsNotFound(err) {
+		err = nil
 		return
 	}
 	if err != nil {

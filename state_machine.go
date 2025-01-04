@@ -14,6 +14,8 @@ import (
 	"github.com/logbn/icarus/internal"
 )
 
+const Uri = "zongzi://github.com/logbn/icarus"
+
 type stateMachine struct {
 	dbKv       dbKv
 	dbKvEvent  dbKvEvent
@@ -31,7 +33,7 @@ type stateMachine struct {
 func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
 	return func(shardID uint64, replicaID uint64) zongzi.StateMachinePersistent {
 		return &stateMachine{
-			envPath: fmt.Sprintf("%s/data.mdb", dataDir),
+			envPath: fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
 			log:     logger,
 		}
 	}
@@ -44,11 +46,17 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 	if err != nil {
 		return
 	}
-	env, err := lmdb.NewEnv()
-	env.SetMaxDBs(255)
-	env.SetMapSize(int64(1 << 33)) // 8 GB
-	env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
-	err = env.Update(func(txn *lmdb.Txn) (err error) {
+	sm.env, err = lmdb.NewEnv()
+	sm.env.SetMaxDBs(255)
+	sm.env.SetMapSize(int64(1 << 33)) // 8 GB
+	sm.env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
+	err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
+		if sm.dbMeta, index, err = newDbMeta(txn); err != nil {
+			return
+		}
+		if sm.dbStats, err = newDbStats(txn); err != nil {
+			return
+		}
 		if sm.dbKv, err = newDbKv(txn); err != nil {
 			return
 		}
@@ -61,39 +69,16 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 		if sm.dbLeaseKey, err = newDbLeaseKey(txn); err != nil {
 			return
 		}
-		if sm.dbMeta, err = newDbMeta(txn); err != nil {
-			return
-		}
-		if sm.dbStats, err = newDbStats(txn); err != nil {
-			return
-		}
-		index, err = sm.dbMeta.getRevision(txn)
-		if lmdb.IsNotFound(err) {
-			sm.dbMeta.setRevision(txn, 0)
-			sm.dbMeta.setRevisionMin(txn, 0)
-		}
 		return
 	})
 	return
 }
 
-func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader {
-	return &internal.ResponseHeader{
-		Revision:  int64(revision),
-		ClusterId: sm.shardID,
-		MemberId:  sm.replicaID,
-		// TODO: Get access to Term through IRaftEventListener.LeaderInfo
-		RaftTerm: 1,
-	}
-}
-
 func (sm *stateMachine) Update(entries []Entry) []Entry {
-	var cmd uint8
 	var header = sm.responseHeader(0)
-	err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
+	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		for i, ent := range entries {
-			cmd = ent.Cmd[0]
-			switch cmd {
+			switch ent.Cmd[0] {
 			case CMD_KV_PUT:
 				var req = &internal.PutRequest{}
 				if err = proto.Unmarshal(ent.Cmd[1:], req); err != nil {
@@ -102,8 +87,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				}
 				prev, _, err := sm.dbKv.put(txn, ent.Index, uint64(req.Lease), req.Key, req.Value)
 				if err != nil {
-					// TODO: Catch transient errors
-					panic("Storage error: " + err.Error())
+					return err
 				}
 				header.Revision = int64(ent.Index)
 				var res = &internal.PutResponse{
@@ -113,19 +97,21 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					res.PrevKv = prev.ToProto()
 				}
 				entries[i].Result.Data, err = proto.Marshal(res)
-				if err = proto.Unmarshal(ent.Cmd[1:], req); err != nil {
-					slog.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
-					continue
+				if err != nil {
+					return err
 				}
 				entries[i].Result.Value = 1
+				// TODO: Insert kv event
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
 		return
-	})
-	if err != nil {
+	}); err != nil {
+		// TODO: Identify and log transient errors
 		slog.Error(err.Error(), "index", entries[0].Index)
+		panic("Storage error: " + err.Error())
 	}
+	// TODO: Notify watchers
 	return entries
 }
 
@@ -200,8 +186,9 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			}
 			return
 		}); err != nil {
-			slog.Error("Invalid query", "query", fmt.Sprintf("%x", query))
-			return
+			// TODO: Identify and log transient errors
+			slog.Error("Unexpected error", "err", err.Error())
+			panic(err)
 		}
 	}
 	return res
@@ -241,5 +228,15 @@ func (sm *stateMachine) Sync() error {
 }
 
 func (sm *stateMachine) Close() error {
-	return nil
+	return sm.env.Close()
+}
+
+func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader {
+	return &internal.ResponseHeader{
+		Revision:  int64(revision),
+		ClusterId: sm.shardID,
+		MemberId:  sm.replicaID,
+		// TODO: Get access to Term through IRaftEventListener.LeaderInfo
+		RaftTerm: 1,
+	}
 }

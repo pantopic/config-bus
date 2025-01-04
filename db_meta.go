@@ -13,10 +13,10 @@ var (
 	metaKeyRevisionMin = []byte(`rev_min`)
 )
 
-func newDbMeta(txn *lmdb.Txn) (db dbMeta, err error) {
+func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 	db.i, err = txn.OpenDBI("meta", uint(lmdb.Create))
-	_, err = txn.Get(db.i, metaKeyRevision)
-	if err == lmdb.NotFound {
+	index, err = db.getRevision(txn)
+	if lmdb.IsNotFound(err) {
 		err = db.setRevision(txn, 0)
 	}
 	return
