@@ -4,9 +4,10 @@ go 1.23.4
 
 require (
 	github.com/PowerDNS/lmdb-go v1.9.2
+	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang/snappy v0.0.4
-	github.com/logbn/zongzi v0.0.11
+	github.com/logbn/zongzi v0.0.13
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.1
@@ -17,7 +18,6 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/VictoriaMetrics/metrics v1.18.1 // indirect
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
-	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect

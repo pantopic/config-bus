@@ -6,8 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/benbjohnson/clock"
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
@@ -28,6 +30,11 @@ type stateMachine struct {
 	log        *slog.Logger
 	replicaID  uint64
 	shardID    uint64
+	clock      clock.Clock
+
+	statUpdates int
+	statEntries int
+	statTime    time.Duration
 }
 
 func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
@@ -35,6 +42,7 @@ func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMac
 		return &stateMachine{
 			envPath: fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
 			log:     logger,
+			clock:   clock.New(),
 		}
 	}
 }
@@ -76,23 +84,40 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var header = sm.responseHeader(0)
+	var t = sm.clock.Now()
+	var req = &internal.PutRequest{}
+	var res = &internal.PutResponse{}
+	sm.statUpdates++
+	sm.statEntries += len(entries)
+	if sm.statUpdates > 100 {
+		sm.log.Info("StateMachine Stats",
+			"entries", sm.statEntries,
+			"average", sm.statEntries/sm.statUpdates,
+			"uTime", int(sm.statTime.Microseconds())/sm.statUpdates,
+			"eTime", int(sm.statTime.Microseconds())/sm.statEntries)
+		sm.statUpdates = 0
+		sm.statEntries = 0
+		sm.statTime = 0
+	}
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		for i, ent := range entries {
-			switch ent.Cmd[0] {
+			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
-				var req = &internal.PutRequest{}
-				if err = proto.Unmarshal(ent.Cmd[1:], req); err != nil {
-					slog.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
 				prev, _, err := sm.dbKv.put(txn, ent.Index, uint64(req.Lease), req.Key, req.Value)
 				if err != nil {
 					return err
 				}
-				header.Revision = int64(ent.Index)
-				var res = &internal.PutResponse{
-					Header: header,
+				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), req.Key)
+				if err != nil {
+					return err
 				}
+				header.Revision = int64(ent.Index)
+				res.Reset()
+				res.Header = header
 				if req.PrevKv {
 					res.PrevKv = prev.ToProto()
 				}
@@ -108,20 +133,21 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		return
 	}); err != nil {
 		// TODO: Identify and log transient errors
-		slog.Error(err.Error(), "index", entries[0].Index)
+		sm.log.Error(err.Error(), "index", entries[0].Index)
 		panic("Storage error: " + err.Error())
 	}
+	sm.statTime += sm.clock.Since(t)
 	// TODO: Notify watchers
 	return entries
 }
 
 func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 	res = zongzi.GetResult()
-	switch query[0] {
+	switch query[len(query)-1] {
 	case QUERY_KV_RANGE:
 		var req = &internal.RangeRequest{}
-		if err := proto.Unmarshal(query[1:], req); err != nil {
-			slog.Error("Invalid query", "query", fmt.Sprintf("%x", query))
+		if err := proto.Unmarshal(query[:len(query)-1], req); err != nil {
+			sm.log.Error("Invalid query", "query", fmt.Sprintf("%x", query))
 			return
 		}
 		if err := sm.env.View(func(txn *lmdb.Txn) (err error) {
@@ -187,11 +213,11 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			return
 		}); err != nil {
 			// TODO: Identify and log transient errors
-			slog.Error("Unexpected error", "err", err.Error())
+			sm.log.Error("Unexpected error", "err", err.Error())
 			panic(err)
 		}
 	}
-	return res
+	return
 }
 
 func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *Result) {

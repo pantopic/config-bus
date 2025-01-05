@@ -19,6 +19,10 @@ func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 	if lmdb.IsNotFound(err) {
 		err = db.setRevision(txn, 0)
 	}
+	_, err = db.getRevisionMin(txn)
+	if lmdb.IsNotFound(err) {
+		err = db.setRevisionMin(txn, 0)
+	}
 	return
 }
 

@@ -59,7 +59,9 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev kv
 		key:      key,
 		val:      val,
 	}
-	txn.Put(db.i, key, prev.Bytes(val, nil), 0)
+	if ICARUS_FLAG_PATCH_ENABLED {
+		txn.Put(db.i, key, prev.Bytes(val, nil), 0)
+	}
 	txn.Put(db.i, key, next.Bytes(nil, nil), 0)
 	return
 }
@@ -129,14 +131,22 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 	if err != nil {
 		return
 	}
+	defer cur.Close()
 	k, v, err := cur.Get(key, nil, 0)
-	if err != nil {
+	if lmdb.IsNotFound(err) {
+		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
+	}
+	if err != nil && !lmdb.IsNotFound(err) {
 		return
 	}
 	var mod uint64
 	var created uint64
 	var r = bytes.NewReader(nil)
-	for !lmdb.IsNotFound(err) {
+	for {
+		if lmdb.IsNotFound(err) {
+			err = nil
+			break
+		}
 		if bytes.Compare(end, key) > 0 {
 			return
 		}
@@ -186,6 +196,9 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		if len(k) > 0 && created != 0 {
 			var item kv
 			item, err = item.FromBytes(k, v, nil, keysOnly)
+			if err != nil {
+				return
+			}
 			items = append(items, item)
 		}
 		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)

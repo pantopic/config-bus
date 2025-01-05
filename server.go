@@ -26,7 +26,25 @@ func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *int
 	if err != nil {
 		return
 	}
-	val, data, err := s.client.Apply(ctx, append([]byte{CMD_KV_PUT}, b...))
+	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_PUT))
+	if err != nil {
+		return
+	}
+	if val != 1 {
+		err = fmt.Errorf("%s", string(data))
+		return
+	}
+	err = proto.Unmarshal(data, res)
+	return
+}
+
+func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
+	res = &internal.RangeResponse{}
+	b, err := proto.Marshal(req)
+	if err != nil {
+		return
+	}
+	val, data, err := s.client.Read(ctx, append(b, QUERY_KV_RANGE), req.Serializable)
 	if err != nil {
 		return
 	}

@@ -17,8 +17,8 @@ const (
 )
 
 var (
-	ICARUS_FLAG_PATCH_ENABLED       = true
-	ICARUS_FLAG_COMPRESSION_ENABLED = true
+	ICARUS_FLAG_PATCH_ENABLED       = false
+	ICARUS_FLAG_COMPRESSION_ENABLED = false
 )
 
 type kv struct {

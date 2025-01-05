@@ -6,7 +6,7 @@ x-variables:
       context: ../..
       dockerfile: cmd/standalone/Dockerfile
       target: standalone
-    network_mode: "host"
+    network_mode: host
 
 services:
   icarus-0:
@@ -18,11 +18,10 @@ services:
       ICARUS_PORT_RAFT: 17002
       ICARUS_PORT_ZONGZI: 17003
     ports:
-      - 19000
-      - 17001/udp
-      - 17001/tcp
-      - 17002
-      - 17003
+      - 19000:19000
+      - 17001:17001
+      - 17002:17002
+      - 17003:17003
 
   icarus-1:
     <<: *common
@@ -33,11 +32,10 @@ services:
       ICARUS_PORT_RAFT: 17102
       ICARUS_PORT_ZONGZI: 17103
     ports:
-      - 19001
-      - 17101/udp
-      - 17101/tcp
-      - 17102
-      - 17103
+      - 19001:19001
+      - 17101:17101
+      - 17102:17102
+      - 17103:17103
 
   icarus-2:
     <<: *common
@@ -48,8 +46,7 @@ services:
       ICARUS_PORT_RAFT: 17202
       ICARUS_PORT_ZONGZI: 17203
     ports:
-      - 19002
-      - 17201/udp
-      - 17201/tcp
-      - 17202
-      - 17203
+      - 19002:19002
+      - 17201:17201
+      - 17202:17202
+      - 17203:17203

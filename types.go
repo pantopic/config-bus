@@ -7,12 +7,15 @@ import (
 )
 
 const (
-	CMD_KV_PUT uint8 = iota
+	CMD_KV_PUT byte = iota
 	CMD_KV_DELETE_RANGE
 	CMD_KV_TXN
 	CMD_KV_COMPACT
 
-	QUERY_KV_RANGE uint8 = iota
+	QUERY_KV_RANGE byte = iota
+
+	KV_EVENT_TYPE_PUT byte = iota
+	KV_EVENT_TYPE_DELETE
 )
 
 var (

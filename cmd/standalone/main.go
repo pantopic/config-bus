@@ -21,7 +21,6 @@ import (
 
 func main() {
 	flag.Parse()
-	// zongzi.SetLogLevelDebug()
 	ctx := context.Background()
 	log := slog.Default()
 	cfg := getConfig()
@@ -35,6 +34,10 @@ func main() {
 		panic(err)
 	}
 
+	// Relax compaction
+	zongzi.DefaultReplicaConfig.CompactionOverhead = 10000
+	zongzi.DefaultReplicaConfig.SnapshotEntries = 10000
+
 	// Start zongzi
 	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, cfg.Dir+"/data"))
 	if err = agent.Start(ctx); err != nil {
@@ -46,7 +49,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	client := agent.Client(shard.ID)
+
+	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 
 	// Start gRPC Server
 	grcpServer := grpc.NewServer()

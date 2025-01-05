@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoReadahead | lmdb.NoSync | lmdb.NoMetaSync
+	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync
 	lmdbDupFlags = lmdb.DupSort | lmdb.ReverseDup
 )
 
@@ -28,8 +28,7 @@ func (db db) trimChecksum(key, val []byte) ([]byte, error) {
 }
 
 func (db db) addChecksum(key, val []byte) []byte {
-	binary.BigEndian.AppendUint32(val, crc(key, val))
-	return val
+	return binary.BigEndian.AppendUint32(val, crc(key, val))
 }
 
 func (db db) getUint64(txn *lmdb.Txn, key []byte) (i uint64, err error) {

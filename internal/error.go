@@ -90,4 +90,178 @@ var (
 
 	ErrGRPCCanceled         = status.New(codes.Canceled, "etcdserver: request canceled").Err()
 	ErrGRPCDeadlineExceeded = status.New(codes.DeadlineExceeded, "etcdserver: context deadline exceeded").Err()
+
+	errStringToError = map[string]error{
+		ErrorDesc(ErrGRPCEmptyKey):      ErrGRPCEmptyKey,
+		ErrorDesc(ErrGRPCKeyNotFound):   ErrGRPCKeyNotFound,
+		ErrorDesc(ErrGRPCValueProvided): ErrGRPCValueProvided,
+		ErrorDesc(ErrGRPCLeaseProvided): ErrGRPCLeaseProvided,
+
+		ErrorDesc(ErrGRPCTooManyOps):   ErrGRPCTooManyOps,
+		ErrorDesc(ErrGRPCDuplicateKey): ErrGRPCDuplicateKey,
+		ErrorDesc(ErrGRPCCompacted):    ErrGRPCCompacted,
+		ErrorDesc(ErrGRPCFutureRev):    ErrGRPCFutureRev,
+		ErrorDesc(ErrGRPCNoSpace):      ErrGRPCNoSpace,
+
+		ErrorDesc(ErrGRPCLeaseNotFound):    ErrGRPCLeaseNotFound,
+		ErrorDesc(ErrGRPCLeaseExist):       ErrGRPCLeaseExist,
+		ErrorDesc(ErrGRPCLeaseTTLTooLarge): ErrGRPCLeaseTTLTooLarge,
+
+		ErrorDesc(ErrGRPCMemberExist):            ErrGRPCMemberExist,
+		ErrorDesc(ErrGRPCPeerURLExist):           ErrGRPCPeerURLExist,
+		ErrorDesc(ErrGRPCMemberNotEnoughStarted): ErrGRPCMemberNotEnoughStarted,
+		ErrorDesc(ErrGRPCMemberBadURLs):          ErrGRPCMemberBadURLs,
+		ErrorDesc(ErrGRPCMemberNotFound):         ErrGRPCMemberNotFound,
+		ErrorDesc(ErrGRPCMemberNotLearner):       ErrGRPCMemberNotLearner,
+		ErrorDesc(ErrGRPCLearnerNotReady):        ErrGRPCLearnerNotReady,
+		ErrorDesc(ErrGRPCTooManyLearners):        ErrGRPCTooManyLearners,
+		ErrorDesc(ErrGRPCClusterIdMismatch):      ErrGRPCClusterIdMismatch,
+
+		ErrorDesc(ErrGRPCRequestTooLarge):        ErrGRPCRequestTooLarge,
+		ErrorDesc(ErrGRPCRequestTooManyRequests): ErrGRPCRequestTooManyRequests,
+
+		ErrorDesc(ErrGRPCRootUserNotExist):     ErrGRPCRootUserNotExist,
+		ErrorDesc(ErrGRPCRootRoleNotExist):     ErrGRPCRootRoleNotExist,
+		ErrorDesc(ErrGRPCUserAlreadyExist):     ErrGRPCUserAlreadyExist,
+		ErrorDesc(ErrGRPCUserEmpty):            ErrGRPCUserEmpty,
+		ErrorDesc(ErrGRPCUserNotFound):         ErrGRPCUserNotFound,
+		ErrorDesc(ErrGRPCRoleAlreadyExist):     ErrGRPCRoleAlreadyExist,
+		ErrorDesc(ErrGRPCRoleNotFound):         ErrGRPCRoleNotFound,
+		ErrorDesc(ErrGRPCRoleEmpty):            ErrGRPCRoleEmpty,
+		ErrorDesc(ErrGRPCAuthFailed):           ErrGRPCAuthFailed,
+		ErrorDesc(ErrGRPCPermissionDenied):     ErrGRPCPermissionDenied,
+		ErrorDesc(ErrGRPCRoleNotGranted):       ErrGRPCRoleNotGranted,
+		ErrorDesc(ErrGRPCPermissionNotGranted): ErrGRPCPermissionNotGranted,
+		ErrorDesc(ErrGRPCAuthNotEnabled):       ErrGRPCAuthNotEnabled,
+		ErrorDesc(ErrGRPCInvalidAuthToken):     ErrGRPCInvalidAuthToken,
+		ErrorDesc(ErrGRPCInvalidAuthMgmt):      ErrGRPCInvalidAuthMgmt,
+		ErrorDesc(ErrGRPCAuthOldRevision):      ErrGRPCAuthOldRevision,
+
+		ErrorDesc(ErrGRPCNoLeader):                   ErrGRPCNoLeader,
+		ErrorDesc(ErrGRPCNotLeader):                  ErrGRPCNotLeader,
+		ErrorDesc(ErrGRPCLeaderChanged):              ErrGRPCLeaderChanged,
+		ErrorDesc(ErrGRPCNotCapable):                 ErrGRPCNotCapable,
+		ErrorDesc(ErrGRPCStopped):                    ErrGRPCStopped,
+		ErrorDesc(ErrGRPCTimeout):                    ErrGRPCTimeout,
+		ErrorDesc(ErrGRPCTimeoutDueToLeaderFail):     ErrGRPCTimeoutDueToLeaderFail,
+		ErrorDesc(ErrGRPCTimeoutDueToConnectionLost): ErrGRPCTimeoutDueToConnectionLost,
+		ErrorDesc(ErrGRPCUnhealthy):                  ErrGRPCUnhealthy,
+		ErrorDesc(ErrGRPCCorrupt):                    ErrGRPCCorrupt,
+		ErrorDesc(ErrGPRCNotSupportedForLearner):     ErrGPRCNotSupportedForLearner,
+		ErrorDesc(ErrGRPCBadLeaderTransferee):        ErrGRPCBadLeaderTransferee,
+
+		ErrorDesc(ErrGRPCClusterVersionUnavailable):     ErrGRPCClusterVersionUnavailable,
+		ErrorDesc(ErrGRPCWrongDowngradeVersionFormat):   ErrGRPCWrongDowngradeVersionFormat,
+		ErrorDesc(ErrGRPCInvalidDowngradeTargetVersion): ErrGRPCInvalidDowngradeTargetVersion,
+		ErrorDesc(ErrGRPCDowngradeInProcess):            ErrGRPCDowngradeInProcess,
+		ErrorDesc(ErrGRPCNoInflightDowngrade):           ErrGRPCNoInflightDowngrade,
+	}
 )
+
+// client-side error
+var (
+	ErrEmptyKey      = Error(ErrGRPCEmptyKey)
+	ErrKeyNotFound   = Error(ErrGRPCKeyNotFound)
+	ErrValueProvided = Error(ErrGRPCValueProvided)
+	ErrLeaseProvided = Error(ErrGRPCLeaseProvided)
+	ErrTooManyOps    = Error(ErrGRPCTooManyOps)
+	ErrDuplicateKey  = Error(ErrGRPCDuplicateKey)
+	ErrCompacted     = Error(ErrGRPCCompacted)
+	ErrFutureRev     = Error(ErrGRPCFutureRev)
+	ErrNoSpace       = Error(ErrGRPCNoSpace)
+
+	ErrLeaseNotFound    = Error(ErrGRPCLeaseNotFound)
+	ErrLeaseExist       = Error(ErrGRPCLeaseExist)
+	ErrLeaseTTLTooLarge = Error(ErrGRPCLeaseTTLTooLarge)
+
+	ErrMemberExist            = Error(ErrGRPCMemberExist)
+	ErrPeerURLExist           = Error(ErrGRPCPeerURLExist)
+	ErrMemberNotEnoughStarted = Error(ErrGRPCMemberNotEnoughStarted)
+	ErrMemberBadURLs          = Error(ErrGRPCMemberBadURLs)
+	ErrMemberNotFound         = Error(ErrGRPCMemberNotFound)
+	ErrMemberNotLearner       = Error(ErrGRPCMemberNotLearner)
+	ErrMemberLearnerNotReady  = Error(ErrGRPCLearnerNotReady)
+	ErrTooManyLearners        = Error(ErrGRPCTooManyLearners)
+
+	ErrRequestTooLarge = Error(ErrGRPCRequestTooLarge)
+	ErrTooManyRequests = Error(ErrGRPCRequestTooManyRequests)
+
+	ErrRootUserNotExist     = Error(ErrGRPCRootUserNotExist)
+	ErrRootRoleNotExist     = Error(ErrGRPCRootRoleNotExist)
+	ErrUserAlreadyExist     = Error(ErrGRPCUserAlreadyExist)
+	ErrUserEmpty            = Error(ErrGRPCUserEmpty)
+	ErrUserNotFound         = Error(ErrGRPCUserNotFound)
+	ErrRoleAlreadyExist     = Error(ErrGRPCRoleAlreadyExist)
+	ErrRoleNotFound         = Error(ErrGRPCRoleNotFound)
+	ErrRoleEmpty            = Error(ErrGRPCRoleEmpty)
+	ErrAuthFailed           = Error(ErrGRPCAuthFailed)
+	ErrPermissionDenied     = Error(ErrGRPCPermissionDenied)
+	ErrRoleNotGranted       = Error(ErrGRPCRoleNotGranted)
+	ErrPermissionNotGranted = Error(ErrGRPCPermissionNotGranted)
+	ErrAuthNotEnabled       = Error(ErrGRPCAuthNotEnabled)
+	ErrInvalidAuthToken     = Error(ErrGRPCInvalidAuthToken)
+	ErrAuthOldRevision      = Error(ErrGRPCAuthOldRevision)
+	ErrInvalidAuthMgmt      = Error(ErrGRPCInvalidAuthMgmt)
+	ErrClusterIdMismatch    = Error(ErrGRPCClusterIdMismatch)
+
+	ErrNoLeader                   = Error(ErrGRPCNoLeader)
+	ErrNotLeader                  = Error(ErrGRPCNotLeader)
+	ErrLeaderChanged              = Error(ErrGRPCLeaderChanged)
+	ErrNotCapable                 = Error(ErrGRPCNotCapable)
+	ErrStopped                    = Error(ErrGRPCStopped)
+	ErrTimeout                    = Error(ErrGRPCTimeout)
+	ErrTimeoutDueToLeaderFail     = Error(ErrGRPCTimeoutDueToLeaderFail)
+	ErrTimeoutDueToConnectionLost = Error(ErrGRPCTimeoutDueToConnectionLost)
+	ErrTimeoutWaitAppliedIndex    = Error(ErrGRPCTimeoutWaitAppliedIndex)
+	ErrUnhealthy                  = Error(ErrGRPCUnhealthy)
+	ErrCorrupt                    = Error(ErrGRPCCorrupt)
+	ErrBadLeaderTransferee        = Error(ErrGRPCBadLeaderTransferee)
+
+	ErrClusterVersionUnavailable     = Error(ErrGRPCClusterVersionUnavailable)
+	ErrWrongDowngradeVersionFormat   = Error(ErrGRPCWrongDowngradeVersionFormat)
+	ErrInvalidDowngradeTargetVersion = Error(ErrGRPCInvalidDowngradeTargetVersion)
+	ErrDowngradeInProcess            = Error(ErrGRPCDowngradeInProcess)
+	ErrNoInflightDowngrade           = Error(ErrGRPCNoInflightDowngrade)
+)
+
+// EtcdError defines gRPC server errors.
+// (https://github.com/grpc/grpc-go/blob/master/rpc_util.go#L319-L323)
+type EtcdError struct {
+	code codes.Code
+	desc string
+}
+
+// Code returns grpc/codes.Code.
+// TODO: define clientv3/codes.Code.
+func (e EtcdError) Code() codes.Code {
+	return e.code
+}
+
+func (e EtcdError) Error() string {
+	return e.desc
+}
+
+func Error(err error) error {
+	if err == nil {
+		return nil
+	}
+	verr, ok := errStringToError[ErrorDesc(err)]
+	if !ok { // not gRPC error
+		return err
+	}
+	ev, ok := status.FromError(verr)
+	var desc string
+	if ok {
+		desc = ev.Message()
+	} else {
+		desc = verr.Error()
+	}
+	return EtcdError{code: ev.Code(), desc: desc}
+}
+
+func ErrorDesc(err error) string {
+	if s, ok := status.FromError(err); ok {
+		return s.Message()
+	}
+	return err.Error()
+}
