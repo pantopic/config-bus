@@ -35,6 +35,7 @@ type stateMachine struct {
 	statUpdates int
 	statEntries int
 	statTime    time.Duration
+	statPatched int
 }
 
 func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
@@ -93,11 +94,13 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		sm.log.Info("StateMachine Stats",
 			"entries", sm.statEntries,
 			"average", sm.statEntries/sm.statUpdates,
+			"diffed", sm.statPatched,
 			"uTime", int(sm.statTime.Microseconds())/sm.statUpdates,
 			"eTime", int(sm.statTime.Microseconds())/sm.statEntries)
-		sm.statUpdates = 0
+		sm.statPatched = 0
 		sm.statEntries = 0
 		sm.statTime = 0
+		sm.statUpdates = 0
 	}
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		for i, ent := range entries {
@@ -107,9 +110,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				prev, _, err := sm.dbKv.put(txn, ent.Index, uint64(req.Lease), req.Key, req.Value)
+				prev, _, patched, err := sm.dbKv.put(txn, ent.Index, uint64(req.Lease), req.Key, req.Value)
 				if err != nil {
 					return err
+				}
+				if patched {
+					sm.statPatched++
 				}
 				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), req.Key)
 				if err != nil {
