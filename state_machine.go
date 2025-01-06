@@ -41,9 +41,11 @@ type stateMachine struct {
 func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
 	return func(shardID uint64, replicaID uint64) zongzi.StateMachinePersistent {
 		return &stateMachine{
-			envPath: fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
-			log:     logger,
-			clock:   clock.New(),
+			shardID:   shardID,
+			replicaID: replicaID,
+			envPath:   fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
+			log:       logger,
+			clock:     clock.New(),
 		}
 	}
 }
@@ -84,7 +86,6 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 }
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
-	var header = sm.responseHeader(0)
 	var t = sm.clock.Now()
 	var req = &internal.PutRequest{}
 	var res = &internal.PutResponse{}
@@ -121,9 +122,8 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
-				header.Revision = int64(ent.Index)
 				res.Reset()
-				res.Header = header
+				res.Header = sm.responseHeader(ent.Index)
 				if req.PrevKv {
 					res.PrevKv = prev.ToProto()
 				}
@@ -166,7 +166,8 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 				if err != nil {
 					return err
 				}
-				if uint64(req.Revision) > min {
+				if req.Revision < int64(min) {
+					sm.log.Info("Revision compacted", "rev", req.Revision, "min", min)
 					res.Data = []byte(internal.ErrGRPCCompacted.Error())
 					return nil
 				}
@@ -175,7 +176,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 				Header: sm.responseHeader(index),
 			}
 			if req.CountOnly {
-				count, err := sm.dbKv.count(txn,
+				_, count, _, err := sm.dbKv.getRange(txn,
 					req.Key,
 					req.RangeEnd,
 					uint64(req.Revision),
@@ -183,6 +184,9 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 					uint64(req.MaxModRevision),
 					uint64(req.MinCreateRevision),
 					uint64(req.MaxCreateRevision),
+					uint64(req.Limit),
+					req.CountOnly,
+					false,
 				)
 				if err != nil {
 					return err
@@ -193,7 +197,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 				}
 				res.Value = 1
 			} else {
-				data, more, err := sm.dbKv.getRange(txn,
+				data, _, more, err := sm.dbKv.getRange(txn,
 					req.Key,
 					req.RangeEnd,
 					uint64(req.Revision),
@@ -202,6 +206,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 					uint64(req.MinCreateRevision),
 					uint64(req.MaxCreateRevision),
 					uint64(req.Limit),
+					false,
 					req.KeysOnly,
 				)
 				if err != nil {

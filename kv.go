@@ -3,6 +3,7 @@ package icarus
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 
 	"github.com/golang/snappy"
 	// "github.com/klauspost/compress/snappy"
@@ -27,7 +28,7 @@ type kv struct {
 }
 
 func (kv kv) Bytes(next, buf []byte) []byte {
-	buf = binary.AppendUvarint(buf, kv.revision)
+	buf = binary.BigEndian.AppendUint64(buf, math.MaxUint64-kv.revision)
 	buf = binary.AppendUvarint(buf, kv.created)
 	if kv.version != 0 {
 		buf = binary.AppendUvarint(buf, kv.version)
@@ -56,18 +57,15 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 
 func (kv kv) FromBytes(key, buf, next []byte, noval bool) (kv, error) {
 	var err error
-	if len(buf) < 4 {
+	if len(buf) < 12 {
 		return kv, ErrChecksumMissing
 	}
 	if binary.BigEndian.Uint32(buf[len(buf)-4:]) != crc(key, buf[:len(buf)-4]) {
 		return kv, ErrChecksumInvalid
 	}
-	r := bytes.NewBuffer(buf[:len(buf)-4])
 	kv.key = key
-	kv.revision, err = binary.ReadUvarint(r)
-	if err != nil {
-		return kv, err
-	}
+	kv.revision = math.MaxUint64 - binary.BigEndian.Uint64(buf[:8])
+	r := bytes.NewBuffer(buf[8 : len(buf)-4])
 	kv.created, err = binary.ReadUvarint(r)
 	if err != nil {
 		return kv, err

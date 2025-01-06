@@ -3,6 +3,7 @@ package icarus
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 )
@@ -37,7 +38,7 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 			key:      key,
 			val:      val,
 		}
-		err = cur.Put(key, next.Bytes(nil, nil), 0)
+		err = txn.Put(db.i, key, next.Bytes(nil, nil), 0)
 		return
 	}
 	if prev.revision == index {
@@ -63,73 +64,13 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 			}
 		}
 	}
-	if err = cur.Put(key, next.Bytes(nil, nil), 0); err != nil {
+	if err = txn.Put(db.i, key, next.Bytes(nil, nil), 0); err != nil {
 		return
 	}
 	return
 }
 
-func (db dbKv) count(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod, minCreated, maxCreated uint64) (count uint64, err error) {
-	txn.RawRead = true
-	cur, err := txn.OpenCursor(db.i)
-	if err != nil {
-		return
-	}
-	k, v, err := cur.Get(key, nil, 0)
-	if err != nil {
-		return
-	}
-	var mod uint64
-	var created uint64
-	var r = bytes.NewReader(nil)
-	for !lmdb.IsNotFound(err) {
-		if bytes.Compare(end, key) > 0 {
-			return
-		}
-		r.Reset(v)
-		mod, err = binary.ReadUvarint(r)
-		if err != nil {
-			return
-		}
-		for mod > revision {
-			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
-			if lmdb.IsNotFound(err) {
-				err = nil
-				break
-			}
-			r.Reset(v)
-			mod, err = binary.ReadUvarint(r)
-			if err != nil {
-				return
-			}
-			if mod < minMod {
-				k = nil
-				break
-			}
-			if mod > maxMod {
-				continue
-			}
-			created, err = binary.ReadUvarint(r)
-			if err != nil {
-				return
-			}
-			if created < minCreated {
-				k = nil
-				break
-			}
-			if created > maxCreated {
-				continue
-			}
-		}
-		if len(k) > 0 {
-			count++
-		}
-		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
-	}
-	return
-}
-
-func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod, minCreated, maxCreated, limit uint64, keysOnly bool) (items []kv, more bool, err error) {
+func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod, minCreated, maxCreated, limit uint64, countOnly, keysOnly bool) (items []kv, count int, more bool, err error) {
 	cur, err := txn.OpenCursor(db.i)
 	if err != nil {
 		return
@@ -139,72 +80,71 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 	if lmdb.IsNotFound(err) {
 		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
 	}
-	if err != nil && !lmdb.IsNotFound(err) {
-		return
-	}
 	var mod uint64
 	var created uint64
 	var r = bytes.NewReader(nil)
-	for {
-		if lmdb.IsNotFound(err) {
-			err = nil
-			break
-		}
-		if bytes.Compare(end, key) > 0 {
+	for !lmdb.IsNotFound(err) {
+		if err != nil {
 			return
 		}
-		if len(items) == int(limit) {
+		if len(v) < 12 {
+			err = ErrValueInvalid
+			return
+		}
+		if len(end) > 0 && bytes.Compare(end, key) < 0 {
+			return
+		}
+		if limit > 0 && len(items) == int(limit) {
 			more = true
 			return
 		}
-		r.Reset(v)
-		mod, err = binary.ReadUvarint(r)
-		if err != nil {
-			return
-		}
-		created, err = binary.ReadUvarint(r)
-		if err != nil {
-			return
-		}
-		for mod > revision {
+		mod = math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
+		for revision > 0 && mod > revision {
 			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
 			if lmdb.IsNotFound(err) {
 				err = nil
 				break
 			}
-			r.Reset(v)
-			mod, err = binary.ReadUvarint(r)
-			if err != nil {
-				return
-			}
-			if mod < minMod {
-				k = nil
-				break
-			}
-			if mod > maxMod {
-				continue
-			}
-			created, err = binary.ReadUvarint(r)
-			if err != nil {
-				return
-			}
-			if created < minCreated {
-				k = nil
-				break
-			}
-			if created > maxCreated {
-				continue
-			}
+			mod = math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
+		}
+		if minMod > 0 && mod < minMod {
+			k = nil
+			break
+		}
+		if maxMod > 0 && mod > maxMod {
+			continue
+		}
+		r.Reset(v[8:])
+		created, err = binary.ReadUvarint(r)
+		if err != nil {
+			return
+		}
+		if minCreated > 0 && created < minCreated {
+			k = nil
+			break
+		}
+		if maxCreated > 0 && created > maxCreated {
+			continue
 		}
 		if len(k) > 0 && created != 0 {
-			var item kv
-			item, err = item.FromBytes(k, v, nil, keysOnly)
-			if err != nil {
-				return
+			if countOnly {
+				count++
+			} else {
+				var item kv
+				item, err = item.FromBytes(k, v, nil, keysOnly)
+				if err != nil {
+					return
+				}
+				items = append(items, item)
 			}
-			items = append(items, item)
+		}
+		if len(end) == 0 {
+			break
 		}
 		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
+	}
+	if lmdb.IsNotFound(err) {
+		err = nil
 	}
 	return
 }

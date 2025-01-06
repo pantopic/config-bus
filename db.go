@@ -8,9 +8,9 @@ import (
 
 var (
 	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync
-	lmdbDupFlags = lmdb.DupSort | lmdb.ReverseDup
+	lmdbDupFlags = lmdb.DupSort
 
-	ICARUS_FLAG_PATCH_ENABLED       = true
+	ICARUS_FLAG_PATCH_ENABLED       = false
 	ICARUS_FLAG_COMPRESSION_ENABLED = false
 )
 

@@ -1,7 +1,5 @@
 FROM debian:stable-slim as standalone
 
-WORKDIR /opt
+COPY standalone .
 
-COPY . .
-
-CMD ["/opt/standalone"]
+CMD ["./standalone"]
