@@ -20,6 +20,11 @@ func NewKvService(client zongzi.ShardClient) *kvService {
 	return &kvService{client: client}
 }
 
+func (s *kvService) addTerm(header *internal.ResponseHeader) {
+	_, term := s.client.Leader()
+	header.RaftTerm = term
+}
+
 func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *internal.PutResponse, err error) {
 	res = &internal.PutResponse{}
 	b, err := proto.Marshal(req)
@@ -35,6 +40,7 @@ func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *int
 		return
 	}
 	err = proto.Unmarshal(data, res)
+	s.addTerm(res.Header)
 	return
 }
 
@@ -53,5 +59,6 @@ func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res 
 		return
 	}
 	err = proto.Unmarshal(data, res)
+	s.addTerm(res.Header)
 	return
 }
