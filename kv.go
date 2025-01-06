@@ -16,11 +16,6 @@ const (
 	KV_FLAG_COMPRESSED
 )
 
-var (
-	ICARUS_FLAG_PATCH_ENABLED       = false
-	ICARUS_FLAG_COMPRESSION_ENABLED = false
-)
-
 type kv struct {
 	revision uint64
 	version  uint64

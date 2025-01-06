@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -24,19 +26,21 @@ func main() {
 	ctx := context.Background()
 	log := slog.Default()
 	cfg := getConfig()
+	go func() {
+		err := http.ListenAndServe("0.0.0.0:6060", nil)
+		if err != nil {
+			log.Error(err.Error())
+		}
+	}()
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithRaftDir(cfg.Dir+"/raft"),
 		zongzi.WithWALDir(cfg.Dir+"/wal"),
-		zongzi.WithGossipAddress(fmt.Sprintf("127.0.0.1:%d", cfg.PortGossip)),
-		zongzi.WithRaftAddress(fmt.Sprintf("127.0.0.1:%d", cfg.PortRaft)),
-		zongzi.WithApiAddress(fmt.Sprintf("127.0.0.1:%d", cfg.PortZongzi)))
+		zongzi.WithGossipAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
+		zongzi.WithRaftAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
+		zongzi.WithApiAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)))
 	if err != nil {
 		panic(err)
 	}
-
-	// Relax compaction
-	zongzi.DefaultReplicaConfig.CompactionOverhead = 10000
-	zongzi.DefaultReplicaConfig.SnapshotEntries = 10000
 
 	// Start zongzi
 	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, cfg.Dir+"/data"))

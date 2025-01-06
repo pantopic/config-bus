@@ -20,7 +20,7 @@ func getConfig() config {
 		ClusterName: "icarus",
 		Dir:         "/var/lib/icarus",
 		HostName:    "icarus-0",
-		HostPeers:   "127.0.0.1:17003,127.0.0.1:17103,127.0.0.1:17203",
+		HostPeers:   "icarus-0:17003,icarus-1:17003,icarus-2:17003",
 		PortApi:     19000,
 		PortGossip:  17001,
 		PortRaft:    17002,
