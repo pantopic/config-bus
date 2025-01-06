@@ -16,21 +16,16 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 	return
 }
 
-func (db dbKv) first(txn *lmdb.Txn, key []byte) (found kv, err error) {
-	buf, err := txn.Get(db.i, key)
-	if lmdb.IsNotFound(err) {
-		err = nil
-		return
-	}
+func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, next kv, patched bool, err error) {
+	cur, err := txn.OpenCursor(db.i)
 	if err != nil {
 		return
 	}
-	return found.FromBytes(key, buf, nil, false)
-}
-
-func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev kv, next kv, err error) {
-	prev, err = db.first(txn, key)
-	if err != nil {
+	defer cur.Close()
+	k, v, err := cur.Get(key, nil, 0)
+	if err == nil {
+		prev, err = prev.FromBytes(k, v, nil, false)
+	} else if !lmdb.IsNotFound(err) {
 		return
 	}
 	if prev.revision == 0 {
@@ -42,13 +37,13 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev kv
 			key:      key,
 			val:      val,
 		}
-		txn.Put(db.i, key, next.Bytes(nil, nil), 0)
+		err = cur.Put(key, next.Bytes(nil, nil), 0)
 		return
 	}
 	if prev.revision == index {
 		prev.val = val
 		prev.lease = lease
-		txn.Put(db.i, key, prev.Bytes(nil, nil), 0)
+		err = cur.Put(key, prev.Bytes(nil, nil), lmdb.Current)
 		return
 	}
 	next = kv{
@@ -60,9 +55,17 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev kv
 		val:      val,
 	}
 	if ICARUS_FLAG_PATCH_ENABLED {
-		txn.Put(db.i, key, prev.Bytes(val, nil), 0)
+		buf := prev.Bytes(val, nil)
+		patched = len(buf) < len(prev.val)
+		if patched {
+			if err = cur.Put(key, buf, lmdb.Current); err != nil {
+				return
+			}
+		}
 	}
-	txn.Put(db.i, key, next.Bytes(nil, nil), 0)
+	if err = cur.Put(key, next.Bytes(nil, nil), 0); err != nil {
+		return
+	}
 	return
 }
 
