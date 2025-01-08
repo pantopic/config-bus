@@ -2,12 +2,17 @@ version: '3.8'
 
 x-variables:
   common: &common
-    build: 
+    build:
       context: ../..
       dockerfile: cmd/standalone/Dockerfile
       target: standalone
     networks:
       - icarus
+    volumes:
+      - type: tmpfs
+        target: /var/lib/icarus
+        tmpfs:
+          mode: 01777
 
 services:
   icarus-0:

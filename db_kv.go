@@ -55,7 +55,7 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 		key:      key,
 		val:      val,
 	}
-	if ICARUS_FLAG_PATCH_ENABLED {
+	if ICARUS_FLAG_KV_PATCH_ENABLED {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(prev.val)
 		if patched {

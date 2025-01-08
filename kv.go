@@ -17,6 +17,11 @@ const (
 	KV_FLAG_COMPRESSED
 )
 
+var (
+	ICARUS_FLAG_KV_PATCH_ENABLED       = true
+	ICARUS_FLAG_KV_COMPRESSION_ENABLED = false
+)
+
 type kv struct {
 	revision uint64
 	version  uint64
@@ -31,17 +36,17 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 	buf = binary.BigEndian.AppendUint64(buf, math.MaxUint64-kv.revision)
 	buf = binary.AppendUvarint(buf, kv.created)
 	if kv.version != 0 {
+		kv.flags = 0
 		buf = binary.AppendUvarint(buf, kv.version)
 		buf = binary.AppendUvarint(buf, kv.lease)
-		kv.flags = 0
-		if next != nil && ICARUS_FLAG_PATCH_ENABLED {
+		if next != nil && ICARUS_FLAG_KV_PATCH_ENABLED {
 			p := patch.Generate(next, kv.val, nil)
 			if len(p) < len(kv.val) {
 				kv.val = p
 				kv.flags |= KV_FLAG_PATCH
 			}
 		}
-		if ICARUS_FLAG_COMPRESSION_ENABLED && len(kv.val) > 16 {
+		if ICARUS_FLAG_KV_COMPRESSION_ENABLED && len(kv.val) > 16 {
 			p := snappy.Encode(nil, kv.val)
 			if len(p) < len(kv.val) {
 				kv.val = p

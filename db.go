@@ -9,9 +9,6 @@ import (
 var (
 	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync
 	lmdbDupFlags = lmdb.DupSort
-
-	ICARUS_FLAG_PATCH_ENABLED       = false
-	ICARUS_FLAG_COMPRESSION_ENABLED = false
 )
 
 type db struct {

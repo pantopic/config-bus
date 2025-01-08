@@ -4,6 +4,9 @@ dev:
 test:
 	@go test
 
+bench:
+	@go test -bench=.
+
 unit:
 	@go test -tags unit
 

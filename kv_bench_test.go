@@ -29,30 +29,38 @@ func BenchmarkTestKv(b *testing.B) {
 			}
 			b.SetBytes(int64(len(buf)))
 		})
-		ICARUS_FLAG_COMPRESSION_ENABLED = false
-		b.Run(`patch`, func(b *testing.B) {
-			var buf []byte
-			for range b.N {
-				buf = itemPatchCompress.Bytes(nextPatch, nil)
-			}
-			b.SetBytes(int64(len(buf)))
+		withGlobal(&ICARUS_FLAG_KV_PATCH_ENABLED, true, func() {
+			withGlobal(&ICARUS_FLAG_KV_COMPRESSION_ENABLED, false, func() {
+				b.Run(`patch`, func(b *testing.B) {
+					var buf []byte
+					for range b.N {
+						buf = itemPatchCompress.Bytes(nextPatch, nil)
+					}
+					b.SetBytes(int64(len(buf)))
+				})
+			})
 		})
-		ICARUS_FLAG_COMPRESSION_ENABLED = true
-		ICARUS_FLAG_PATCH_ENABLED = false
-		b.Run(`compress`, func(b *testing.B) {
-			var buf []byte
-			for range b.N {
-				buf = itemPatchCompress.Bytes(nextCompress, nil)
-			}
-			b.SetBytes(int64(len(buf)))
+		withGlobal(&ICARUS_FLAG_KV_COMPRESSION_ENABLED, true, func() {
+			withGlobal(&ICARUS_FLAG_KV_PATCH_ENABLED, false, func() {
+				b.Run(`compress`, func(b *testing.B) {
+					var buf []byte
+					for range b.N {
+						buf = itemPatchCompress.Bytes(nextCompress, nil)
+					}
+					b.SetBytes(int64(len(buf)))
+				})
+			})
 		})
-		ICARUS_FLAG_PATCH_ENABLED = true
-		b.Run(`nopatch-compress`, func(b *testing.B) {
-			var buf []byte
-			for range b.N {
-				buf = itemPatchCompress.Bytes(nextCompress, nil)
-			}
-			b.SetBytes(int64(len(buf)))
+		withGlobal(&ICARUS_FLAG_KV_COMPRESSION_ENABLED, true, func() {
+			withGlobal(&ICARUS_FLAG_KV_PATCH_ENABLED, true, func() {
+				b.Run(`nopatch-compress`, func(b *testing.B) {
+					var buf []byte
+					for range b.N {
+						buf = itemPatchCompress.Bytes(nextCompress, nil)
+					}
+					b.SetBytes(int64(len(buf)))
+				})
+			})
 		})
 	})
 	b.Run(`dec`, func(b *testing.B) {
@@ -71,7 +79,12 @@ func BenchmarkTestKv(b *testing.B) {
 		b.Run(`patch`, func(b *testing.B) {
 			var err error
 			var item2 kv
-			var buf = itemPatchCompress.Bytes(nextPatch, nil)
+			var buf []byte
+			withGlobal(&ICARUS_FLAG_KV_PATCH_ENABLED, true, func() {
+				withGlobal(&ICARUS_FLAG_KV_COMPRESSION_ENABLED, false, func() {
+					buf = itemPatchCompress.Bytes(nextPatch, nil)
+				})
+			})
 			for range b.N {
 				item2, err = item2.FromBytes(item.key, buf, nextPatch, false)
 			}
@@ -83,7 +96,12 @@ func BenchmarkTestKv(b *testing.B) {
 		b.Run(`compress`, func(b *testing.B) {
 			var err error
 			var item2 kv
-			var buf = itemPatchCompress.Bytes(nextCompress, nil)
+			var buf []byte
+			withGlobal(&ICARUS_FLAG_KV_PATCH_ENABLED, false, func() {
+				withGlobal(&ICARUS_FLAG_KV_COMPRESSION_ENABLED, true, func() {
+					buf = itemPatchCompress.Bytes(nextPatch, nil)
+				})
+			})
 			for range b.N {
 				item2, err = item2.FromBytes(item.key, buf, nextCompress, false)
 			}
