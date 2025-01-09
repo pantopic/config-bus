@@ -7,7 +7,7 @@ require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang/snappy v0.0.4
-	github.com/logbn/zongzi v0.0.17
+	github.com/logbn/zongzi v0.0.18
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.1

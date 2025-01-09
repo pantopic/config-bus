@@ -118,6 +118,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if patched {
 					sm.statPatched++
 				}
+				// TODO Replace timestamp w/ epoch
 				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), req.Key)
 				if err != nil {
 					return err

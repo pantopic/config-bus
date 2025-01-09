@@ -17,7 +17,7 @@ import (
 	"github.com/logbn/icarus/internal"
 )
 
-func Test(t *testing.T) {
+func TestService(t *testing.T) {
 	var err error
 	var (
 		agents = make([]*zongzi.Agent, 3)
@@ -32,6 +32,7 @@ func Test(t *testing.T) {
 			fmt.Sprintf(host+":%d", port+23),
 		}
 	)
+	zongzi.SetLogLevel(zongzi.LogLevelWarning)
 	if err = os.RemoveAll(dir); err != nil {
 		panic(err)
 	}
@@ -228,7 +229,6 @@ func Test(t *testing.T) {
 			assert.Greater(t, resp.Header.Revision, rev)
 		})
 		t.Run("revision", func(t *testing.T) {
-			t.Log("REVISION", rev)
 			resp, err := svc.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key-patch`),
 				Revision: rev,
@@ -241,6 +241,21 @@ func Test(t *testing.T) {
 			assert.Equal(t, 80, len(resp.Kvs[0].Value), string(resp.Kvs[0].Value))
 		})
 	})
+	// DeleteRange
+	// Compact
+	// Txn
+	// Watch
+	// LeaseGrant
+	// LeaseRevoke
+	// LeaseKeepAlive
+	// LeaseTimeToLive
+	// LeaseLeases
+
+	// Status
+	// Defragment
+	// Hash
+	// HashKV
+	// MemberList
 }
 
 func await(d, n time.Duration, fn func() bool) bool {

@@ -24,7 +24,7 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 	}
 	defer cur.Close()
 	k, v, err := cur.Get(key, nil, lmdb.SetRange)
-	if err == nil && bytes.Compare(k, key) == 0 {
+	if err == nil && bytes.Equal(k, key) {
 		prev, err = prev.FromBytes(k, v, nil, false)
 	} else if err != nil && !lmdb.IsNotFound(err) {
 		return
