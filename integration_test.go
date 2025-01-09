@@ -17,7 +17,7 @@ import (
 	"github.com/logbn/icarus/internal"
 )
 
-func TestIntegration(t *testing.T) {
+func Test(t *testing.T) {
 	var err error
 	var (
 		agents = make([]*zongzi.Agent, 3)
@@ -143,34 +143,102 @@ func TestIntegration(t *testing.T) {
 	})
 	t.Run("range", func(t *testing.T) {
 		_, err := svc.Put(ctx, &internal.PutRequest{
-			Key:   []byte(`test-key-2`),
-			Value: []byte(`test-value-2`),
+			Key:   []byte(`test-range-key-1`),
+			Value: []byte(`test-range-value-2`),
+		})
+		require.Nil(t, err, err)
+		_, err = svc.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-range-key-2`),
+			Value: []byte(`test-range-value-2`),
 		})
 		require.Nil(t, err, err)
 		t.Run("basic", func(t *testing.T) {
 			resp, err := svc.Range(ctx, &internal.RangeRequest{
-				Key:      []byte(`test-key`),
-				RangeEnd: []byte(`test-key-2`),
+				Key:      []byte(`test-range-key-1`),
+				RangeEnd: []byte(`test-range-key-2`),
 			})
 			require.Nil(t, err, err)
 			assert.NotNil(t, resp)
 			assert.Greater(t, resp.Header.Revision, int64(0))
 			require.Equal(t, 2, len(resp.Kvs))
-			assert.Equal(t, []byte(`test-key`), resp.Kvs[0].Key)
-			assert.Equal(t, []byte(`test-key-2`), resp.Kvs[1].Key)
+			assert.Equal(t, []byte(`test-range-key-1`), resp.Kvs[0].Key)
+			assert.Equal(t, []byte(`test-range-key-2`), resp.Kvs[1].Key)
+		})
+		t.Run("count", func(t *testing.T) {
+			resp, err := svc.Range(ctx, &internal.RangeRequest{
+				Key:       []byte(`test-range-key-1`),
+				RangeEnd:  []byte(`test-range-key-2`),
+				CountOnly: true,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.Greater(t, resp.Header.Revision, int64(0))
+			require.Equal(t, int64(2), resp.Count)
 		})
 		t.Run("revision", func(t *testing.T) {
 			resp, err := svc.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key`),
-				RangeEnd: []byte(`test-key-2`),
+				RangeEnd: []byte(`test-range-key-2`),
 				Revision: rev1,
 			})
 			require.Nil(t, err, err)
 			assert.NotNil(t, resp)
 			assert.Greater(t, resp.Header.Revision, int64(0))
 			require.Equal(t, 1, len(resp.Kvs))
-			assert.Equal(t, []byte(`test-key`), resp.Kvs[0].Key)
-			assert.Equal(t, []byte(`test-value`), resp.Kvs[0].Value)
+			assert.Equal(t, []byte(`test-key`), resp.Kvs[0].Key, string(resp.Kvs[0].Key))
+			assert.Equal(t, []byte(`test-value`), resp.Kvs[0].Value, string(resp.Kvs[0].Value))
+		})
+		t.Run("next", func(t *testing.T) {
+			resp, err := svc.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test`),
+				RangeEnd: []byte(`vest`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.Greater(t, resp.Header.Revision, int64(0))
+			assert.Equal(t, 3, len(resp.Kvs))
+			assert.Equal(t, []byte(`test-key`), resp.Kvs[0].Key, string(resp.Kvs[0].Key))
+			assert.Equal(t, []byte(`test-range-key-1`), resp.Kvs[1].Key, string(resp.Kvs[1].Key))
+			assert.Equal(t, []byte(`test-range-key-2`), resp.Kvs[2].Key, string(resp.Kvs[2].Key))
+		})
+		t.Run("missing", func(t *testing.T) {
+			resp, err := svc.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`rest`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.Greater(t, resp.Header.Revision, int64(0))
+			require.Equal(t, 0, len(resp.Kvs))
+		})
+	})
+	t.Run("patch", func(t *testing.T) {
+		resp, err := svc.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-key-patch`),
+			Value: []byte(`--------------------------------------------------------------------------------`),
+		})
+		require.Nil(t, err, err)
+		rev = resp.Header.Revision
+		t.Run("put", func(t *testing.T) {
+			resp, err := svc.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-key-patch`),
+				Value: []byte(`----------------------------------------0----------------------------------------`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.Greater(t, resp.Header.Revision, rev)
+		})
+		t.Run("revision", func(t *testing.T) {
+			t.Log("REVISION", rev)
+			resp, err := svc.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-key-patch`),
+				Revision: rev,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.Greater(t, resp.Header.Revision, int64(0))
+			require.Equal(t, 1, len(resp.Kvs))
+			assert.Equal(t, []byte(`test-key-patch`), resp.Kvs[0].Key, string(resp.Kvs[0].Key))
+			assert.Equal(t, 80, len(resp.Kvs[0].Value), string(resp.Kvs[0].Value))
 		})
 	})
 }

@@ -11,7 +11,7 @@ bench:
 	@go test -bench=.
 
 unit:
-	@go test -tags unit
+	@go test ./... -tags unit -v
 
 cover:
 	@mkdir -p _dist

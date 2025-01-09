@@ -186,7 +186,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 					uint64(req.MaxCreateRevision),
 					uint64(req.Limit),
 					req.CountOnly,
-					false,
+					req.KeysOnly,
 				)
 				if err != nil {
 					return err
@@ -206,7 +206,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 					uint64(req.MinCreateRevision),
 					uint64(req.MaxCreateRevision),
 					uint64(req.Limit),
-					false,
+					req.CountOnly,
 					req.KeysOnly,
 				)
 				if err != nil {
