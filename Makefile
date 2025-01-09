@@ -4,6 +4,9 @@ dev:
 test:
 	@go test
 
+integration:
+	@go test ./...
+
 bench:
 	@go test -bench=.
 

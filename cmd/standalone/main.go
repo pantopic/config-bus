@@ -42,12 +42,46 @@ func main() {
 		panic(err)
 	}
 
+	grpcServer := grpc.NewServer()
+	if _, err = start(ctx, grpcServer, agent, log, cfg.Dir+"/data", cfg.PortApi); err != nil {
+		panic(err)
+	}
+
+	// await stop
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, syscall.SIGTERM)
+	<-stop
+
+	if grpcServer != nil {
+		var ch = make(chan bool)
+		go func() {
+			grpcServer.GracefulStop()
+			close(ch)
+		}()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			grpcServer.Stop()
+		}
+	}
+	agent.Stop()
+}
+
+func start(
+	ctx context.Context,
+	grpcServer *grpc.Server,
+	agent *zongzi.Agent,
+	log *slog.Logger,
+	dataDir string,
+	port uint16,
+) (shard zongzi.Shard, err error) {
 	// Start zongzi
-	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, cfg.Dir+"/data"))
+	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, dataDir))
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
-	shard, _, err := agent.ShardCreate(ctx, icarus.Uri,
+	shard, _, err = agent.ShardCreate(ctx, icarus.Uri,
 		zongzi.WithName("icarus-standalone"),
 		zongzi.WithPlacementMembers(3))
 	if err != nil {
@@ -57,35 +91,15 @@ func main() {
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 
 	// Start gRPC Server
-	grcpServer := grpc.NewServer()
-	internal.RegisterKVServer(grcpServer, icarus.NewKvService(client))
-	stop := make(chan os.Signal, 1)
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
+	internal.RegisterKVServer(grpcServer, icarus.NewKvService(client))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		panic(err)
 	}
 	go func() {
-		err = grcpServer.Serve(lis)
-		log.Error(err.Error())
-		close(stop)
-	}()
-
-	// await stop
-	signal.Notify(stop, os.Interrupt)
-	signal.Notify(stop, syscall.SIGTERM)
-	<-stop
-
-	if grcpServer != nil {
-		var ch = make(chan bool)
-		go func() {
-			grcpServer.GracefulStop()
-			close(ch)
-		}()
-		select {
-		case <-ch:
-		case <-time.After(5 * time.Second):
-			grcpServer.Stop()
+		if err = grpcServer.Serve(lis); err != nil {
+			panic(err)
 		}
-	}
-	agent.Stop()
+	}()
+	return
 }

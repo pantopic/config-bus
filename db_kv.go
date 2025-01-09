@@ -102,10 +102,12 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		for revision > 0 && mod > revision {
 			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
 			if lmdb.IsNotFound(err) {
-				err = nil
 				break
 			}
 			mod = math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
+		}
+		if err != nil {
+			continue
 		}
 		if minMod > 0 && mod < minMod {
 			k = nil
