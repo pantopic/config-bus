@@ -241,7 +241,65 @@ func TestService(t *testing.T) {
 			assert.Equal(t, 80, len(resp.Kvs[0].Value), string(resp.Kvs[0].Value))
 		})
 	})
-	// DeleteRange
+	t.Run("delete", func(t *testing.T) {
+		t.Run("one", func(t *testing.T) {
+			var k = []byte(`test-key-delete-one`)
+			var v = []byte(`test-val`)
+			_, err := svc.Put(ctx, &internal.PutRequest{Key: k, Value: v})
+			require.Nil(t, err, err)
+			resp, err := svc.Range(ctx, &internal.RangeRequest{Key: k})
+			require.Nil(t, err, err)
+			assert.Equal(t, 1, len(resp.Kvs))
+			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key: k,
+			})
+			require.Nil(t, err, err)
+			assert.EqualValues(t, 1, resp2.Deleted)
+			resp, err = svc.Range(ctx, &internal.RangeRequest{
+				Key: k,
+			})
+			require.Nil(t, err, err)
+			assert.Equal(t, 0, len(resp.Kvs))
+		})
+		t.Run("range", func(t *testing.T) {
+			for i := range 10 {
+				_, err = svc.Put(ctx, &internal.PutRequest{
+					Key:   []byte(fmt.Sprintf(`test-key-delete-%d`, i)),
+					Value: []byte(`-------------------`),
+				})
+				require.Nil(t, err, err)
+			}
+			resp, err := svc.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-key-delete-0`),
+				RangeEnd: []byte(`test-key-delete-9`),
+			})
+			require.Nil(t, err, err)
+			assert.Equal(t, 10, len(resp.Kvs))
+			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key:      []byte(`test-key-delete-0`),
+				RangeEnd: []byte(`test-key-delete-9`),
+			})
+			require.Nil(t, err, err)
+			assert.EqualValues(t, 10, resp2.Deleted)
+			resp, err = svc.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-key-delete-0`),
+				RangeEnd: []byte(`test-key-delete-9`),
+			})
+			require.Nil(t, err, err)
+			assert.Equal(t, 0, len(resp.Kvs))
+		})
+		t.Run("missing", func(t *testing.T) {
+			var k = []byte(`test-key-delete-one`)
+			resp, err := svc.Range(ctx, &internal.RangeRequest{Key: k})
+			require.Nil(t, err, err)
+			assert.Equal(t, 0, len(resp.Kvs))
+			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key: k,
+			})
+			require.Nil(t, err, err)
+			assert.EqualValues(t, 0, resp2.Deleted)
+		})
+	})
 	// Compact
 	// Txn
 	// Watch

@@ -100,7 +100,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			err = ErrValueInvalid
 			return
 		}
-		if len(end) == 0 && bytes.Compare(k, key) != 0 {
+		if len(end) == 0 && !bytes.Equal(k, key) {
 			break
 		}
 		if len(end) > 0 && bytes.Compare(k, end) > 0 {
@@ -113,7 +113,9 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		next = next[:0]
 		mod := math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
 		for revision > 0 && mod > revision {
-			next = append(next, v)
+			if !countOnly {
+				next = append(next, v)
+			}
 			if k, v, err = cur.Get(nil, nil, lmdb.NextDup); err != nil {
 				break
 			}
@@ -142,9 +144,8 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			continue
 		}
 		if created > 0 {
-			if countOnly {
-				count++
-			} else {
+			count++
+			if !countOnly {
 				next = append(next, v)
 				item, err = item.FromBytes(k, next[0], nil, keysOnly)
 				if err != nil {
@@ -158,6 +159,58 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 				}
 				items = append(items, item)
 			}
+		}
+		if len(end) == 0 {
+			break
+		}
+		k, v, err = cur.Get(k, nil, lmdb.NextNoDup)
+	}
+	if lmdb.IsNotFound(err) {
+		err = nil
+	}
+	return
+}
+
+func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items []kv, count int64, err error) {
+	var next kv
+	var prev kv
+	cur, err := txn.OpenCursor(db.i)
+	if err != nil {
+		return
+	}
+	defer cur.Close()
+	k, v, err := cur.Get(key, nil, lmdb.SetRange)
+	for !lmdb.IsNotFound(err) {
+		if err != nil {
+			return
+		}
+		if len(v) < 12 {
+			err = ErrValueInvalid
+			return
+		}
+		if len(end) == 0 && !bytes.Equal(k, key) {
+			break
+		}
+		if len(end) > 0 && bytes.Compare(k, end) > 0 {
+			return
+		}
+		prev, err = prev.FromBytes(k, v, nil, false)
+		if prev.created > 0 {
+			next = kv{
+				key:      k,
+				revision: index,
+			}
+			if prev.revision == index {
+				if err = cur.Put(k, next.Bytes(nil, nil), lmdb.Current); err != nil {
+					return
+				}
+			} else {
+				if err = txn.Put(db.i, k, next.Bytes(nil, nil), 0); err != nil {
+					return
+				}
+			}
+			items = append(items, prev)
+			count++
 		}
 		if len(end) == 0 {
 			break

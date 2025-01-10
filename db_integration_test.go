@@ -2,6 +2,7 @@ package icarus
 
 import (
 	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
@@ -22,6 +23,9 @@ func TestDb(t *testing.T) {
 		envPath:   dir,
 		log:       log,
 		clock:     clock.New(),
+	}
+	if err = os.RemoveAll(dir); err != nil {
+		panic(err)
 	}
 	_, err = sm.Open(make(chan struct{}))
 	if err != nil {

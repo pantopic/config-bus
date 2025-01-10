@@ -62,3 +62,22 @@ func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res 
 	s.addTerm(res.Header)
 	return
 }
+
+func (s *kvService) DeleteRange(ctx context.Context, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+	res = &internal.DeleteRangeResponse{}
+	b, err := proto.Marshal(req)
+	if err != nil {
+		return
+	}
+	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_DELETE_RANGE))
+	if err != nil {
+		return
+	}
+	if val != 1 {
+		err = fmt.Errorf("%s", string(data))
+		return
+	}
+	err = proto.Unmarshal(data, res)
+	s.addTerm(res.Header)
+	return
+}

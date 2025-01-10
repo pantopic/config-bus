@@ -87,8 +87,10 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var t = sm.clock.Now()
-	var req = &internal.PutRequest{}
-	var res = &internal.PutResponse{}
+	var reqPut = &internal.PutRequest{}
+	var resPut = &internal.PutResponse{}
+	var reqDel = &internal.DeleteRangeRequest{}
+	var resDel = &internal.DeleteRangeResponse{}
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
@@ -107,11 +109,11 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		for i, ent := range entries {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
-				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqPut); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				prev, _, patched, err := sm.dbKv.put(txn, ent.Index, uint64(req.Lease), req.Key, req.Value)
+				prev, _, patched, err := sm.dbKv.put(txn, ent.Index, uint64(reqPut.Lease), reqPut.Key, reqPut.Value)
 				if err != nil {
 					return err
 				}
@@ -119,21 +121,51 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.statPatched++
 				}
 				// TODO Replace timestamp w/ epoch
-				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), req.Key)
+				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), reqPut.Key)
 				if err != nil {
 					return err
 				}
-				res.Reset()
-				res.Header = sm.responseHeader(ent.Index)
-				if req.PrevKv {
-					res.PrevKv = prev.ToProto()
+				resPut.Reset()
+				resPut.Header = sm.responseHeader(ent.Index)
+				if reqPut.PrevKv {
+					resPut.PrevKv = prev.ToProto()
 				}
-				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Data, err = proto.Marshal(resPut)
 				if err != nil {
 					return err
 				}
 				entries[i].Result.Value = 1
-				// TODO: Insert kv event
+			case CMD_KV_DELETE_RANGE:
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqDel); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				prev, n, err := sm.dbKv.deleteRange(txn, ent.Index, reqDel.Key, reqDel.RangeEnd)
+				if err != nil {
+					return err
+				}
+				var keys = make([][]byte, len(prev))
+				for _, item := range prev {
+					keys = append(keys, item.key)
+				}
+				// TODO Replace timestamp w/ epoch
+				err = sm.dbKvEvent.delete(txn, ent.Index, uint64(t.Unix()), keys)
+				if err != nil {
+					return err
+				}
+				resDel.Reset()
+				resDel.Deleted = n
+				resDel.Header = sm.responseHeader(ent.Index)
+				if reqDel.PrevKv {
+					for _, item := range prev {
+						resDel.PrevKvs = append(resDel.PrevKvs, item.ToProto())
+					}
+				}
+				entries[i].Result.Data, err = proto.Marshal(resDel)
+				if err != nil {
+					return err
+				}
+				entries[i].Result.Value = 1
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)

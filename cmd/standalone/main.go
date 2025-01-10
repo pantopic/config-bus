@@ -23,6 +23,7 @@ import (
 
 func main() {
 	flag.Parse()
+	zongzi.SetLogLevel(zongzi.LogLevelWarning)
 	ctx := context.Background()
 	log := slog.Default()
 	cfg := getConfig()
@@ -37,7 +38,8 @@ func main() {
 		zongzi.WithWALDir(cfg.Dir+"/wal"),
 		zongzi.WithGossipAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
 		zongzi.WithRaftAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
-		zongzi.WithApiAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)))
+		zongzi.WithApiAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
+		zongzi.WithHostMemoryLimit(zongzi.HostMemory256))
 	if err != nil {
 		panic(err)
 	}
@@ -86,6 +88,15 @@ func start(
 		zongzi.WithPlacementMembers(3))
 	if err != nil {
 		panic(err)
+	}
+
+	for i := range 23 {
+		_, _, err = agent.ShardCreate(ctx, icarus.Uri,
+			zongzi.WithName(fmt.Sprintf("icarus-%05d", i)),
+			zongzi.WithPlacementMembers(3))
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())

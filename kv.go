@@ -55,8 +55,8 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 		}
 		buf = append(buf, kv.flags)
 		buf = append(buf, kv.val...)
-		buf = binary.BigEndian.AppendUint32(buf, crc(kv.key, buf))
 	}
+	buf = binary.BigEndian.AppendUint32(buf, crc(kv.key, buf))
 	return buf
 }
 
