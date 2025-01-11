@@ -87,10 +87,6 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var t = sm.clock.Now()
-	var reqPut = &internal.PutRequest{}
-	var resPut = &internal.PutResponse{}
-	var reqDel = &internal.DeleteRangeRequest{}
-	var resDel = &internal.DeleteRangeResponse{}
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
@@ -109,6 +105,8 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		for i, ent := range entries {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
+				// TODO - Add sync pool for protobuf messages
+				var reqPut = &internal.PutRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqPut); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
@@ -120,12 +118,13 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if patched {
 					sm.statPatched++
 				}
-				// TODO Replace timestamp w/ epoch
+				// TODO - Replace timestamp w/ epoch
 				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), reqPut.Key)
 				if err != nil {
 					return err
 				}
-				resPut.Reset()
+				// TODO - Insert lease keys
+				var resPut = &internal.PutResponse{}
 				resPut.Header = sm.responseHeader(ent.Index)
 				if reqPut.PrevKv {
 					resPut.PrevKv = prev.ToProto()
@@ -136,6 +135,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				}
 				entries[i].Result.Value = 1
 			case CMD_KV_DELETE_RANGE:
+				var reqDel = &internal.DeleteRangeRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqDel); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
@@ -148,12 +148,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				for _, item := range prev {
 					keys = append(keys, item.key)
 				}
-				// TODO Replace timestamp w/ epoch
+				// TODO - Replace timestamp w/ epoch
 				err = sm.dbKvEvent.delete(txn, ent.Index, uint64(t.Unix()), keys)
 				if err != nil {
 					return err
 				}
-				resDel.Reset()
+				var resDel = &internal.DeleteRangeResponse{}
 				resDel.Deleted = n
 				resDel.Header = sm.responseHeader(ent.Index)
 				if reqDel.PrevKv {
@@ -166,17 +166,44 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				entries[i].Result.Value = 1
+			case CMD_KV_COMPACT:
+				var req = &internal.CompactionRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				// TODO - Add support for asynchronous compaction w/ req.Physical
+				batch, index, err := sm.dbKvEvent.compact(txn, uint64(req.Revision))
+				if err != nil {
+					return err
+				}
+				if _, err = sm.dbKv.compact(txn, batch); err != nil {
+					return err
+				}
+				var res = &internal.CompactionResponse{}
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				if err != nil {
+					return err
+				}
+				if err := sm.dbMeta.setRevisionMin(txn, uint64(req.Revision)); err != nil {
+					return err
+				}
+				if err := sm.dbMeta.setRevisionCompacted(txn, index); err != nil {
+					return err
+				}
+				entries[i].Result.Value = 1
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
 		return
 	}); err != nil {
-		// TODO: Identify and log transient errors
+		// TODO - Identify and log transient errors
 		sm.log.Error(err.Error(), "index", entries[0].Index)
 		panic("Storage error: " + err.Error())
 	}
 	sm.statTime += sm.clock.Since(t)
-	// TODO: Notify watchers
+	// TODO - Notify watchers
 	return entries
 }
 
@@ -306,7 +333,5 @@ func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader
 		Revision:  int64(revision),
 		ClusterId: sm.shardID,
 		MemberId:  sm.replicaID,
-		// TODO: Get access to Term through IRaftEventListener.LeaderInfo
-		RaftTerm: 1,
 	}
 }

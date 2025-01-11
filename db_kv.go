@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/elliotchance/orderedmap/v3"
 )
 
 type dbKv struct {
@@ -107,6 +108,8 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			return
 		}
 		if limit > 0 && len(items) == int(limit) {
+			// TODO - Return full count upon reaching limit
+			// countOnly = true
 			more = true
 			return
 		}
@@ -219,6 +222,45 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items 
 	}
 	if lmdb.IsNotFound(err) {
 		err = nil
+	}
+	return
+}
+
+func (db dbKv) compact(txn *lmdb.Txn, batch *orderedmap.OrderedMap[string, uint64]) (n int, err error) {
+	var k []byte
+	var v []byte
+	var current kv
+	cur, err := txn.OpenCursor(db.i)
+	if err != nil {
+		return
+	}
+	defer cur.Close()
+	for key, max := range batch.AllFromFront() {
+		k, v, err = cur.Get([]byte(key), nil, lmdb.SetRange)
+		for !lmdb.IsNotFound(err) {
+			if err != nil {
+				return
+			}
+			if len(v) < 13 {
+				err = ErrValueInvalid
+				return
+			}
+			current, err = current.FromBytes(k, v, nil, true)
+			if !bytes.Equal(current.key, []byte(key)) {
+				err = ErrKeyMissing
+				return
+			}
+			if current.revision < max || (current.revision == max && current.created == 0) {
+				if err = cur.Del(lmdb.Current); err != nil {
+					return
+				}
+				n++
+			}
+			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
+		}
+		if lmdb.IsNotFound(err) {
+			err = nil
+		}
 	}
 	return
 }

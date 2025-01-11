@@ -9,8 +9,8 @@ import (
 const (
 	CMD_KV_PUT byte = iota
 	CMD_KV_DELETE_RANGE
-	CMD_KV_TXN
 	CMD_KV_COMPACT
+	CMD_KV_TXN
 
 	QUERY_KV_RANGE byte = iota
 
@@ -23,6 +23,8 @@ var (
 	ErrChecksumMissing = fmt.Errorf(`Checksum missing`)
 	ErrValueInvalid    = fmt.Errorf(`Value invalid`)
 	ErrPatchInvalid    = fmt.Errorf(`Patch invalid (missing next?)`)
+	ErrKeyInvalid      = fmt.Errorf(`Key invalid`)
+	ErrKeyMissing      = fmt.Errorf(`Key missing`)
 )
 
 type (

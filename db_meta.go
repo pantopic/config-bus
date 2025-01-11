@@ -9,19 +9,27 @@ type dbMeta struct {
 }
 
 var (
-	metaKeyRevision    = []byte(`rev`)
-	metaKeyRevisionMin = []byte(`rev_min`)
+	metaKeyRevision          = []byte(`rev`)
+	metaKeyRevisionMin       = []byte(`rev_min`)
+	metaKeyRevisionCompacted = []byte(`rev_compacted`)
 )
 
 func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 	db.i, err = txn.OpenDBI("meta", uint(lmdb.Create))
-	index, err = db.getRevision(txn)
-	if lmdb.IsNotFound(err) {
+	if index, err = db.getRevision(txn); lmdb.IsNotFound(err) {
 		err = db.setRevision(txn, 0)
 	}
-	_, err = db.getRevisionMin(txn)
-	if lmdb.IsNotFound(err) {
+	if err != nil {
+		return
+	}
+	if _, err = db.getRevisionMin(txn); lmdb.IsNotFound(err) {
 		err = db.setRevisionMin(txn, 0)
+	}
+	if err != nil {
+		return
+	}
+	if _, err = db.getRevisionCompacted(txn); lmdb.IsNotFound(err) {
+		err = db.setRevisionCompacted(txn, 0)
 	}
 	return
 }
@@ -40,4 +48,12 @@ func (db dbMeta) getRevisionMin(txn *lmdb.Txn) (index uint64, err error) {
 
 func (db dbMeta) setRevisionMin(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyRevisionMin, index)
+}
+
+func (db dbMeta) getRevisionCompacted(txn *lmdb.Txn) (index uint64, err error) {
+	return db.getUint64(txn, metaKeyRevisionCompacted)
+}
+
+func (db dbMeta) setRevisionCompacted(txn *lmdb.Txn, index uint64) (err error) {
+	return db.putUint64(txn, metaKeyRevisionCompacted, index)
 }
