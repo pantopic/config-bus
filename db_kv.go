@@ -30,7 +30,7 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 	} else if err != nil && !lmdb.IsNotFound(err) {
 		return
 	}
-	if prev.revision == 0 {
+	if prev.created == 0 {
 		next = kv{
 			revision: index,
 			version:  1,
