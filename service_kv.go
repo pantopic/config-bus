@@ -16,7 +16,7 @@ type kvService struct {
 	client zongzi.ShardClient
 }
 
-func NewKvService(client zongzi.ShardClient) *kvService {
+func NewServiceKv(client zongzi.ShardClient) *kvService {
 	return &kvService{client: client}
 }
 

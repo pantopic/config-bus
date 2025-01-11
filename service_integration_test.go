@@ -79,7 +79,8 @@ func TestService(t *testing.T) {
 		})
 		return shard.Leader > 0
 	}))
-	svc := NewKvService(agents[0].Client(shard.ID))
+	svcKv := NewServiceKv(agents[0].Client(shard.ID))
+	svcLease := NewServiceLease(agents[0].Client(shard.ID))
 	var rev int64 = 0
 	t.Run("insert", func(t *testing.T) {
 		put := &internal.PutRequest{
@@ -87,14 +88,14 @@ func TestService(t *testing.T) {
 			Value: []byte(`test-value`),
 		}
 		t.Run("put", func(t *testing.T) {
-			resp, err := svc.Put(ctx, put)
+			resp, err := svcKv.Put(ctx, put)
 			require.Nil(t, err, err)
 			assert.NotNil(t, resp)
 			assert.Greater(t, resp.Header.Revision, rev)
 			rev = resp.Header.Revision
 		})
 		t.Run("get", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key: put.Key,
 			})
 			require.Nil(t, err, err)
@@ -112,14 +113,14 @@ func TestService(t *testing.T) {
 			Value: []byte(`test-value-2`),
 		}
 		t.Run("put", func(t *testing.T) {
-			resp, err := svc.Put(ctx, put)
+			resp, err := svcKv.Put(ctx, put)
 			require.Nil(t, err, err)
 			assert.NotNil(t, resp)
 			assert.Greater(t, resp.Header.Revision, rev)
 			rev = resp.Header.Revision
 		})
 		t.Run("get", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key: put.Key,
 			})
 			require.Nil(t, err, err)
@@ -130,7 +131,7 @@ func TestService(t *testing.T) {
 			assert.Equal(t, put.Value, resp.Kvs[0].Value)
 		})
 		t.Run("prev", func(t *testing.T) {
-			resp, err := svc.Put(ctx, &internal.PutRequest{
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
 				Key:    []byte(`test-key`),
 				Value:  []byte(`test-value-3`),
 				PrevKv: true,
@@ -143,18 +144,18 @@ func TestService(t *testing.T) {
 		})
 	})
 	t.Run("range", func(t *testing.T) {
-		_, err := svc.Put(ctx, &internal.PutRequest{
+		_, err := svcKv.Put(ctx, &internal.PutRequest{
 			Key:   []byte(`test-range-key-1`),
 			Value: []byte(`test-range-value-2`),
 		})
 		require.Nil(t, err, err)
-		_, err = svc.Put(ctx, &internal.PutRequest{
+		_, err = svcKv.Put(ctx, &internal.PutRequest{
 			Key:   []byte(`test-range-key-2`),
 			Value: []byte(`test-range-value-2`),
 		})
 		require.Nil(t, err, err)
 		t.Run("basic", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-range-key-1`),
 				RangeEnd: []byte(`test-range-key-2`),
 			})
@@ -166,7 +167,7 @@ func TestService(t *testing.T) {
 			assert.Equal(t, []byte(`test-range-key-2`), resp.Kvs[1].Key)
 		})
 		t.Run("revision", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key`),
 				RangeEnd: []byte(`test-range-key-2`),
 				Revision: rev1,
@@ -179,7 +180,7 @@ func TestService(t *testing.T) {
 			assert.Equal(t, []byte(`test-value`), resp.Kvs[0].Value, string(resp.Kvs[0].Value))
 		})
 		t.Run("next", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test`),
 				RangeEnd: []byte(`vest`),
 			})
@@ -192,7 +193,7 @@ func TestService(t *testing.T) {
 			assert.Equal(t, []byte(`test-range-key-2`), resp.Kvs[2].Key, string(resp.Kvs[2].Key))
 		})
 		t.Run("missing", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key: []byte(`rest`),
 			})
 			require.Nil(t, err, err)
@@ -202,7 +203,7 @@ func TestService(t *testing.T) {
 		})
 		t.Run("count", func(t *testing.T) {
 			t.Run("only", func(t *testing.T) {
-				resp, err := svc.Range(ctx, &internal.RangeRequest{
+				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:       []byte(`test-range-key-1`),
 					RangeEnd:  []byte(`test-range-key-2`),
 					CountOnly: true,
@@ -214,7 +215,7 @@ func TestService(t *testing.T) {
 			})
 			var revs []int64
 			for i := range 100 {
-				resp, err := svc.Put(ctx, &internal.PutRequest{
+				resp, err := svcKv.Put(ctx, &internal.PutRequest{
 					Key:   []byte(fmt.Sprintf(`test-count-%02d`, i)),
 					Value: []byte(fmt.Sprintf(`value-count-%02d`, i)),
 				})
@@ -223,7 +224,7 @@ func TestService(t *testing.T) {
 			}
 			t.Run("partial", func(t *testing.T) {
 				withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, false, func() {
-					resp, err := svc.Range(ctx, &internal.RangeRequest{
+					resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 						Key:      []byte(`test-count-00`),
 						RangeEnd: []byte(`test-count-99`),
 						Limit:    10,
@@ -236,7 +237,7 @@ func TestService(t *testing.T) {
 			})
 			t.Run("full", func(t *testing.T) {
 				withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, true, func() {
-					resp, err := svc.Range(ctx, &internal.RangeRequest{
+					resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 						Key:      []byte(`test-count-00`),
 						RangeEnd: []byte(`test-count-99`),
 						Limit:    10,
@@ -245,7 +246,7 @@ func TestService(t *testing.T) {
 					require.NotNil(t, resp)
 					assert.Len(t, resp.Kvs, 10)
 					assert.Equal(t, int64(100), resp.Count)
-					resp, err = svc.Range(ctx, &internal.RangeRequest{
+					resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 						Key:      []byte(`test-count-00`),
 						RangeEnd: []byte(`test-count-99`),
 						Revision: revs[49],
@@ -260,14 +261,14 @@ func TestService(t *testing.T) {
 		})
 	})
 	t.Run("patch", func(t *testing.T) {
-		resp, err := svc.Put(ctx, &internal.PutRequest{
+		resp, err := svcKv.Put(ctx, &internal.PutRequest{
 			Key:   []byte(`test-key-patch`),
 			Value: []byte(`--------------------------------------------------------------------------------`),
 		})
 		require.Nil(t, err, err)
 		rev = resp.Header.Revision
 		t.Run("put", func(t *testing.T) {
-			resp, err := svc.Put(ctx, &internal.PutRequest{
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
 				Key:   []byte(`test-key-patch`),
 				Value: []byte(`----------------------------------------0----------------------------------------`),
 			})
@@ -276,7 +277,7 @@ func TestService(t *testing.T) {
 			assert.Greater(t, resp.Header.Revision, rev)
 		})
 		t.Run("revision", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key-patch`),
 				Revision: rev,
 			})
@@ -292,17 +293,17 @@ func TestService(t *testing.T) {
 		t.Run("one", func(t *testing.T) {
 			var k = []byte(`test-key-delete-one`)
 			var v = []byte(`test-val`)
-			_, err := svc.Put(ctx, &internal.PutRequest{Key: k, Value: v})
+			_, err := svcKv.Put(ctx, &internal.PutRequest{Key: k, Value: v})
 			require.Nil(t, err, err)
-			resp, err := svc.Range(ctx, &internal.RangeRequest{Key: k})
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{Key: k})
 			require.Nil(t, err, err)
 			assert.Equal(t, 1, len(resp.Kvs))
-			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+			resp2, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
 				Key: k,
 			})
 			require.Nil(t, err, err)
 			assert.EqualValues(t, 1, resp2.Deleted)
-			resp, err = svc.Range(ctx, &internal.RangeRequest{
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key: k,
 			})
 			require.Nil(t, err, err)
@@ -310,25 +311,25 @@ func TestService(t *testing.T) {
 		})
 		t.Run("range", func(t *testing.T) {
 			for i := range 10 {
-				_, err = svc.Put(ctx, &internal.PutRequest{
+				_, err = svcKv.Put(ctx, &internal.PutRequest{
 					Key:   []byte(fmt.Sprintf(`test-key-delete-%d`, i)),
 					Value: []byte(`-------------------`),
 				})
 				require.Nil(t, err, err)
 			}
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key-delete-0`),
 				RangeEnd: []byte(`test-key-delete-9`),
 			})
 			require.Nil(t, err, err)
 			assert.Equal(t, 10, len(resp.Kvs))
-			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+			resp2, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
 				Key:      []byte(`test-key-delete-0`),
 				RangeEnd: []byte(`test-key-delete-9`),
 			})
 			require.Nil(t, err, err)
 			assert.EqualValues(t, 10, resp2.Deleted)
-			resp, err = svc.Range(ctx, &internal.RangeRequest{
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key-delete-0`),
 				RangeEnd: []byte(`test-key-delete-9`),
 			})
@@ -337,10 +338,10 @@ func TestService(t *testing.T) {
 		})
 		t.Run("missing", func(t *testing.T) {
 			var k = []byte(`test-key-delete-one`)
-			resp, err := svc.Range(ctx, &internal.RangeRequest{Key: k})
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{Key: k})
 			require.Nil(t, err, err)
 			assert.Equal(t, 0, len(resp.Kvs))
-			resp2, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+			resp2, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
 				Key: k,
 			})
 			require.Nil(t, err, err)
@@ -350,14 +351,14 @@ func TestService(t *testing.T) {
 	t.Run("compact", func(t *testing.T) {
 		var revs []int64
 		for i := range 10 {
-			resp, err := svc.Put(ctx, &internal.PutRequest{
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
 				Key:   []byte(fmt.Sprintf(`test-key-compact-%d`, i)),
 				Value: []byte(`-------------------`),
 			})
 			require.Nil(t, err, err)
 			revs = append(revs, resp.Header.Revision)
 		}
-		resp, err := svc.Range(ctx, &internal.RangeRequest{
+		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-0`),
 			RangeEnd: []byte(`test-key-compact-9`),
 			Revision: revs[1],
@@ -365,37 +366,37 @@ func TestService(t *testing.T) {
 		require.Nil(t, err, err)
 		assert.Equal(t, 2, len(resp.Kvs))
 		for i := range 10 {
-			resp, err := svc.DeleteRange(ctx, &internal.DeleteRangeRequest{
+			resp, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
 				Key: []byte(fmt.Sprintf(`test-key-compact-%d`, i)),
 			})
 			require.Nil(t, err, err)
 			revs = append(revs, resp.Header.Revision)
 		}
-		resp, err = svc.Range(ctx, &internal.RangeRequest{
+		resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-0`),
 			RangeEnd: []byte(`test-key-compact-9`),
 		})
 		require.Nil(t, err, err)
 		assert.Equal(t, 0, len(resp.Kvs))
-		resp, err = svc.Range(ctx, &internal.RangeRequest{
+		resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-0`),
 			RangeEnd: []byte(`test-key-compact-9`),
 			Revision: revs[10],
 		})
 		require.Nil(t, err, err)
 		assert.Equal(t, 9, len(resp.Kvs))
-		_, err = svc.Compact(ctx, &internal.CompactionRequest{
+		_, err = svcKv.Compact(ctx, &internal.CompactionRequest{
 			Revision: revs[10],
 		})
 		require.Nil(t, err, err)
-		resp2, err := svc.Range(ctx, &internal.RangeRequest{
+		resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-0`),
 			RangeEnd: []byte(`test-key-compact-9`),
 			Revision: revs[10],
 		})
 		require.Nil(t, err, err)
 		assert.Equal(t, 9, len(resp2.Kvs))
-		resp2, err = svc.Range(ctx, &internal.RangeRequest{
+		resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-0`),
 			RangeEnd: []byte(`test-key-compact-9`),
 			Revision: revs[9],
@@ -405,7 +406,7 @@ func TestService(t *testing.T) {
 
 	t.Run("transaction", func(t *testing.T) {
 		t.Run("basic", func(t *testing.T) {
-			_, err = svc.Put(ctx, &internal.PutRequest{
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
 				Key:   []byte(`test-txn-00`),
 				Value: []byte(`-----------`),
 			})
@@ -449,32 +450,32 @@ func TestService(t *testing.T) {
 					}),
 				},
 			}
-			resp, err := svc.Txn(ctx, req)
+			resp, err := svcKv.Txn(ctx, req)
 			require.Nil(t, err, err)
 			assert.True(t, resp.Succeeded)
 			assert.Len(t, resp.Responses, len(req.Success))
 			assert.Len(t, resp.Responses[3].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 2)
-			resp, err = svc.Txn(ctx, req)
+			resp, err = svcKv.Txn(ctx, req)
 			require.Nil(t, err, err)
 			assert.False(t, resp.Succeeded)
 			assert.Len(t, resp.Responses, len(req.Failure))
 			assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
 		})
-		resp, err := svc.Put(ctx, &internal.PutRequest{
+		resp, err := svcKv.Put(ctx, &internal.PutRequest{
 			Key:   []byte(`test-txn-00`),
 			Value: []byte(`b`),
 			Lease: 1,
 		})
 		require.Nil(t, err, err)
 		rev := resp.Header.Revision
-		resp2, err := svc.Range(ctx, &internal.RangeRequest{
+		resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key: []byte(`test-txn-00`),
 		})
 		require.Nil(t, err, err)
 		assert.Equal(t, 1, len(resp2.Kvs))
 		item := resp2.Kvs[0]
 		valueCompare := func(result internal.Compare_CompareResult, b []byte) (*internal.TxnResponse, error) {
-			return svc.Txn(ctx, &internal.TxnRequest{
+			return svcKv.Txn(ctx, &internal.TxnRequest{
 				Compare: []*internal.Compare{
 					{
 						Key:    []byte(`test-txn-00`),
@@ -553,7 +554,7 @@ func TestService(t *testing.T) {
 		}
 		t.Run("version", func(t *testing.T) {
 			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
-				return svc.Txn(ctx, &internal.TxnRequest{
+				return svcKv.Txn(ctx, &internal.TxnRequest{
 					Compare: []*internal.Compare{
 						{
 							Key:    []byte(`test-txn-00`),
@@ -569,7 +570,7 @@ func TestService(t *testing.T) {
 		})
 		t.Run("revision", func(t *testing.T) {
 			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
-				return svc.Txn(ctx, &internal.TxnRequest{
+				return svcKv.Txn(ctx, &internal.TxnRequest{
 					Compare: []*internal.Compare{
 						{
 							Key:    []byte(`test-txn-00`),
@@ -585,7 +586,7 @@ func TestService(t *testing.T) {
 		})
 		t.Run("created", func(t *testing.T) {
 			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
-				return svc.Txn(ctx, &internal.TxnRequest{
+				return svcKv.Txn(ctx, &internal.TxnRequest{
 					Compare: []*internal.Compare{
 						{
 							Key:    []byte(`test-txn-00`),
@@ -601,7 +602,7 @@ func TestService(t *testing.T) {
 		})
 		t.Run("lease", func(t *testing.T) {
 			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
-				return svc.Txn(ctx, &internal.TxnRequest{
+				return svcKv.Txn(ctx, &internal.TxnRequest{
 					Compare: []*internal.Compare{
 						{
 							Key:    []byte(`test-txn-00`),
@@ -616,7 +617,7 @@ func TestService(t *testing.T) {
 			}, item.Lease)
 		})
 		t.Run("no-compare", func(t *testing.T) {
-			resp, err := svc.Txn(ctx, &internal.TxnRequest{
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 				Success: []*internal.RequestOp{
 					putOp(&internal.PutRequest{
 						Key:   []byte(`test-txn-03`),
@@ -629,7 +630,7 @@ func TestService(t *testing.T) {
 		})
 		t.Run("multi-write", func(t *testing.T) {
 			withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, false, func() {
-				resp, err := svc.Txn(ctx, &internal.TxnRequest{
+				resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 					Success: []*internal.RequestOp{
 						putOp(&internal.PutRequest{
 							Key:   []byte(`test-txn-03`),
@@ -643,7 +644,7 @@ func TestService(t *testing.T) {
 				})
 				require.NotNil(t, err, err)
 				assert.Nil(t, resp)
-				resp, err = svc.Txn(ctx, &internal.TxnRequest{
+				resp, err = svcKv.Txn(ctx, &internal.TxnRequest{
 					Success: []*internal.RequestOp{
 						putOp(&internal.PutRequest{
 							Key:   []byte(`test-txn-03`),
@@ -662,7 +663,7 @@ func TestService(t *testing.T) {
 					`test-txn-03`, // Existent
 					`test-txn-04`, // Non-existent
 				} {
-					resp, err := svc.Txn(ctx, &internal.TxnRequest{
+					resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 						Success: []*internal.RequestOp{
 							putOp(&internal.PutRequest{
 								Key:   []byte(k),
@@ -676,14 +677,14 @@ func TestService(t *testing.T) {
 					})
 					require.Nil(t, err, err)
 					assert.Len(t, resp.Responses, 2)
-					resp2, err := svc.Range(ctx, &internal.RangeRequest{
+					resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
 						Key: []byte(k),
 					})
 					require.Nil(t, err, err)
 					assert.Equal(t, 1, len(resp2.Kvs))
 					assert.Equal(t, []byte(`b`), resp2.Kvs[0].Value)
 				}
-				resp, err := svc.Txn(ctx, &internal.TxnRequest{
+				resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 					Success: []*internal.RequestOp{
 						putOp(&internal.PutRequest{
 							Key:   []byte(`test-txn-03`),
@@ -696,11 +697,37 @@ func TestService(t *testing.T) {
 				})
 				require.Nil(t, err, err)
 				assert.Len(t, resp.Responses, 2)
-				resp2, err := svc.Range(ctx, &internal.RangeRequest{
+				resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key: []byte(`test-txn-03`),
 				})
 				require.Nil(t, err, err)
 				assert.Equal(t, 0, len(resp2.Kvs))
+			})
+		})
+		t.Run("lease-grant", func(t *testing.T) {
+			t.Run("no-id", func(t *testing.T) {
+				var id int64
+				t.Run("success", func(t *testing.T) {
+					resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+						TTL: 600,
+					})
+					require.Nil(t, err, err)
+					assert.NotNil(t, resp)
+					assert.Empty(t, resp.Error)
+					assert.EqualValues(t, 600, resp.TTL)
+					assert.Greater(t, resp.ID, int64(0))
+					id = resp.ID
+				})
+				t.Run("failure", func(t *testing.T) {
+					resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+						ID:  id,
+						TTL: 600,
+					})
+					require.Nil(t, err, err)
+					assert.NotNil(t, resp)
+					assert.NotEmpty(t, resp.Error)
+					assert.EqualValues(t, 0, resp.TTL)
+				})
 			})
 		})
 	})
@@ -715,6 +742,7 @@ func TestService(t *testing.T) {
 	// LeaseKeepAlive
 	// LeaseTimeToLive
 	// LeaseLeases
+	// LeaseCheckpoint
 	// Watch
 
 	// Status

@@ -22,6 +22,7 @@ const Uri = "zongzi://github.com/logbn/icarus"
 type stateMachine struct {
 	dbKv       dbKv
 	dbKvEvent  dbKvEvent
+	dbLease    dbLease
 	dbLeaseExp dbLeaseExp
 	dbLeaseKey dbLeaseKey
 	dbMeta     dbMeta
@@ -73,6 +74,9 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 			return
 		}
 		if sm.dbKvEvent, err = newDbKvEvent(txn); err != nil {
+			return
+		}
+		if sm.dbLease, err = newDbLease(txn); err != nil {
 			return
 		}
 		if sm.dbLeaseExp, err = newDbLeaseExp(txn); err != nil {
@@ -194,6 +198,53 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					entries[i].Result.Data, err = proto.Marshal(res)
 					entries[i].Result.Value = 1
 				}
+			case CMD_LEASE_GRANT:
+				var req = &internal.LeaseGrantRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				res := &internal.LeaseGrantResponse{}
+				res.Header = sm.responseHeader(ent.Index)
+				item := lease{id: uint64(req.ID)}
+				if item.id == 0 {
+					if item.id, err = sm.dbMeta.getLeaseID(txn); err != nil {
+						return
+					}
+					var found lease
+					for {
+						item.id++
+						if found, err = sm.dbLease.get(txn, item.id); err != nil {
+							return
+						}
+						if found.id == 0 {
+							break
+						}
+					}
+					if err = sm.dbMeta.setLeaseID(txn, item.id); err != nil {
+						return
+					}
+				} else {
+					if item, err = sm.dbLease.get(txn, item.id); err != nil {
+						return
+					}
+				}
+				if item.renewed != 0 {
+					res.Error = internal.ErrGRPCDuplicateKey.Error()
+				} else {
+					item.renewed = epoch
+					item.expires = epoch + uint64(req.TTL)
+					if err = sm.dbLease.put(txn, item); err != nil {
+						return err
+					}
+					res.ID = int64(item.id)
+					res.TTL = req.TTL
+				}
+				entries[i].Result.Data, err = proto.Marshal(res)
+				if err != nil {
+					return err
+				}
+				entries[i].Result.Value = 1
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)

@@ -104,7 +104,8 @@ func start(
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 
 	// Start gRPC Server
-	internal.RegisterKVServer(grpcServer, icarus.NewKvService(client))
+	internal.RegisterKVServer(grpcServer, icarus.NewServiceKv(client))
+	internal.RegisterLeaseServer(grpcServer, icarus.NewServiceLease(client))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		panic(err)

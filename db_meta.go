@@ -9,28 +9,32 @@ type dbMeta struct {
 }
 
 var (
+	metaKeyEpoch             = []byte(`epoch`)
+	metaKeyLeaseCheckpoint   = []byte(`lease_checkpoint`)
+	metaKeyLeaseID           = []byte(`lease_id`)
 	metaKeyRevision          = []byte(`rev`)
-	metaKeyRevisionMin       = []byte(`rev_min`)
 	metaKeyRevisionCompacted = []byte(`rev_compacted`)
+	metaKeyRevisionMin       = []byte(`rev_min`)
 )
 
 func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 	db.i, err = txn.OpenDBI("meta", uint(lmdb.Create))
-	if index, err = db.getRevision(txn); lmdb.IsNotFound(err) {
-		err = db.setRevision(txn, 0)
+	for _, k := range [][]byte{
+		metaKeyEpoch,
+		metaKeyLeaseCheckpoint,
+		metaKeyLeaseID,
+		metaKeyRevision,
+		metaKeyRevisionCompacted,
+		metaKeyRevisionMin,
+	} {
+		if _, err = db.db.getUint64(txn, k); lmdb.IsNotFound(err) {
+			err = db.putUint64(txn, k, 0)
+		}
+		if err != nil {
+			return
+		}
 	}
-	if err != nil {
-		return
-	}
-	if _, err = db.getRevisionMin(txn); lmdb.IsNotFound(err) {
-		err = db.setRevisionMin(txn, 0)
-	}
-	if err != nil {
-		return
-	}
-	if _, err = db.getRevisionCompacted(txn); lmdb.IsNotFound(err) {
-		err = db.setRevisionCompacted(txn, 0)
-	}
+	index, err = db.getRevision(txn)
 	return
 }
 
@@ -56,4 +60,12 @@ func (db dbMeta) getRevisionCompacted(txn *lmdb.Txn) (index uint64, err error) {
 
 func (db dbMeta) setRevisionCompacted(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyRevisionCompacted, index)
+}
+
+func (db dbMeta) getLeaseID(txn *lmdb.Txn) (index uint64, err error) {
+	return db.getUint64(txn, metaKeyLeaseID)
+}
+
+func (db dbMeta) setLeaseID(txn *lmdb.Txn, index uint64) (err error) {
+	return db.putUint64(txn, metaKeyLeaseID, index)
 }
