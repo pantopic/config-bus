@@ -1,6 +1,7 @@
 package icarus
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -87,6 +88,8 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var t = sm.clock.Now()
+	// TODO - Replace timestamp w/ real epoch
+	var epoch = uint64(t.Unix())
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
@@ -111,23 +114,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				prev, _, patched, err := sm.dbKv.put(txn, ent.Index, uint64(reqPut.Lease), reqPut.Key, reqPut.Value)
+				resPut, err := sm.put(txn, ent.Index, epoch, reqPut)
 				if err != nil {
 					return err
-				}
-				if patched {
-					sm.statPatched++
-				}
-				// TODO - Replace timestamp w/ epoch
-				err = sm.dbKvEvent.put(txn, ent.Index, uint64(t.Unix()), reqPut.Key)
-				if err != nil {
-					return err
-				}
-				// TODO - Insert lease keys
-				var resPut = &internal.PutResponse{}
-				resPut.Header = sm.responseHeader(ent.Index)
-				if reqPut.PrevKv {
-					resPut.PrevKv = prev.ToProto()
 				}
 				entries[i].Result.Data, err = proto.Marshal(resPut)
 				if err != nil {
@@ -140,26 +129,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				prev, n, err := sm.dbKv.deleteRange(txn, ent.Index, reqDel.Key, reqDel.RangeEnd)
+				resDel, err := sm.deleteRange(txn, ent.Index, epoch, reqDel)
 				if err != nil {
 					return err
-				}
-				var keys = make([][]byte, len(prev))
-				for _, item := range prev {
-					keys = append(keys, item.key)
-				}
-				// TODO - Replace timestamp w/ epoch
-				err = sm.dbKvEvent.delete(txn, ent.Index, uint64(t.Unix()), keys)
-				if err != nil {
-					return err
-				}
-				var resDel = &internal.DeleteRangeResponse{}
-				resDel.Deleted = n
-				resDel.Header = sm.responseHeader(ent.Index)
-				if reqDel.PrevKv {
-					for _, item := range prev {
-						resDel.PrevKvs = append(resDel.PrevKvs, item.ToProto())
-					}
 				}
 				entries[i].Result.Data, err = proto.Marshal(resDel)
 				if err != nil {
@@ -193,6 +165,28 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				entries[i].Result.Value = 1
+			case CMD_KV_TXN:
+				var req = &internal.TxnRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				var success bool
+				success, err = sm.runCompare(txn, req.Compare)
+				if err != nil {
+					return
+				}
+				var res = &internal.TxnResponse{
+					Succeeded: success,
+				}
+				if success {
+					res.Responses, err = sm.runOps(txn, ent.Index, epoch, req.Success)
+				} else {
+					res.Responses, err = sm.runOps(txn, ent.Index, epoch, req.Failure)
+				}
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Value = 1
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
@@ -216,76 +210,26 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			sm.log.Error("Invalid query", "query", fmt.Sprintf("%x", query))
 			return
 		}
-		if err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+		var resp *internal.RangeResponse
+		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
 			index, err := sm.dbMeta.getRevision(txn)
 			if err != nil {
 				return
 			}
-			if req.Revision > 0 {
-				min, err := sm.dbMeta.getRevisionMin(txn)
-				if err != nil {
-					return err
-				}
-				if req.Revision < int64(min) {
-					sm.log.Info("Revision compacted", "rev", req.Revision, "min", min)
-					res.Data = []byte(internal.ErrGRPCCompacted.Error())
-					return nil
-				}
-			}
-			resp := &internal.RangeResponse{
-				Header: sm.responseHeader(index),
-			}
-			if req.CountOnly {
-				_, count, _, err := sm.dbKv.getRange(txn,
-					req.Key,
-					req.RangeEnd,
-					uint64(req.Revision),
-					uint64(req.MinModRevision),
-					uint64(req.MaxModRevision),
-					uint64(req.MinCreateRevision),
-					uint64(req.MaxCreateRevision),
-					uint64(req.Limit),
-					req.CountOnly,
-					req.KeysOnly,
-				)
-				if err != nil {
-					return err
-				}
-				resp.Count = int64(count)
-				if res.Data, err = proto.Marshal(resp); err != nil {
-					return err
-				}
-				res.Value = 1
-			} else {
-				data, _, more, err := sm.dbKv.getRange(txn,
-					req.Key,
-					req.RangeEnd,
-					uint64(req.Revision),
-					uint64(req.MinModRevision),
-					uint64(req.MaxModRevision),
-					uint64(req.MinCreateRevision),
-					uint64(req.MaxCreateRevision),
-					uint64(req.Limit),
-					req.CountOnly,
-					req.KeysOnly,
-				)
-				if err != nil {
-					return err
-				}
-				for _, kv := range data {
-					resp.Kvs = append(resp.Kvs, kv.ToProto())
-				}
-				resp.More = more
-				if res.Data, err = proto.Marshal(resp); err != nil {
-					return err
-				}
-				res.Value = 1
-			}
+			resp, err = sm.rangeReq(txn, index, req)
 			return
-		}); err != nil {
-			// TODO: Identify and log transient errors
-			sm.log.Error("Unexpected error", "err", err.Error())
-			panic(err)
+		})
+		if err == internal.ErrGRPCCompacted {
+			res.Data = []byte(err.Error())
+			err = nil
+		} else if err != nil {
+			return
+		} else {
+			if res.Data, err = proto.Marshal(resp); err != nil {
+				sm.log.Error("Invalid response", "res", fmt.Sprintf("%x", query))
+				return nil
+			}
+			res.Value = 1
 		}
 	}
 	return
@@ -334,4 +278,210 @@ func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader
 		ClusterId: sm.shardID,
 		MemberId:  sm.replicaID,
 	}
+}
+
+func (sm *stateMachine) put(txn *lmdb.Txn, index, epoch uint64, req *internal.PutRequest) (res *internal.PutResponse, err error) {
+	prev, _, patched, err := sm.dbKv.put(txn, index, uint64(req.Lease), req.Key, req.Value)
+	if err != nil {
+		return
+	}
+	if patched {
+		sm.statPatched++
+	}
+	// TODO - Replace timestamp w/ epoch
+	err = sm.dbKvEvent.put(txn, index, epoch, req.Key)
+	if err != nil {
+		return
+	}
+	// TODO - Insert lease keys
+	res = &internal.PutResponse{}
+	res.Header = sm.responseHeader(index)
+	if req.PrevKv {
+		res.PrevKv = prev.ToProto()
+	}
+	return
+}
+
+func (sm *stateMachine) deleteRange(txn *lmdb.Txn, index, epoch uint64, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+	prev, n, err := sm.dbKv.deleteRange(txn, index, req.Key, req.RangeEnd)
+	if err != nil {
+		return
+	}
+	var keys = make([][]byte, len(prev))
+	for _, item := range prev {
+		keys = append(keys, item.key)
+	}
+
+	err = sm.dbKvEvent.delete(txn, index, epoch, keys)
+	if err != nil {
+		return
+	}
+	res = &internal.DeleteRangeResponse{}
+	res.Deleted = n
+	res.Header = sm.responseHeader(index)
+	if req.PrevKv {
+		for _, item := range prev {
+			res.PrevKvs = append(res.PrevKvs, item.ToProto())
+		}
+	}
+	return
+}
+
+func (sm *stateMachine) rangeReq(txn *lmdb.Txn, index uint64, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
+	if req.Revision > 0 {
+		min, err := sm.dbMeta.getRevisionMin(txn)
+		if err != nil {
+			return nil, err
+		}
+		if req.Revision < int64(min) {
+			sm.log.Info("Revision compacted", "rev", req.Revision, "min", min)
+			return nil, internal.ErrGRPCCompacted
+		}
+	}
+	res = &internal.RangeResponse{
+		Header: sm.responseHeader(index),
+	}
+	if req.CountOnly {
+		_, count, _, err := sm.dbKv.getRange(txn,
+			req.Key,
+			req.RangeEnd,
+			uint64(req.Revision),
+			uint64(req.MinModRevision),
+			uint64(req.MaxModRevision),
+			uint64(req.MinCreateRevision),
+			uint64(req.MaxCreateRevision),
+			uint64(req.Limit),
+			req.CountOnly,
+			req.KeysOnly,
+		)
+		if err != nil {
+			return nil, err
+		}
+		res.Count = int64(count)
+	} else {
+		data, _, more, err := sm.dbKv.getRange(txn,
+			req.Key,
+			req.RangeEnd,
+			uint64(req.Revision),
+			uint64(req.MinModRevision),
+			uint64(req.MaxModRevision),
+			uint64(req.MinCreateRevision),
+			uint64(req.MaxCreateRevision),
+			uint64(req.Limit),
+			req.CountOnly,
+			req.KeysOnly,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, kv := range data {
+			res.Kvs = append(res.Kvs, kv.ToProto())
+		}
+		res.More = more
+	}
+	return
+}
+
+func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*internal.RequestOp) (res []*internal.ResponseOp, err error) {
+	for _, op := range ops {
+		switch op.Request.(type) {
+		case *internal.RequestOp_RequestPut:
+			putReq := op.Request.(*internal.RequestOp_RequestPut).RequestPut
+			putRes, err := sm.put(txn, index, epoch, putReq)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, &internal.ResponseOp{
+				Response: &internal.ResponseOp_ResponsePut{
+					ResponsePut: putRes,
+				},
+			})
+		case *internal.RequestOp_RequestDeleteRange:
+			delReq := op.Request.(*internal.RequestOp_RequestDeleteRange).RequestDeleteRange
+			delRes, err := sm.deleteRange(txn, index, epoch, delReq)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, &internal.ResponseOp{
+				Response: &internal.ResponseOp_ResponseDeleteRange{
+					ResponseDeleteRange: delRes,
+				},
+			})
+		case *internal.RequestOp_RequestRange:
+			rangeReq := op.Request.(*internal.RequestOp_RequestRange).RequestRange
+			rangeRes, err := sm.rangeReq(txn, index, rangeReq)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, &internal.ResponseOp{
+				Response: &internal.ResponseOp_ResponseRange{
+					ResponseRange: rangeRes,
+				},
+			})
+		}
+	}
+	return
+}
+func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (success bool, err error) {
+	var item kv
+	for _, cond := range conds {
+		if item, err = sm.dbKv.get(txn, cond.Key); err != nil {
+			success = false
+			break
+		}
+		switch cond.Target {
+		case internal.Compare_VERSION:
+			v := cond.TargetUnion.(*internal.Compare_Version).Version
+			switch cond.Result {
+			case internal.Compare_EQUAL:
+				success = int64(item.version) == v
+			case internal.Compare_GREATER:
+				success = int64(item.version) > v
+			case internal.Compare_LESS:
+				success = int64(item.version) < v
+			case internal.Compare_NOT_EQUAL:
+				success = int64(item.version) != v
+			}
+		case internal.Compare_CREATE:
+			v := cond.TargetUnion.(*internal.Compare_CreateRevision).CreateRevision
+			switch cond.Result {
+			case internal.Compare_EQUAL:
+				success = int64(item.version) == v
+			case internal.Compare_GREATER:
+				success = int64(item.version) > v
+			case internal.Compare_LESS:
+				success = int64(item.version) < v
+			case internal.Compare_NOT_EQUAL:
+				success = int64(item.version) != v
+			}
+		case internal.Compare_MOD:
+			v := cond.TargetUnion.(*internal.Compare_ModRevision).ModRevision
+			switch cond.Result {
+			case internal.Compare_EQUAL:
+				success = int64(item.version) == v
+			case internal.Compare_GREATER:
+				success = int64(item.version) > v
+			case internal.Compare_LESS:
+				success = int64(item.version) < v
+			case internal.Compare_NOT_EQUAL:
+				success = int64(item.version) != v
+			}
+		case internal.Compare_VALUE:
+			v := cond.TargetUnion.(*internal.Compare_Value).Value
+			switch cond.Result {
+			case internal.Compare_EQUAL:
+				success = bytes.Equal(item.val, v)
+			case internal.Compare_GREATER:
+				success = bytes.Compare(item.val, v) > 0
+			case internal.Compare_LESS:
+				success = bytes.Compare(item.val, v) < 0
+			case internal.Compare_NOT_EQUAL:
+				success = !bytes.Equal(item.val, v)
+			}
+		}
+		if !success {
+			break
+		}
+	}
+	return
 }

@@ -355,7 +355,69 @@ func TestService(t *testing.T) {
 		})
 		require.NotNil(t, err, err)
 	})
-	// Txn
+
+	t.Run("transaction", func(t *testing.T) {
+		_, err = svc.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-txn-00`),
+			Value: []byte(`-----------`),
+		})
+		require.Nil(t, err, err)
+		req := &internal.TxnRequest{
+			Compare: []*internal.Compare{
+				{
+					Key:    []byte(`test-txn-00`),
+					Result: internal.Compare_EQUAL,
+					Target: internal.Compare_VALUE,
+					TargetUnion: &internal.Compare_Value{
+						Value: []byte(`-----------`),
+					},
+				},
+			},
+			Success: []*internal.RequestOp{
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-01`),
+					Value: []byte(`-----------`),
+				}),
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-02`),
+					Value: []byte(`-----------`),
+				}),
+				delOp(&internal.DeleteRangeRequest{
+					Key: []byte(`test-txn-00`),
+				}),
+				rangeOp(&internal.RangeRequest{
+					Key:      []byte(`test-txn-00`),
+					RangeEnd: []byte(`test-txn-02`),
+				}),
+			},
+			Failure: []*internal.RequestOp{
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-00`),
+					Value: []byte(`-----------`),
+				}),
+				rangeOp(&internal.RangeRequest{
+					Key:      []byte(`test-txn-00`),
+					RangeEnd: []byte(`test-txn-02`),
+				}),
+			},
+		}
+		resp, err := svc.Txn(ctx, req)
+		require.Nil(t, err, err)
+		assert.True(t, resp.Succeeded)
+		assert.Len(t, resp.Responses, len(req.Success))
+		assert.Len(t, resp.Responses[3].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 2)
+		resp, err = svc.Txn(ctx, req)
+		require.Nil(t, err, err)
+		assert.False(t, resp.Succeeded)
+		assert.Len(t, resp.Responses, len(req.Failure))
+		assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
+	})
+
+	// ✅ Put
+	// ✅ Range
+	// ✅ Delete
+	// ✅ Compact
+	// ✅ Txn
 	// Watch
 	// LeaseGrant
 	// LeaseRevoke
@@ -368,6 +430,30 @@ func TestService(t *testing.T) {
 	// Hash
 	// HashKV
 	// MemberList
+}
+
+func delOp(req *internal.DeleteRangeRequest) *internal.RequestOp {
+	return &internal.RequestOp{
+		Request: &internal.RequestOp_RequestDeleteRange{
+			RequestDeleteRange: req,
+		},
+	}
+}
+
+func putOp(req *internal.PutRequest) *internal.RequestOp {
+	return &internal.RequestOp{
+		Request: &internal.RequestOp_RequestPut{
+			RequestPut: req,
+		},
+	}
+}
+
+func rangeOp(req *internal.RangeRequest) *internal.RequestOp {
+	return &internal.RequestOp{
+		Request: &internal.RequestOp_RequestRange{
+			RequestRange: req,
+		},
+	}
 }
 
 func await(d, n time.Duration, fn func() bool) bool {

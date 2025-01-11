@@ -264,3 +264,15 @@ func (db dbKv) compact(txn *lmdb.Txn, batch *orderedmap.OrderedMap[string, uint6
 	}
 	return
 }
+
+func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
+	v, err := txn.Get(db.i, key)
+	if lmdb.IsNotFound(err) {
+		err = nil
+		return
+	}
+	if err != nil {
+		return
+	}
+	return item.FromBytes(key, v, nil, false)
+}
