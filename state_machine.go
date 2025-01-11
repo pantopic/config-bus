@@ -350,39 +350,25 @@ func (sm *stateMachine) rangeReq(txn *lmdb.Txn, index uint64, req *internal.Rang
 	res = &internal.RangeResponse{
 		Header: sm.responseHeader(index),
 	}
-	if req.CountOnly {
-		_, count, _, err := sm.dbKv.getRange(txn,
-			req.Key,
-			req.RangeEnd,
-			uint64(req.Revision),
-			uint64(req.MinModRevision),
-			uint64(req.MaxModRevision),
-			uint64(req.MinCreateRevision),
-			uint64(req.MaxCreateRevision),
-			uint64(req.Limit),
-			req.CountOnly,
-			req.KeysOnly,
-		)
-		if err != nil {
-			return nil, err
-		}
+	data, count, more, err := sm.dbKv.getRange(txn,
+		req.Key,
+		req.RangeEnd,
+		uint64(req.Revision),
+		uint64(req.MinModRevision),
+		uint64(req.MaxModRevision),
+		uint64(req.MinCreateRevision),
+		uint64(req.MaxCreateRevision),
+		uint64(req.Limit),
+		req.CountOnly,
+		req.KeysOnly,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if req.CountOnly || ICARUS_KV_FULL_COUNT_ENABLED {
 		res.Count = int64(count)
-	} else {
-		data, _, more, err := sm.dbKv.getRange(txn,
-			req.Key,
-			req.RangeEnd,
-			uint64(req.Revision),
-			uint64(req.MinModRevision),
-			uint64(req.MaxModRevision),
-			uint64(req.MinCreateRevision),
-			uint64(req.MaxCreateRevision),
-			uint64(req.Limit),
-			req.CountOnly,
-			req.KeysOnly,
-		)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if !req.CountOnly {
 		for _, kv := range data {
 			res.Kvs = append(res.Kvs, kv.ToProto())
 		}

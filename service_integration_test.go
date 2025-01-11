@@ -165,17 +165,6 @@ func TestService(t *testing.T) {
 			assert.Equal(t, []byte(`test-range-key-1`), resp.Kvs[0].Key)
 			assert.Equal(t, []byte(`test-range-key-2`), resp.Kvs[1].Key)
 		})
-		t.Run("count", func(t *testing.T) {
-			resp, err := svc.Range(ctx, &internal.RangeRequest{
-				Key:       []byte(`test-range-key-1`),
-				RangeEnd:  []byte(`test-range-key-2`),
-				CountOnly: true,
-			})
-			require.Nil(t, err, err)
-			assert.NotNil(t, resp)
-			assert.Greater(t, resp.Header.Revision, int64(0))
-			require.Equal(t, int64(2), resp.Count)
-		})
 		t.Run("revision", func(t *testing.T) {
 			resp, err := svc.Range(ctx, &internal.RangeRequest{
 				Key:      []byte(`test-key`),
@@ -210,6 +199,64 @@ func TestService(t *testing.T) {
 			assert.NotNil(t, resp)
 			assert.Greater(t, resp.Header.Revision, int64(0))
 			require.Equal(t, 0, len(resp.Kvs))
+		})
+		t.Run("count", func(t *testing.T) {
+			t.Run("only", func(t *testing.T) {
+				resp, err := svc.Range(ctx, &internal.RangeRequest{
+					Key:       []byte(`test-range-key-1`),
+					RangeEnd:  []byte(`test-range-key-2`),
+					CountOnly: true,
+				})
+				require.Nil(t, err, err)
+				assert.NotNil(t, resp)
+				assert.Greater(t, resp.Header.Revision, int64(0))
+				require.Equal(t, int64(2), resp.Count)
+			})
+			var revs []int64
+			for i := range 100 {
+				resp, err := svc.Put(ctx, &internal.PutRequest{
+					Key:   []byte(fmt.Sprintf(`test-count-%02d`, i)),
+					Value: []byte(fmt.Sprintf(`value-count-%02d`, i)),
+				})
+				revs = append(revs, resp.Header.Revision)
+				require.Nil(t, err, err)
+			}
+			t.Run("partial", func(t *testing.T) {
+				withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, false, func() {
+					resp, err := svc.Range(ctx, &internal.RangeRequest{
+						Key:      []byte(`test-count-00`),
+						RangeEnd: []byte(`test-count-99`),
+						Limit:    10,
+					})
+					require.Nil(t, err, err)
+					require.NotNil(t, resp)
+					assert.Len(t, resp.Kvs, 10)
+					assert.Equal(t, int64(0), resp.Count)
+				})
+			})
+			t.Run("full", func(t *testing.T) {
+				withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, true, func() {
+					resp, err := svc.Range(ctx, &internal.RangeRequest{
+						Key:      []byte(`test-count-00`),
+						RangeEnd: []byte(`test-count-99`),
+						Limit:    10,
+					})
+					require.Nil(t, err, err)
+					require.NotNil(t, resp)
+					assert.Len(t, resp.Kvs, 10)
+					assert.Equal(t, int64(100), resp.Count)
+					resp, err = svc.Range(ctx, &internal.RangeRequest{
+						Key:      []byte(`test-count-00`),
+						RangeEnd: []byte(`test-count-99`),
+						Revision: revs[49],
+						Limit:    10,
+					})
+					require.Nil(t, err, err)
+					require.NotNil(t, resp)
+					assert.Len(t, resp.Kvs, 10)
+					assert.Equal(t, int64(50), resp.Count)
+				})
+			})
 		})
 	})
 	t.Run("patch", func(t *testing.T) {
@@ -596,6 +643,19 @@ func TestService(t *testing.T) {
 				})
 				require.NotNil(t, err, err)
 				assert.Nil(t, resp)
+				resp, err = svc.Txn(ctx, &internal.TxnRequest{
+					Success: []*internal.RequestOp{
+						putOp(&internal.PutRequest{
+							Key:   []byte(`test-txn-03`),
+							Value: []byte(`-----------`),
+						}),
+						delOp(&internal.DeleteRangeRequest{
+							Key: []byte(`test-txn-03`),
+						}),
+					},
+				})
+				require.NotNil(t, err, err)
+				assert.Nil(t, resp)
 			})
 			withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, true, func() {
 				for _, k := range []string{
@@ -623,6 +683,24 @@ func TestService(t *testing.T) {
 					assert.Equal(t, 1, len(resp2.Kvs))
 					assert.Equal(t, []byte(`b`), resp2.Kvs[0].Value)
 				}
+				resp, err := svc.Txn(ctx, &internal.TxnRequest{
+					Success: []*internal.RequestOp{
+						putOp(&internal.PutRequest{
+							Key:   []byte(`test-txn-03`),
+							Value: []byte(`a`),
+						}),
+						delOp(&internal.DeleteRangeRequest{
+							Key: []byte(`test-txn-03`),
+						}),
+					},
+				})
+				require.Nil(t, err, err)
+				assert.Len(t, resp.Responses, 2)
+				resp2, err := svc.Range(ctx, &internal.RangeRequest{
+					Key: []byte(`test-txn-03`),
+				})
+				require.Nil(t, err, err)
+				assert.Equal(t, 0, len(resp2.Kvs))
 			})
 		})
 	})
@@ -632,12 +710,12 @@ func TestService(t *testing.T) {
 	// ✅ Delete
 	// ✅ Compact
 	// ✅ Txn
-	// Watch
 	// LeaseGrant
 	// LeaseRevoke
 	// LeaseKeepAlive
 	// LeaseTimeToLive
 	// LeaseLeases
+	// Watch
 
 	// Status
 	// Defragment

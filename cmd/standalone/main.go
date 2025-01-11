@@ -90,14 +90,16 @@ func start(
 		panic(err)
 	}
 
-	for i := range 23 {
-		_, _, err = agent.ShardCreate(ctx, icarus.Uri,
-			zongzi.WithName(fmt.Sprintf("icarus-%05d", i)),
-			zongzi.WithPlacementMembers(3))
-		if err != nil {
-			panic(err)
+	/*
+		for i := range 23 {
+			_, _, err = agent.ShardCreate(ctx, icarus.Uri,
+				zongzi.WithName(fmt.Sprintf("icarus-%05d", i)),
+				zongzi.WithPlacementMembers(3))
+			if err != nil {
+				panic(err)
+			}
 		}
-	}
+	*/
 
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 

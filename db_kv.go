@@ -113,11 +113,12 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		if len(end) > 0 && bytes.Compare(k, end) > 0 {
 			return
 		}
-		if limit > 0 && len(items) == int(limit) {
-			// TODO - Return full count upon reaching limit
-			// countOnly = true
+		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
-			return
+			if !ICARUS_KV_FULL_COUNT_ENABLED {
+				return
+			}
+			countOnly = true
 		}
 		next = next[:0]
 		mod := math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
@@ -210,6 +211,10 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items 
 				revision: index,
 			}
 			if prev.revision == index {
+				if !ICARUS_TXN_MULTI_WRITE_ENABLED {
+					err = internal.ErrGRPCDuplicateKey
+					return
+				}
 				if err = cur.Put(k, next.Bytes(nil, nil), lmdb.Current); err != nil {
 					return
 				}
