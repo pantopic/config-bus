@@ -346,6 +346,7 @@ func (sm *stateMachine) put(txn *lmdb.Txn, index, epoch uint64, req *internal.Pu
 	if patched {
 		sm.statPatched++
 	}
+	// TODO - Reject KV Put for non-existent lease (internal.ErrGRPCLeaseNotFound)
 	// TODO - Replace timestamp w/ epoch
 	err = sm.dbKvEvent.put(txn, index, epoch, req.Key)
 	if err != nil {
@@ -468,6 +469,7 @@ func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*intern
 	}
 	return
 }
+
 func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (success bool, err error) {
 	success = true
 	var item kv
@@ -504,6 +506,7 @@ func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 	}
 	return
 }
+
 func intCompare(cond internal.Compare_CompareResult, a, b int64) bool {
 	switch cond {
 	case internal.Compare_EQUAL:

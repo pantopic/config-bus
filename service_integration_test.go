@@ -732,12 +732,14 @@ func TestService(t *testing.T) {
 		})
 	})
 
+	// TODO - Test KV min/max rev + min/max created
+
 	// ✅ Put
 	// ✅ Range
 	// ✅ Delete
 	// ✅ Compact
 	// ✅ Txn
-	// LeaseGrant
+	// ✅ LeaseGrant
 	// LeaseRevoke
 	// LeaseKeepAlive
 	// LeaseTimeToLive
