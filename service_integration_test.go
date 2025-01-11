@@ -357,60 +357,274 @@ func TestService(t *testing.T) {
 	})
 
 	t.Run("transaction", func(t *testing.T) {
-		_, err = svc.Put(ctx, &internal.PutRequest{
-			Key:   []byte(`test-txn-00`),
-			Value: []byte(`-----------`),
-		})
-		require.Nil(t, err, err)
-		req := &internal.TxnRequest{
-			Compare: []*internal.Compare{
-				{
-					Key:    []byte(`test-txn-00`),
-					Result: internal.Compare_EQUAL,
-					Target: internal.Compare_VALUE,
-					TargetUnion: &internal.Compare_Value{
-						Value: []byte(`-----------`),
+		t.Run("basic", func(t *testing.T) {
+			_, err = svc.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-txn-00`),
+				Value: []byte(`-----------`),
+			})
+			require.Nil(t, err, err)
+			req := &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-txn-00`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_VALUE,
+						TargetUnion: &internal.Compare_Value{
+							Value: []byte(`-----------`),
+						},
 					},
 				},
-			},
-			Success: []*internal.RequestOp{
-				putOp(&internal.PutRequest{
-					Key:   []byte(`test-txn-01`),
-					Value: []byte(`-----------`),
-				}),
-				putOp(&internal.PutRequest{
-					Key:   []byte(`test-txn-02`),
-					Value: []byte(`-----------`),
-				}),
-				delOp(&internal.DeleteRangeRequest{
-					Key: []byte(`test-txn-00`),
-				}),
-				rangeOp(&internal.RangeRequest{
-					Key:      []byte(`test-txn-00`),
-					RangeEnd: []byte(`test-txn-02`),
-				}),
-			},
-			Failure: []*internal.RequestOp{
-				putOp(&internal.PutRequest{
-					Key:   []byte(`test-txn-00`),
-					Value: []byte(`-----------`),
-				}),
-				rangeOp(&internal.RangeRequest{
-					Key:      []byte(`test-txn-00`),
-					RangeEnd: []byte(`test-txn-02`),
-				}),
-			},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-01`),
+						Value: []byte(`-----------`),
+					}),
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-02`),
+						Value: []byte(`-----------`),
+					}),
+					delOp(&internal.DeleteRangeRequest{
+						Key: []byte(`test-txn-00`),
+					}),
+					rangeOp(&internal.RangeRequest{
+						Key:      []byte(`test-txn-00`),
+						RangeEnd: []byte(`test-txn-02`),
+					}),
+				},
+				Failure: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-00`),
+						Value: []byte(`-----------`),
+					}),
+					rangeOp(&internal.RangeRequest{
+						Key:      []byte(`test-txn-00`),
+						RangeEnd: []byte(`test-txn-02`),
+					}),
+				},
+			}
+			resp, err := svc.Txn(ctx, req)
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+			assert.Len(t, resp.Responses, len(req.Success))
+			assert.Len(t, resp.Responses[3].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 2)
+			resp, err = svc.Txn(ctx, req)
+			require.Nil(t, err, err)
+			assert.False(t, resp.Succeeded)
+			assert.Len(t, resp.Responses, len(req.Failure))
+			assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
+		})
+		resp, err := svc.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-txn-00`),
+			Value: []byte(`b`),
+			Lease: 1,
+		})
+		require.Nil(t, err, err)
+		rev := resp.Header.Revision
+		resp2, err := svc.Range(ctx, &internal.RangeRequest{
+			Key: []byte(`test-txn-00`),
+		})
+		require.Nil(t, err, err)
+		assert.Equal(t, 1, len(resp2.Kvs))
+		item := resp2.Kvs[0]
+		valueCompare := func(result internal.Compare_CompareResult, b []byte) (*internal.TxnResponse, error) {
+			return svc.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-txn-00`),
+						Result: result,
+						Target: internal.Compare_VALUE,
+						TargetUnion: &internal.Compare_Value{
+							Value: b,
+						},
+					},
+				},
+			})
 		}
-		resp, err := svc.Txn(ctx, req)
-		require.Nil(t, err, err)
-		assert.True(t, resp.Succeeded)
-		assert.Len(t, resp.Responses, len(req.Success))
-		assert.Len(t, resp.Responses[3].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 2)
-		resp, err = svc.Txn(ctx, req)
-		require.Nil(t, err, err)
-		assert.False(t, resp.Succeeded)
-		assert.Len(t, resp.Responses, len(req.Failure))
-		assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
+		t.Run("value", func(t *testing.T) {
+			resp3, err := valueCompare(internal.Compare_EQUAL, []byte(`b`))
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_EQUAL, []byte(`c`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_GREATER, []byte(`a`))
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_GREATER, []byte(`b`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_GREATER, []byte(`c`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_LESS, []byte(`c`))
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_LESS, []byte(`b`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_LESS, []byte(`a`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_NOT_EQUAL, []byte(`a`))
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = valueCompare(internal.Compare_NOT_EQUAL, []byte(`b`))
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+		})
+		intCompare := func(fn func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error), val int64) {
+			resp3, err := fn(internal.Compare_EQUAL, val)
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_EQUAL, 0)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_GREATER, 0)
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_GREATER, val)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_GREATER, val+1)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_LESS, val+1)
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_LESS, val)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_LESS, 0)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_NOT_EQUAL, 0)
+			require.Nil(t, err, err)
+			require.True(t, resp3.Succeeded)
+			resp3, err = fn(internal.Compare_NOT_EQUAL, val)
+			require.Nil(t, err, err)
+			require.False(t, resp3.Succeeded)
+		}
+		t.Run("version", func(t *testing.T) {
+			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
+				return svc.Txn(ctx, &internal.TxnRequest{
+					Compare: []*internal.Compare{
+						{
+							Key:    []byte(`test-txn-00`),
+							Result: result,
+							Target: internal.Compare_VERSION,
+							TargetUnion: &internal.Compare_Version{
+								Version: val,
+							},
+						},
+					},
+				})
+			}, int64(item.Version))
+		})
+		t.Run("revision", func(t *testing.T) {
+			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
+				return svc.Txn(ctx, &internal.TxnRequest{
+					Compare: []*internal.Compare{
+						{
+							Key:    []byte(`test-txn-00`),
+							Result: result,
+							Target: internal.Compare_MOD,
+							TargetUnion: &internal.Compare_ModRevision{
+								ModRevision: val,
+							},
+						},
+					},
+				})
+			}, rev)
+		})
+		t.Run("created", func(t *testing.T) {
+			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
+				return svc.Txn(ctx, &internal.TxnRequest{
+					Compare: []*internal.Compare{
+						{
+							Key:    []byte(`test-txn-00`),
+							Result: result,
+							Target: internal.Compare_CREATE,
+							TargetUnion: &internal.Compare_CreateRevision{
+								CreateRevision: val,
+							},
+						},
+					},
+				})
+			}, item.CreateRevision)
+		})
+		t.Run("lease", func(t *testing.T) {
+			intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
+				return svc.Txn(ctx, &internal.TxnRequest{
+					Compare: []*internal.Compare{
+						{
+							Key:    []byte(`test-txn-00`),
+							Result: result,
+							Target: internal.Compare_LEASE,
+							TargetUnion: &internal.Compare_Lease{
+								Lease: val,
+							},
+						},
+					},
+				})
+			}, item.Lease)
+		})
+		t.Run("no-compare", func(t *testing.T) {
+			resp, err := svc.Txn(ctx, &internal.TxnRequest{
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-03`),
+						Value: []byte(`-----------`),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+		})
+		t.Run("multi-write", func(t *testing.T) {
+			withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, false, func() {
+				resp, err := svc.Txn(ctx, &internal.TxnRequest{
+					Success: []*internal.RequestOp{
+						putOp(&internal.PutRequest{
+							Key:   []byte(`test-txn-03`),
+							Value: []byte(`-----------`),
+						}),
+						putOp(&internal.PutRequest{
+							Key:   []byte(`test-txn-03`),
+							Value: []byte(`-----------`),
+						}),
+					},
+				})
+				require.NotNil(t, err, err)
+				assert.Nil(t, resp)
+			})
+			withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, true, func() {
+				for _, k := range []string{
+					`test-txn-03`, // Existent
+					`test-txn-04`, // Non-existent
+				} {
+					resp, err := svc.Txn(ctx, &internal.TxnRequest{
+						Success: []*internal.RequestOp{
+							putOp(&internal.PutRequest{
+								Key:   []byte(k),
+								Value: []byte(`a`),
+							}),
+							putOp(&internal.PutRequest{
+								Key:   []byte(k),
+								Value: []byte(`b`),
+							}),
+						},
+					})
+					require.Nil(t, err, err)
+					assert.Len(t, resp.Responses, 2)
+					resp2, err := svc.Range(ctx, &internal.RangeRequest{
+						Key: []byte(k),
+					})
+					require.Nil(t, err, err)
+					assert.Equal(t, 1, len(resp2.Kvs))
+					assert.Equal(t, []byte(`b`), resp2.Kvs[0].Value)
+				}
+			})
+		})
 	})
 
 	// ✅ Put

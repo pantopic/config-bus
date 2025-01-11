@@ -18,8 +18,9 @@ const (
 )
 
 var (
-	ICARUS_FLAG_KV_PATCH_ENABLED       = true
-	ICARUS_FLAG_KV_COMPRESSION_ENABLED = true
+	ICARUS_KV_PATCH_ENABLED        = true
+	ICARUS_KV_COMPRESSION_ENABLED  = true
+	ICARUS_TXN_MULTI_WRITE_ENABLED = false
 )
 
 type kv struct {
@@ -39,14 +40,14 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 		kv.flags = 0
 		buf = binary.AppendUvarint(buf, kv.version)
 		buf = binary.AppendUvarint(buf, kv.lease)
-		if next != nil && ICARUS_FLAG_KV_PATCH_ENABLED {
+		if next != nil && ICARUS_KV_PATCH_ENABLED {
 			p := patch.Generate(next, kv.val, nil)
 			if len(p) < len(kv.val) {
 				kv.val = p
 				kv.flags |= KV_FLAG_PATCH
 			}
 		}
-		if ICARUS_FLAG_KV_COMPRESSION_ENABLED && len(kv.val) > 16 {
+		if ICARUS_KV_COMPRESSION_ENABLED && len(kv.val) > 16 {
 			p := snappy.Encode(nil, kv.val)
 			if len(p) < len(kv.val) {
 				kv.val = p

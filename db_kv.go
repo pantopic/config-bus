@@ -7,6 +7,8 @@ import (
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/elliotchance/orderedmap/v3"
+
+	"github.com/logbn/icarus/internal"
 )
 
 type dbKv struct {
@@ -43,6 +45,10 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 		return
 	}
 	if prev.revision == index {
+		if !ICARUS_TXN_MULTI_WRITE_ENABLED {
+			err = internal.ErrGRPCDuplicateKey
+			return
+		}
 		current := prev
 		current.val = val
 		current.lease = lease
@@ -69,7 +75,7 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 		key:      key,
 		val:      val,
 	}
-	if ICARUS_FLAG_KV_PATCH_ENABLED {
+	if ICARUS_KV_PATCH_ENABLED {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
 		if patched {

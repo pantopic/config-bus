@@ -26,7 +26,6 @@ func (s *kvService) addTerm(header *internal.ResponseHeader) {
 }
 
 func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *internal.PutResponse, err error) {
-	res = &internal.PutResponse{}
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -39,13 +38,13 @@ func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *int
 		err = fmt.Errorf("%s", string(data))
 		return
 	}
+	res = &internal.PutResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
 	return
 }
 
 func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
-	res = &internal.RangeResponse{}
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -58,13 +57,13 @@ func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res 
 		err = fmt.Errorf("%s", string(data))
 		return
 	}
+	res = &internal.RangeResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
 	return
 }
 
 func (s *kvService) DeleteRange(ctx context.Context, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
-	res = &internal.DeleteRangeResponse{}
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -77,13 +76,13 @@ func (s *kvService) DeleteRange(ctx context.Context, req *internal.DeleteRangeRe
 		err = fmt.Errorf("%s", string(data))
 		return
 	}
+	res = &internal.DeleteRangeResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
 	return
 }
 
 func (s *kvService) Compact(ctx context.Context, req *internal.CompactionRequest) (res *internal.CompactionResponse, err error) {
-	res = &internal.CompactionResponse{}
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -96,13 +95,13 @@ func (s *kvService) Compact(ctx context.Context, req *internal.CompactionRequest
 		err = fmt.Errorf("%s", string(data))
 		return
 	}
+	res = &internal.CompactionResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
 	return
 }
 
 func (s *kvService) Txn(ctx context.Context, req *internal.TxnRequest) (res *internal.TxnResponse, err error) {
-	res = &internal.TxnResponse{}
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -115,6 +114,7 @@ func (s *kvService) Txn(ctx context.Context, req *internal.TxnRequest) (res *int
 		err = fmt.Errorf("%s", string(data))
 		return
 	}
+	res = &internal.TxnResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
 	return

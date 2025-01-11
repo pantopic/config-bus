@@ -184,9 +184,16 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else {
 					res.Responses, err = sm.runOps(txn, ent.Index, epoch, req.Failure)
 				}
-				res.Header = sm.responseHeader(ent.Index)
-				entries[i].Result.Data, err = proto.Marshal(res)
-				entries[i].Result.Value = 1
+				if err == internal.ErrGRPCDuplicateKey {
+					entries[i].Result.Data = []byte(err.Error())
+					err = nil
+				} else if err != nil {
+					return
+				} else {
+					res.Header = sm.responseHeader(ent.Index)
+					entries[i].Result.Data, err = proto.Marshal(res)
+					entries[i].Result.Value = 1
+				}
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
@@ -219,7 +226,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			resp, err = sm.rangeReq(txn, index, req)
 			return
 		})
-		if err == internal.ErrGRPCCompacted {
+		if err == internal.ErrGRPCCompacted || err == internal.ErrGRPCFutureRev {
 			res.Data = []byte(err.Error())
 			err = nil
 		} else if err != nil {
@@ -334,8 +341,10 @@ func (sm *stateMachine) rangeReq(txn *lmdb.Txn, index uint64, req *internal.Rang
 			return nil, err
 		}
 		if req.Revision < int64(min) {
-			sm.log.Info("Revision compacted", "rev", req.Revision, "min", min)
 			return nil, internal.ErrGRPCCompacted
+		}
+		if req.Revision > int64(index) {
+			return nil, internal.ErrGRPCFutureRev
 		}
 	}
 	res = &internal.RangeResponse{
@@ -423,6 +432,7 @@ func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*intern
 	return
 }
 func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (success bool, err error) {
+	success = true
 	var item kv
 	for _, cond := range conds {
 		if item, err = sm.dbKv.get(txn, cond.Key); err != nil {
@@ -431,41 +441,13 @@ func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 		}
 		switch cond.Target {
 		case internal.Compare_VERSION:
-			v := cond.TargetUnion.(*internal.Compare_Version).Version
-			switch cond.Result {
-			case internal.Compare_EQUAL:
-				success = int64(item.version) == v
-			case internal.Compare_GREATER:
-				success = int64(item.version) > v
-			case internal.Compare_LESS:
-				success = int64(item.version) < v
-			case internal.Compare_NOT_EQUAL:
-				success = int64(item.version) != v
-			}
+			success = intCompare(cond.Result, int64(item.version), cond.TargetUnion.(*internal.Compare_Version).Version)
 		case internal.Compare_CREATE:
-			v := cond.TargetUnion.(*internal.Compare_CreateRevision).CreateRevision
-			switch cond.Result {
-			case internal.Compare_EQUAL:
-				success = int64(item.version) == v
-			case internal.Compare_GREATER:
-				success = int64(item.version) > v
-			case internal.Compare_LESS:
-				success = int64(item.version) < v
-			case internal.Compare_NOT_EQUAL:
-				success = int64(item.version) != v
-			}
+			success = intCompare(cond.Result, int64(item.created), cond.TargetUnion.(*internal.Compare_CreateRevision).CreateRevision)
 		case internal.Compare_MOD:
-			v := cond.TargetUnion.(*internal.Compare_ModRevision).ModRevision
-			switch cond.Result {
-			case internal.Compare_EQUAL:
-				success = int64(item.version) == v
-			case internal.Compare_GREATER:
-				success = int64(item.version) > v
-			case internal.Compare_LESS:
-				success = int64(item.version) < v
-			case internal.Compare_NOT_EQUAL:
-				success = int64(item.version) != v
-			}
+			success = intCompare(cond.Result, int64(item.revision), cond.TargetUnion.(*internal.Compare_ModRevision).ModRevision)
+		case internal.Compare_LEASE:
+			success = intCompare(cond.Result, int64(item.lease), cond.TargetUnion.(*internal.Compare_Lease).Lease)
 		case internal.Compare_VALUE:
 			v := cond.TargetUnion.(*internal.Compare_Value).Value
 			switch cond.Result {
@@ -484,4 +466,17 @@ func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 		}
 	}
 	return
+}
+func intCompare(cond internal.Compare_CompareResult, a, b int64) bool {
+	switch cond {
+	case internal.Compare_EQUAL:
+		return a == b
+	case internal.Compare_GREATER:
+		return a > b
+	case internal.Compare_LESS:
+		return a < b
+	case internal.Compare_NOT_EQUAL:
+		return a != b
+	}
+	return false
 }
