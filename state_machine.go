@@ -228,6 +228,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					if item, err = sm.dbLease.get(txn, item.id); err != nil {
 						return
 					}
+					item.id = uint64(req.ID)
 				}
 				if item.renewed != 0 {
 					res.Error = internal.ErrGRPCDuplicateKey.Error()

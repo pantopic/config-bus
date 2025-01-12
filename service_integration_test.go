@@ -20,14 +20,18 @@ import (
 )
 
 func TestService(t *testing.T) {
-	var svcKv internal.KVServer
-	var svcLease internal.LeaseServer
-	var err error
 	var (
+		err      error
+		svcKv    internal.KVServer
+		svcLease internal.LeaseServer
+
 		ctx    = context.Background()
 		parity = os.Getenv("ICARUS_PARITY_CHECK") == "true"
 	)
 	if parity {
+		// Run integration tests against locally running etcd instance
+		// Be sure to completely destroy the etcd cluster between parity runs
+		// Otherwise data from previous runs will give bad results
 		conn, err := grpc.NewClient("127.0.0.1:2379", grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			panic(err)
@@ -36,6 +40,7 @@ func TestService(t *testing.T) {
 		svcKv = newParityKvService(conn)
 		svcLease = newParityLeaseService(conn)
 	} else {
+		// Run integration tests against bootstrapped icarus instance
 		var (
 			agents = make([]*zongzi.Agent, 3)
 			dir    = "/tmp/icarus/test"
@@ -731,27 +736,40 @@ func TestService(t *testing.T) {
 			})
 		})
 		t.Run("lease-grant", func(t *testing.T) {
-			t.Run("no-id", func(t *testing.T) {
-				var id int64
-				t.Run("success", func(t *testing.T) {
-					resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
-						TTL: 600,
-					})
-					require.Nil(t, err, err)
-					assert.NotNil(t, resp)
-					assert.Empty(t, resp.Error)
-					assert.EqualValues(t, 600, resp.TTL)
-					assert.Greater(t, resp.ID, int64(0))
-					id = resp.ID
+			var id int64
+			t.Run("success", func(t *testing.T) {
+				resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					TTL: 600,
 				})
-				t.Run("failure", func(t *testing.T) {
-					resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
-						ID:  id,
-						TTL: 600,
-					})
-					require.NotNil(t, err, err)
-					assert.Nil(t, resp)
+				require.Nil(t, err, err)
+				assert.NotNil(t, resp)
+				assert.Empty(t, resp.Error)
+				assert.EqualValues(t, 600, resp.TTL)
+				assert.Equal(t, resp.ID, int64(2))
+				id = resp.ID
+			})
+			t.Run("failure", func(t *testing.T) {
+				resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					ID:  id,
+					TTL: 600,
 				})
+				require.NotNil(t, err, err)
+				assert.Nil(t, resp)
+			})
+			t.Run("custom", func(t *testing.T) {
+				resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					ID:  3,
+					TTL: 600,
+				})
+				require.Nil(t, err, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, int64(3), resp.ID)
+				resp, err = svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					TTL: 600,
+				})
+				require.Nil(t, err, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, int64(4), resp.ID)
 			})
 		})
 	})
