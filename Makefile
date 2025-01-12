@@ -7,6 +7,9 @@ test:
 integration:
 	@go test ./...
 
+parity:
+	@ICARUS_PARITY_CHECK=true go test ./... -v
+
 bench:
 	@go test -bench=.
 

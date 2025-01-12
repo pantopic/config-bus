@@ -40,7 +40,12 @@ func (s *serviceLease) LeaseGrant(ctx context.Context, req *internal.LeaseGrantR
 	}
 	res = &internal.LeaseGrantResponse{}
 	err = proto.Unmarshal(data, res)
-	s.addTerm(res.Header)
+	if len(res.Error) > 0 && res.Error == internal.ErrGRPCDuplicateKey.Error() {
+		err = internal.ErrGRPCDuplicateKey
+		res = nil
+	} else {
+		s.addTerm(res.Header)
+	}
 	return
 }
 

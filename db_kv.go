@@ -110,7 +110,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		if len(end) == 0 && !bytes.Equal(k, key) {
 			break
 		}
-		if len(end) > 0 && bytes.Compare(k, end) > 0 {
+		if len(end) > 0 && bytes.Compare(k, end) >= 0 {
 			return
 		}
 		if !countOnly && limit > 0 && len(items) == int(limit) {

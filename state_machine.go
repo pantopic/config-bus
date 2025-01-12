@@ -370,7 +370,6 @@ func (sm *stateMachine) deleteRange(txn *lmdb.Txn, index, epoch uint64, req *int
 	for _, item := range prev {
 		keys = append(keys, item.key)
 	}
-
 	err = sm.dbKvEvent.delete(txn, index, epoch, keys)
 	if err != nil {
 		return
