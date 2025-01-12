@@ -98,7 +98,12 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		return
 	}
 	defer cur.Close()
-	k, v, err := cur.Get(key, nil, lmdb.SetRange)
+	var k, v []byte
+	if len(key) > 0 {
+		k, v, err = cur.Get(key, nil, lmdb.SetRange)
+	} else {
+		k, v, err = cur.Get(nil, nil, lmdb.Next)
+	}
 	for !lmdb.IsNotFound(err) {
 		if err != nil {
 			return
@@ -107,7 +112,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			err = ErrValueInvalid
 			return
 		}
-		if len(end) == 0 && !bytes.Equal(k, key) {
+		if len(key) > 0 && len(end) == 0 && !bytes.Equal(k, key) {
 			break
 		}
 		if len(end) > 0 && bytes.Compare(k, end) >= 0 {
@@ -135,11 +140,10 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			continue
 		}
 		if minMod > 0 && mod < minMod {
-			k = nil
-			break
+			goto next
 		}
 		if maxMod > 0 && mod > maxMod {
-			continue
+			goto next
 		}
 		r.Reset(v[8 : len(v)-4])
 		created, err = binary.ReadUvarint(r)
@@ -147,11 +151,10 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			return
 		}
 		if minCreated > 0 && created < minCreated {
-			k = nil
-			break
+			goto next
 		}
 		if maxCreated > 0 && created > maxCreated {
-			continue
+			goto next
 		}
 		if created > 0 {
 			count++
@@ -173,6 +176,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 		if len(end) == 0 {
 			break
 		}
+	next:
 		k, v, err = cur.Get(k, nil, lmdb.NextNoDup)
 	}
 	if lmdb.IsNotFound(err) {
