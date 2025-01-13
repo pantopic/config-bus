@@ -67,3 +67,7 @@ func (db dbLease) get(txn *lmdb.Txn, id uint64) (item lease, err error) {
 func (db dbLease) put(txn *lmdb.Txn, item lease) error {
 	return txn.Put(db.i, binary.AppendUvarint(nil, item.id), item.Bytes(nil), 0)
 }
+
+func (db dbLease) del(txn *lmdb.Txn, id uint64) error {
+	return txn.Del(db.i, binary.AppendUvarint(nil, id), nil)
+}

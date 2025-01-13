@@ -31,6 +31,7 @@ var (
 	ErrKeyInvalid      = fmt.Errorf(`Key invalid`)
 	ErrKeyMissing      = fmt.Errorf(`Key missing`)
 	ErrLeaseKeyInvalid = fmt.Errorf(`Lease key invalid`)
+	ErrNotFound        = fmt.Errorf(`Not found`)
 )
 
 type (

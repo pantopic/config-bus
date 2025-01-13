@@ -1,6 +1,7 @@
 package icarus
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -25,7 +26,11 @@ func (s *kvService) addTerm(header *internal.ResponseHeader) {
 	header.RaftTerm = term
 }
 
-func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *internal.PutResponse, err error) {
+// Put a key to the KV store
+func (s *kvService) Put(
+	ctx context.Context,
+	req *internal.PutRequest,
+) (res *internal.PutResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -35,7 +40,13 @@ func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *int
 		return
 	}
 	if val != 1 {
-		err = fmt.Errorf("%s", string(data))
+		if bytes.Equal(data, []byte(internal.ErrGRPCLeaseProvided.Error())) {
+			err = internal.ErrGRPCLeaseProvided
+		} else if bytes.Equal(data, []byte(internal.ErrGRPCValueProvided.Error())) {
+			err = internal.ErrGRPCValueProvided
+		} else {
+			err = fmt.Errorf("%s", string(data))
+		}
 		return
 	}
 	res = &internal.PutResponse{}
@@ -44,7 +55,11 @@ func (s *kvService) Put(ctx context.Context, req *internal.PutRequest) (res *int
 	return
 }
 
-func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
+// Range over keys in the KV store
+func (s *kvService) Range(
+	ctx context.Context,
+	req *internal.RangeRequest,
+) (res *internal.RangeResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -63,7 +78,11 @@ func (s *kvService) Range(ctx context.Context, req *internal.RangeRequest) (res 
 	return
 }
 
-func (s *kvService) DeleteRange(ctx context.Context, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+// DeleteRange of keys in the KV store
+func (s *kvService) DeleteRange(
+	ctx context.Context,
+	req *internal.DeleteRangeRequest,
+) (res *internal.DeleteRangeResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -82,7 +101,11 @@ func (s *kvService) DeleteRange(ctx context.Context, req *internal.DeleteRangeRe
 	return
 }
 
-func (s *kvService) Compact(ctx context.Context, req *internal.CompactionRequest) (res *internal.CompactionResponse, err error) {
+// Compact old revisions of keys in the KV store
+func (s *kvService) Compact(
+	ctx context.Context,
+	req *internal.CompactionRequest,
+) (res *internal.CompactionResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -101,7 +124,11 @@ func (s *kvService) Compact(ctx context.Context, req *internal.CompactionRequest
 	return
 }
 
-func (s *kvService) Txn(ctx context.Context, req *internal.TxnRequest) (res *internal.TxnResponse, err error) {
+// Txn over keys in the KV store
+func (s *kvService) Txn(
+	ctx context.Context,
+	req *internal.TxnRequest,
+) (res *internal.TxnResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return

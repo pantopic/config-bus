@@ -12,6 +12,7 @@ import (
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
 	"github.com/logbn/zongzi"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/logbn/icarus/internal"
@@ -113,27 +114,47 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
 				// TODO - Add sync pool for protobuf messages
-				var reqPut = &internal.PutRequest{}
-				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqPut); err != nil {
+				var req = &internal.PutRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				resPut, err := sm.put(txn, ent.Index, epoch, reqPut)
+				if req.IgnoreLease && req.Lease != 0 {
+					entries[i].Result.Data = []byte(internal.ErrGRPCLeaseProvided.Error())
+					continue
+				}
+				if req.IgnoreValue && len(req.Value) != 0 {
+					entries[i].Result.Data = []byte(internal.ErrGRPCValueProvided.Error())
+					continue
+				}
+				var item lease
+				if req.Lease != 0 {
+					item, err = sm.dbLease.get(txn, uint64(req.Lease))
+					if err != nil {
+						return
+					}
+					if item.id == 0 {
+						entries[i].Result.Data = []byte(internal.ErrGRPCLeaseNotFound.Error())
+						continue
+					}
+				}
+				res, val, err := sm.cmdPut(txn, ent.Index, epoch, req)
 				if err != nil {
 					return err
 				}
-				entries[i].Result.Data, err = proto.Marshal(resPut)
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
 				if err != nil {
 					return err
 				}
-				entries[i].Result.Value = 1
+				entries[i].Result.Value = val
 			case CMD_KV_DELETE_RANGE:
 				var reqDel = &internal.DeleteRangeRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqDel); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				resDel, err := sm.deleteRange(txn, ent.Index, epoch, reqDel)
+				resDel, err := sm.cmdDeleteRange(txn, ent.Index, epoch, reqDel)
 				if err != nil {
 					return err
 				}
@@ -176,7 +197,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					continue
 				}
 				var success bool
-				success, err = sm.runCompare(txn, req.Compare)
+				success, err = sm.txnCompare(txn, req.Compare)
 				if err != nil {
 					return
 				}
@@ -184,9 +205,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					Succeeded: success,
 				}
 				if success {
-					res.Responses, err = sm.runOps(txn, ent.Index, epoch, req.Success)
+					res.Responses, err = sm.txnOps(txn, ent.Index, epoch, req.Success)
 				} else {
-					res.Responses, err = sm.runOps(txn, ent.Index, epoch, req.Failure)
+					res.Responses, err = sm.txnOps(txn, ent.Index, epoch, req.Failure)
 				}
 				if err == internal.ErrGRPCDuplicateKey {
 					entries[i].Result.Data = []byte(err.Error())
@@ -236,7 +257,10 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					item.renewed = epoch
 					item.expires = epoch + uint64(req.TTL)
 					if err = sm.dbLease.put(txn, item); err != nil {
-						return err
+						return
+					}
+					if err = sm.dbLeaseExp.put(txn, item); err != nil {
+						return
 					}
 					res.ID = int64(item.id)
 					res.TTL = req.TTL
@@ -246,6 +270,22 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				entries[i].Result.Value = 1
+			case CMD_LEASE_REVOKE:
+				var req = &internal.LeaseRevokeRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				res, val, err := sm.cmdLeaseRevoke(txn, ent.Index, req)
+				if err != nil {
+					return err
+				}
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Value = val
+				if err != nil {
+					return err
+				}
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
@@ -275,13 +315,14 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			if err != nil {
 				return
 			}
-			resp, err = sm.rangeReq(txn, index, req)
+			resp, err = sm.queryRange(txn, index, req)
 			return
 		})
 		if err == internal.ErrGRPCCompacted || err == internal.ErrGRPCFutureRev {
 			res.Data = []byte(err.Error())
 			err = nil
 		} else if err != nil {
+			res.Data = []byte(err.Error())
 			return
 		} else {
 			if res.Data, err = proto.Marshal(resp); err != nil {
@@ -331,38 +372,42 @@ func (sm *stateMachine) Close() error {
 	return sm.env.Close()
 }
 
-func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader {
-	return &internal.ResponseHeader{
-		Revision:  int64(revision),
-		ClusterId: sm.shardID,
-		MemberId:  sm.replicaID,
-	}
-}
-
-func (sm *stateMachine) put(txn *lmdb.Txn, index, epoch uint64, req *internal.PutRequest) (res *internal.PutResponse, err error) {
-	prev, _, patched, err := sm.dbKv.put(txn, index, uint64(req.Lease), req.Key, req.Value)
+func (sm *stateMachine) cmdPut(txn *lmdb.Txn, index, epoch uint64, req *internal.PutRequest) (res *internal.PutResponse, val uint64, err error) {
+	res = &internal.PutResponse{}
+	prev, _, patched, err := sm.dbKv.put(txn, index, uint64(req.Lease), req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return
 	}
 	if patched {
 		sm.statPatched++
 	}
-	// TODO - Reject KV Put for non-existent lease (internal.ErrGRPCLeaseNotFound)
 	// TODO - Replace timestamp w/ epoch
 	err = sm.dbKvEvent.put(txn, index, epoch, req.Key)
 	if err != nil {
 		return
 	}
+	if !req.IgnoreLease && int64(prev.lease) != req.Lease {
+		if req.Lease > 0 {
+			if err = sm.dbLeaseKey.put(txn, req.Key, uint64(req.Lease)); err != nil {
+				return
+			}
+		}
+		if prev.lease > 0 {
+			if err = sm.dbLeaseKey.del(txn, prev.lease, req.Key); err != nil {
+				return
+			}
+		}
+	}
 	// TODO - Insert lease keys
-	res = &internal.PutResponse{}
-	res.Header = sm.responseHeader(index)
 	if req.PrevKv {
 		res.PrevKv = prev.ToProto()
 	}
+	val = 1
 	return
 }
 
-func (sm *stateMachine) deleteRange(txn *lmdb.Txn, index, epoch uint64, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+func (sm *stateMachine) cmdDeleteRange(txn *lmdb.Txn, index, epoch uint64, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+	res = &internal.DeleteRangeResponse{}
 	prev, n, err := sm.dbKv.deleteRange(txn, index, req.Key, req.RangeEnd)
 	if err != nil {
 		return
@@ -370,12 +415,16 @@ func (sm *stateMachine) deleteRange(txn *lmdb.Txn, index, epoch uint64, req *int
 	var keys = make([][]byte, len(prev))
 	for _, item := range prev {
 		keys = append(keys, item.key)
+		if item.lease != 0 {
+			if err = sm.dbLeaseKey.del(txn, item.lease, item.key); err != nil {
+				return
+			}
+		}
 	}
 	err = sm.dbKvEvent.delete(txn, index, epoch, keys)
 	if err != nil {
 		return
 	}
-	res = &internal.DeleteRangeResponse{}
 	res.Deleted = n
 	res.Header = sm.responseHeader(index)
 	if req.PrevKv {
@@ -386,7 +435,38 @@ func (sm *stateMachine) deleteRange(txn *lmdb.Txn, index, epoch uint64, req *int
 	return
 }
 
-func (sm *stateMachine) rangeReq(txn *lmdb.Txn, index uint64, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
+func (sm *stateMachine) cmdLeaseRevoke(txn *lmdb.Txn, index uint64, req *internal.LeaseRevokeRequest) (res *internal.LeaseRevokeResponse, val uint64, err error) {
+	res = &internal.LeaseRevokeResponse{}
+	var item lease
+	if item, err = sm.dbLease.get(txn, uint64(req.ID)); err != nil {
+		return
+	}
+	if item.id == 0 {
+		val = uint64(codes.NotFound)
+		return
+	}
+	var batch = make([][]byte, 100)
+	for {
+		if batch, err = sm.dbLeaseKey.sweep(txn, item.id, batch[:0]); err != nil {
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+		if err = sm.dbKv.deleteBatch(txn, index, batch); err != nil {
+			return
+		}
+	}
+	if err = sm.dbLeaseExp.del(txn, item); err != nil {
+		return
+	}
+	if err = sm.dbLease.del(txn, item.id); err != nil {
+		return
+	}
+	return
+}
+
+func (sm *stateMachine) queryRange(txn *lmdb.Txn, index uint64, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
 	if req.Revision > 0 {
 		min, err := sm.dbMeta.getRevisionMin(txn)
 		if err != nil {
@@ -429,12 +509,12 @@ func (sm *stateMachine) rangeReq(txn *lmdb.Txn, index uint64, req *internal.Rang
 	return
 }
 
-func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*internal.RequestOp) (res []*internal.ResponseOp, err error) {
+func (sm *stateMachine) txnOps(txn *lmdb.Txn, index, epoch uint64, ops []*internal.RequestOp) (res []*internal.ResponseOp, err error) {
 	for _, op := range ops {
 		switch op.Request.(type) {
 		case *internal.RequestOp_RequestPut:
 			putReq := op.Request.(*internal.RequestOp_RequestPut).RequestPut
-			putRes, err := sm.put(txn, index, epoch, putReq)
+			putRes, _, err := sm.cmdPut(txn, index, epoch, putReq)
 			if err != nil {
 				return nil, err
 			}
@@ -445,7 +525,7 @@ func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*intern
 			})
 		case *internal.RequestOp_RequestDeleteRange:
 			delReq := op.Request.(*internal.RequestOp_RequestDeleteRange).RequestDeleteRange
-			delRes, err := sm.deleteRange(txn, index, epoch, delReq)
+			delRes, err := sm.cmdDeleteRange(txn, index, epoch, delReq)
 			if err != nil {
 				return nil, err
 			}
@@ -456,7 +536,7 @@ func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*intern
 			})
 		case *internal.RequestOp_RequestRange:
 			rangeReq := op.Request.(*internal.RequestOp_RequestRange).RequestRange
-			rangeRes, err := sm.rangeReq(txn, index, rangeReq)
+			rangeRes, err := sm.queryRange(txn, index, rangeReq)
 			if err != nil {
 				return nil, err
 			}
@@ -470,23 +550,26 @@ func (sm *stateMachine) runOps(txn *lmdb.Txn, index, epoch uint64, ops []*intern
 	return
 }
 
-func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (success bool, err error) {
+func (sm *stateMachine) txnCompare(txn *lmdb.Txn, conds []*internal.Compare) (success bool, err error) {
 	success = true
 	var item kv
 	for _, cond := range conds {
 		if item, err = sm.dbKv.get(txn, cond.Key); err != nil {
+			return
+		}
+		if !bytes.Equal(cond.Key, item.key) {
 			success = false
 			break
 		}
 		switch cond.Target {
 		case internal.Compare_VERSION:
-			success = intCompare(cond.Result, int64(item.version), cond.TargetUnion.(*internal.Compare_Version).Version)
+			success = txnIntCompare(cond.Result, int64(item.version), cond.TargetUnion.(*internal.Compare_Version).Version)
 		case internal.Compare_CREATE:
-			success = intCompare(cond.Result, int64(item.created), cond.TargetUnion.(*internal.Compare_CreateRevision).CreateRevision)
+			success = txnIntCompare(cond.Result, int64(item.created), cond.TargetUnion.(*internal.Compare_CreateRevision).CreateRevision)
 		case internal.Compare_MOD:
-			success = intCompare(cond.Result, int64(item.revision), cond.TargetUnion.(*internal.Compare_ModRevision).ModRevision)
+			success = txnIntCompare(cond.Result, int64(item.revision), cond.TargetUnion.(*internal.Compare_ModRevision).ModRevision)
 		case internal.Compare_LEASE:
-			success = intCompare(cond.Result, int64(item.lease), cond.TargetUnion.(*internal.Compare_Lease).Lease)
+			success = txnIntCompare(cond.Result, int64(item.lease), cond.TargetUnion.(*internal.Compare_Lease).Lease)
 		case internal.Compare_VALUE:
 			v := cond.TargetUnion.(*internal.Compare_Value).Value
 			switch cond.Result {
@@ -507,7 +590,15 @@ func (sm *stateMachine) runCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 	return
 }
 
-func intCompare(cond internal.Compare_CompareResult, a, b int64) bool {
+func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader {
+	return &internal.ResponseHeader{
+		Revision:  int64(revision),
+		ClusterId: sm.shardID,
+		MemberId:  sm.replicaID,
+	}
+}
+
+func txnIntCompare(cond internal.Compare_CompareResult, a, b int64) bool {
 	switch cond {
 	case internal.Compare_EQUAL:
 		return a == b

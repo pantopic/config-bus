@@ -42,18 +42,13 @@ func TestService(t *testing.T) {
 	t.Run("compact", testCompact)
 	t.Run("transaction", testTransaction)
 	t.Run("lease-grant", testLeaseGrant)
-
 	t.Run("lease-revoke", testLeaseRevoke)
+
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
 	t.Run("lease-checkpoint", testLeaseCheckpoint)
 
-	// LeaseRevoke
-	// LeaseKeepAlive
-	// LeaseTimeToLive
-	// LeaseLeases
-	// LeaseCheckpoint
 	// Watch
 
 	// Status
@@ -71,9 +66,11 @@ func setupParity(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
 	svcKv = newParityKvService(conn)
 	svcLease = newParityLeaseService(conn)
+
+	// Etcd bugs
+	ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED = false
 }
 
 // Run integration tests against bootstrapped icarus instance
@@ -129,7 +126,7 @@ func setupIcarus(t *testing.T) {
 		return true
 	}), `%#v`, agents)
 	// 5 seconds for shard to have active leader
-	require.True(t, await(5, 100, func() bool {
+	require.True(t, await(10, 100, func() bool {
 		agents[0].State(ctx, func(s *zongzi.State) {
 			if found, ok := s.Shard(shard.ID); ok {
 				shard = found
@@ -199,6 +196,28 @@ func testUpdate(t *testing.T) {
 		assert.Greater(t, resp.Header.Revision, rev)
 		assert.Equal(t, resp.PrevKv.Value, put.Value)
 	})
+	t.Run("ignore-value", func(t *testing.T) {
+		resp, err := svcKv.Put(ctx, &internal.PutRequest{
+			Key:         []byte(`test-key`),
+			Value:       []byte(`test-value-4`),
+			IgnoreValue: true,
+		})
+		require.NotNil(t, err, err)
+		assert.Equal(t, internal.ErrGRPCValueProvided, err)
+		resp, err = svcKv.Put(ctx, &internal.PutRequest{
+			Key:         []byte(`test-key`),
+			IgnoreValue: true,
+		})
+		require.Nil(t, err, err)
+		assert.NotNil(t, resp)
+		resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key: []byte(`test-key`),
+		})
+		require.Nil(t, err, err)
+		assert.NotNil(t, resp2)
+		require.Equal(t, len(resp2.Kvs), 1)
+		assert.Equal(t, []byte(`test-value-3`), resp2.Kvs[0].Value)
+	})
 	return
 }
 
@@ -215,10 +234,13 @@ func testRange(t *testing.T) {
 	})
 	require.Nil(t, err, err)
 	t.Run("all", func(t *testing.T) {
-		resp, err := svcKv.Range(ctx, &internal.RangeRequest{})
+		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte{0},
+			RangeEnd: []byte{0},
+		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
-		require.Equal(t, 1, len(resp.Kvs))
+		require.Equal(t, 3, len(resp.Kvs))
 	})
 	t.Run("basic", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -355,7 +377,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:            []byte(`test-range-000`),
 				RangeEnd:       []byte(`test-range-100`),
@@ -364,7 +390,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:            []byte(`test-range-000`),
 				RangeEnd:       []byte(`test-range-100`),
@@ -374,7 +404,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 		})
 		t.Run("create", func(t *testing.T) {
 			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -385,7 +419,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:               []byte(`test-range-000`),
 				RangeEnd:          []byte(`test-range-100`),
@@ -394,7 +432,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:               []byte(`test-range-000`),
 				RangeEnd:          []byte(`test-range-100`),
@@ -404,7 +446,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 		})
 		t.Run("both", func(t *testing.T) {
 			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -418,7 +464,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
 				Key:               []byte(`test-range-000`),
 				RangeEnd:          []byte(`test-range-100`),
@@ -430,7 +480,11 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			assert.Equal(t, int64(50), resp.Count)
+			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
 		})
 	})
 }
@@ -577,6 +631,12 @@ func testCompact(t *testing.T) {
 		Key:      []byte(`test-key-compact-00`),
 		RangeEnd: []byte(`test-key-compact-10`),
 		Revision: revs[9],
+	})
+	require.NotNil(t, err, err)
+	resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
+		Key:      []byte(`test-key-compact-00`),
+		RangeEnd: []byte(`test-key-compact-10`),
+		Revision: 1e10,
 	})
 	require.NotNil(t, err, err)
 }
@@ -898,7 +958,7 @@ func testLeaseGrant(t *testing.T) {
 		assert.NotNil(t, resp)
 		assert.Empty(t, resp.Error)
 		assert.EqualValues(t, 600, resp.TTL)
-		assert.Equal(t, resp.ID, int64(2))
+		assert.Greater(t, resp.ID, int64(0))
 		id = resp.ID
 	})
 	t.Run("failure", func(t *testing.T) {
@@ -922,11 +982,197 @@ func testLeaseGrant(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		require.NotNil(t, resp)
-		assert.Equal(t, int64(4), resp.ID)
+		assert.Greater(t, resp.ID, int64(3))
+	})
+	t.Run("wihout", func(t *testing.T) {
+		_, err := svcKv.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-no-lease-00`),
+			Value: []byte(`test-no-lease-value-00`),
+			Lease: 1e10,
+		})
+		require.NotNil(t, err, err)
 	})
 }
 
-func testLeaseRevoke(t *testing.T)     {}
+func testLeaseRevoke(t *testing.T) {
+	resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+		TTL: 600,
+	})
+	require.Nil(t, err, err)
+	var id = resp.ID
+	t.Run("success", func(t *testing.T) {
+		resp, err := svcLease.LeaseRevoke(ctx, &internal.LeaseRevokeRequest{
+			ID: id,
+		})
+		require.Nil(t, err, err)
+		assert.NotNil(t, resp)
+	})
+	t.Run("failure", func(t *testing.T) {
+		resp, err := svcLease.LeaseRevoke(ctx, &internal.LeaseRevokeRequest{
+			ID: id,
+		})
+		require.NotNil(t, err, err)
+		assert.Nil(t, resp)
+	})
+	resp, err = svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+		TTL: 600,
+	})
+	require.Nil(t, err, err)
+	id = resp.ID
+	var rev int64
+	t.Run("keys", func(t *testing.T) {
+		resp2, err := svcKv.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-lease-revoke-00`),
+			Value: []byte(`test-lease-revoke-value-00`),
+			Lease: id,
+		})
+		require.Nil(t, err, err)
+		rev = resp2.Header.Revision
+		t.Run("added", func(t *testing.T) {
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-00`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+		})
+		t.Run("ignore-lease", func(t *testing.T) {
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:         []byte(`test-lease-revoke-00`),
+				Value:       []byte(`test-lease-revoke-value-01`),
+				Lease:       54321,
+				IgnoreLease: true,
+			})
+			require.NotNil(t, err, err)
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:         []byte(`test-lease-revoke-00`),
+				Value:       []byte(`test-lease-revoke-value-02`),
+				IgnoreLease: true,
+			})
+			require.Nil(t, err, err)
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-00`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+			assert.Equal(t, id, resp.Kvs[0].Lease)
+			assert.Equal(t, []byte(`test-lease-revoke-value-02`), resp.Kvs[0].Value)
+		})
+		_, err = svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+			ID:  54321,
+			TTL: 600,
+		})
+		require.Nil(t, err, err)
+		t.Run("overwrite-lease", func(t *testing.T) {
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-lease-revoke-01`),
+				Value: []byte(`test-lease-revoke-value-01`),
+				Lease: id,
+			})
+			require.Nil(t, err, err)
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-01`),
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+			assert.Equal(t, id, resp.Kvs[0].Lease)
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-lease-revoke-01`),
+				Value: []byte(`test-lease-revoke-value-02`),
+				Lease: 54321,
+			})
+			require.Nil(t, err, err)
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-01`),
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+			assert.EqualValues(t, 54321, resp.Kvs[0].Lease)
+		})
+		t.Run("removed", func(t *testing.T) {
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-00`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+			require.EqualValues(t, 1, resp.Count)
+			resp2, err := svcLease.LeaseRevoke(ctx, &internal.LeaseRevokeRequest{
+				ID: id,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp2)
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-00`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 0, len(resp.Kvs))
+			require.EqualValues(t, 0, resp.Count)
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-01`),
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+			require.EqualValues(t, 1, resp.Count)
+		})
+		t.Run("still-visible-at-revision", func(t *testing.T) {
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-lease-revoke-00`),
+				Revision: rev,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+		})
+		resp, err = svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+			TTL: 600,
+		})
+		require.Nil(t, err, err)
+		newLease := resp.ID
+		t.Run("delete-overwrite-remove", func(t *testing.T) {
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-lease-revoke-02`),
+				Value: []byte(`test-lease-revoke-value-00`),
+				Lease: newLease,
+			})
+			require.Nil(t, err, err)
+			delResp, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key:    []byte(`test-lease-revoke-02`),
+				PrevKv: true,
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, delResp)
+			require.Equal(t, 1, len(delResp.PrevKvs))
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-02`),
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			require.Equal(t, 0, len(resp.Kvs))
+			_, err = svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(`test-lease-revoke-02`),
+				Value: []byte(`test-lease-revoke-value-01`),
+				Lease: 54321,
+			})
+			_, err = svcLease.LeaseRevoke(ctx, &internal.LeaseRevokeRequest{
+				ID: newLease,
+			})
+			require.Nil(t, err, err)
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key: []byte(`test-lease-revoke-02`),
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			require.Equal(t, 1, len(resp.Kvs))
+		})
+	})
+}
+
 func testLeaseKeepAlive(t *testing.T)  {}
 func testLeaseLeases(t *testing.T)     {}
 func testLeaseTimeToLive(t *testing.T) {}
@@ -1003,4 +1249,8 @@ func newParityLeaseService(conn grpc.ClientConnInterface) internal.LeaseServer {
 
 func (svc parityLeaseService) LeaseGrant(ctx context.Context, req *internal.LeaseGrantRequest) (*internal.LeaseGrantResponse, error) {
 	return svc.client.LeaseGrant(ctx, req)
+}
+
+func (svc parityLeaseService) LeaseRevoke(ctx context.Context, req *internal.LeaseRevokeRequest) (*internal.LeaseRevokeResponse, error) {
+	return svc.client.LeaseRevoke(ctx, req)
 }

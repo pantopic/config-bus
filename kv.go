@@ -35,6 +35,11 @@ var (
 	// ICARUS_TXN_MULTI_WRITE_ENABLED determines whether to allow multiple writes to a single key during a transaction.
 	// Icarus supports it, but etcd does not so it is disabled by default.
 	ICARUS_TXN_MULTI_WRITE_ENABLED = false
+
+	// ICARUS_RANGE_CORRECT_FILTER_COUNT_ENABLED determines whether to apply filters to the result count.
+	// This is a bug in etcd that they don't intend to fix.
+	// Min/max mod/created rev not used by Kubernetes so it is enabled by default since it is the correct behavior.
+	ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED = true
 )
 
 type kv struct {

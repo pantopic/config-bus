@@ -20,7 +20,12 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 	return
 }
 
-func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, next kv, patched bool, err error) {
+func (db dbKv) put(
+	txn *lmdb.Txn,
+	index, lease uint64,
+	key, val []byte,
+	ignoreValue, ignoreLease bool,
+) (prev, next kv, patched bool, err error) {
 	cur, err := txn.OpenCursor(db.i)
 	if err != nil {
 		return
@@ -52,6 +57,12 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 		current := prev
 		current.val = val
 		current.lease = lease
+		if ignoreValue {
+			current.val = prev.val
+		}
+		if ignoreLease {
+			current.lease = prev.lease
+		}
 		if err = cur.Put(key, current.Bytes(nil, nil), lmdb.Current); err != nil {
 			return
 		}
@@ -75,6 +86,12 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 		key:      key,
 		val:      val,
 	}
+	if ignoreValue {
+		next.val = prev.val
+	}
+	if ignoreLease {
+		next.lease = prev.lease
+	}
 	if ICARUS_KV_PATCH_ENABLED {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
@@ -88,7 +105,12 @@ func (db dbKv) put(txn *lmdb.Txn, index, lease uint64, key, val []byte) (prev, n
 	return
 }
 
-func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod, minCreated, maxCreated, limit uint64, countOnly, keysOnly bool) (items []kv, count int, more bool, err error) {
+func (db dbKv) getRange(
+	txn *lmdb.Txn,
+	key, end []byte,
+	revision, minMod, maxMod, minCreated, maxCreated, limit uint64,
+	countOnly, keysOnly bool,
+) (items []kv, count int, more bool, err error) {
 	var created uint64
 	var r = bytes.NewReader(nil)
 	var next [][]byte
@@ -99,11 +121,8 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 	}
 	defer cur.Close()
 	var k, v []byte
-	if len(key) > 0 {
-		k, v, err = cur.Get(key, nil, lmdb.SetRange)
-	} else {
-		k, v, err = cur.Get(nil, nil, lmdb.Next)
-	}
+	var isFullScan = bytes.Equal(key, []byte{0}) && bytes.Equal(end, []byte{0})
+	k, v, err = cur.Get(key, nil, lmdb.SetRange)
 	for !lmdb.IsNotFound(err) {
 		if err != nil {
 			return
@@ -112,11 +131,11 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			err = ErrValueInvalid
 			return
 		}
-		if len(key) > 0 && len(end) == 0 && !bytes.Equal(k, key) {
+		if !isFullScan && len(end) == 0 && !bytes.Equal(k, key) {
 			break
 		}
-		if len(end) > 0 && bytes.Compare(k, end) >= 0 {
-			return
+		if !isFullScan && len(end) > 0 && bytes.Compare(k, end) >= 0 {
+			break
 		}
 		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
@@ -177,7 +196,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 			break
 		}
 	next:
-		k, v, err = cur.Get(k, nil, lmdb.NextNoDup)
+		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
 	}
 	if lmdb.IsNotFound(err) {
 		err = nil
@@ -186,8 +205,7 @@ func (db dbKv) getRange(txn *lmdb.Txn, key, end []byte, revision, minMod, maxMod
 }
 
 func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items []kv, count int64, err error) {
-	var next kv
-	var prev kv
+	var prev, tombstone kv
 	cur, err := txn.OpenCursor(db.i)
 	if err != nil {
 		return
@@ -210,7 +228,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items 
 		}
 		prev, err = prev.FromBytes(k, v, nil, false)
 		if prev.created > 0 {
-			next = kv{
+			tombstone = kv{
 				key:      k,
 				revision: index,
 			}
@@ -219,11 +237,11 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items 
 					err = internal.ErrGRPCDuplicateKey
 					return
 				}
-				if err = cur.Put(k, next.Bytes(nil, nil), lmdb.Current); err != nil {
+				if err = cur.Put(k, tombstone.Bytes(nil, nil), lmdb.Current); err != nil {
 					return
 				}
 			} else {
-				if err = txn.Put(db.i, k, next.Bytes(nil, nil), 0); err != nil {
+				if err = txn.Put(db.i, k, tombstone.Bytes(nil, nil), 0); err != nil {
 					return
 				}
 			}
@@ -237,6 +255,43 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index uint64, key, end []byte) (items 
 	}
 	if lmdb.IsNotFound(err) {
 		err = nil
+	}
+	return
+}
+
+func (db dbKv) deleteBatch(txn *lmdb.Txn, index uint64, keys [][]byte) (err error) {
+	var prev, tombstone kv
+	var k, v []byte
+	cur, err := txn.OpenCursor(db.i)
+	if err != nil {
+		return
+	}
+	defer cur.Close()
+	for _, key := range keys {
+		k, v, err = cur.Get(key, nil, lmdb.SetRange)
+		if lmdb.IsNotFound(err) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return
+		}
+		if len(v) < 12 {
+			err = ErrValueInvalid
+			return
+		}
+		if !bytes.Equal(k, key) {
+			return ErrNotFound
+		}
+		prev, err = prev.FromBytes(k, v, nil, false)
+		if prev.created > 0 {
+			tombstone = kv{
+				key:      k,
+				revision: index,
+			}
+			if err = txn.Put(db.i, k, tombstone.Bytes(nil, nil), 0); err != nil {
+				return
+			}
+		}
 	}
 	return
 }
@@ -280,6 +335,35 @@ func (db dbKv) compact(txn *lmdb.Txn, batch *orderedmap.OrderedMap[string, uint6
 	return
 }
 
+func (db dbKv) del(txn *lmdb.Txn, batch [][]byte) (err error) {
+	cur, err := txn.OpenCursor(db.i)
+	if err != nil {
+		return
+	}
+	defer cur.Close()
+	var k, v []byte
+	for _, key := range batch {
+		k, v, err = cur.Get(key, nil, lmdb.SetRange)
+		for !lmdb.IsNotFound(err) {
+			if err != nil {
+				return
+			}
+			if len(v) < 12 {
+				err = ErrValueInvalid
+				return
+			}
+			if !bytes.Equal(k, key) {
+				break
+			}
+			if err = cur.Del(lmdb.Current); err != nil {
+				return
+			}
+			k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
+		}
+	}
+	return
+}
+
 func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 	v, err := txn.Get(db.i, key)
 	if lmdb.IsNotFound(err) {
@@ -289,5 +373,11 @@ func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 	if err != nil {
 		return
 	}
-	return item.FromBytes(key, v, nil, false)
+	if item, err = item.FromBytes(key, v, nil, false); err != nil {
+		return
+	}
+	if item.created == 0 {
+		item = kv{}
+	}
+	return
 }

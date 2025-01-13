@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/logbn/zongzi"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/logbn/icarus/internal"
@@ -25,7 +26,11 @@ func (s *serviceLease) addTerm(header *internal.ResponseHeader) {
 	header.RaftTerm = term
 }
 
-func (s *serviceLease) LeaseGrant(ctx context.Context, req *internal.LeaseGrantRequest) (res *internal.LeaseGrantResponse, err error) {
+// LeaseGrant creates a new lease
+func (s *serviceLease) LeaseGrant(
+	ctx context.Context,
+	req *internal.LeaseGrantRequest,
+) (res *internal.LeaseGrantResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -49,7 +54,11 @@ func (s *serviceLease) LeaseGrant(ctx context.Context, req *internal.LeaseGrantR
 	return
 }
 
-func (s *serviceLease) LeaseRevoke(ctx context.Context, req *internal.LeaseRevokeRequest) (res *internal.LeaseRevokeResponse, err error) {
+// LeaseRevoke revokes a new lease, deleting all associated keys
+func (s *serviceLease) LeaseRevoke(
+	ctx context.Context,
+	req *internal.LeaseRevokeRequest,
+) (res *internal.LeaseRevokeResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -58,8 +67,8 @@ func (s *serviceLease) LeaseRevoke(ctx context.Context, req *internal.LeaseRevok
 	if err != nil {
 		return
 	}
-	if val != 1 {
-		err = fmt.Errorf("%s", string(data))
+	if val == uint64(codes.NotFound) {
+		err = internal.ErrGRPCLeaseNotFound
 		return
 	}
 	res = &internal.LeaseRevokeResponse{}
@@ -68,28 +77,19 @@ func (s *serviceLease) LeaseRevoke(ctx context.Context, req *internal.LeaseRevok
 	return
 }
 
-/*
-	func (s *serviceLease) LeaseKeepAlive(ctx context.Context, req *internal.LeaseKeepAliveRequest) (res *internal.LeaseKeepAliveResponse, err error) {
-		b, err := proto.Marshal(req)
-		if err != nil {
-			return
-		}
-		val, data, err := s.client.Apply(ctx, append(b, CMD_LEASE_KEEP_ALIVE))
-		if err != nil {
-			return
-		}
-		if val != 1 {
-			err = fmt.Errorf("%s", string(data))
-			return
-		}
-		res = &internal.LeaseKeepAliveResponse{}
-		err = proto.Unmarshal(data, res)
-		s.addTerm(res.Header)
-		return
-	}
-*/
+// LeaseKeepAlive renews a lease to prevent it from expiring after TTL seconds
+func (s *serviceLease) LeaseKeepAlive(
+	server internal.Lease_LeaseKeepAliveServer,
+) (er error) {
+	// TODO - Implement Keepalive service
+	return
+}
 
-func (s *serviceLease) LeaseLeases(ctx context.Context, req *internal.LeaseLeasesRequest) (res *internal.LeaseLeasesResponse, err error) {
+// LeaseLeases reurns a list of all leases
+func (s *serviceLease) LeaseLeases(
+	ctx context.Context,
+	req *internal.LeaseLeasesRequest,
+) (res *internal.LeaseLeasesResponse, err error) {
 	val, data, err := s.client.Read(ctx, []byte{QUERY_LEASE_LEASES}, true)
 	if err != nil {
 		return
@@ -104,7 +104,10 @@ func (s *serviceLease) LeaseLeases(ctx context.Context, req *internal.LeaseLease
 	return
 }
 
-func (s *serviceLease) LeaseTimeToLive(ctx context.Context, req *internal.LeaseTimeToLiveRequest) (res *internal.LeaseTimeToLiveResponse, err error) {
+func (s *serviceLease) LeaseTimeToLive(
+	ctx context.Context,
+	req *internal.LeaseTimeToLiveRequest,
+) (res *internal.LeaseTimeToLiveResponse, err error) {
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return

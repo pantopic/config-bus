@@ -92,13 +92,13 @@ func TestDb(t *testing.T) {
 		defer func() { sm.dbKv.i = i }()
 		sm.dbKv.i = 0
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`))
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
 		sm.dbKv.i = 100000
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`))
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
