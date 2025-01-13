@@ -286,6 +286,22 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
+			case CMD_LEASE_KEEP_ALIVE:
+				var req = &internal.LeaseKeepAliveRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				res, val, err := sm.cmdLeaseKeepAlive(txn, epoch, req)
+				if err != nil {
+					return err
+				}
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Value = val
+				if err != nil {
+					return err
+				}
 			}
 		}
 		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
@@ -372,7 +388,10 @@ func (sm *stateMachine) Close() error {
 	return sm.env.Close()
 }
 
-func (sm *stateMachine) cmdPut(txn *lmdb.Txn, index, epoch uint64, req *internal.PutRequest) (res *internal.PutResponse, val uint64, err error) {
+func (sm *stateMachine) cmdPut(
+	txn *lmdb.Txn, index, epoch uint64,
+	req *internal.PutRequest,
+) (res *internal.PutResponse, val uint64, err error) {
 	res = &internal.PutResponse{}
 	prev, _, patched, err := sm.dbKv.put(txn, index, uint64(req.Lease), req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
@@ -406,7 +425,10 @@ func (sm *stateMachine) cmdPut(txn *lmdb.Txn, index, epoch uint64, req *internal
 	return
 }
 
-func (sm *stateMachine) cmdDeleteRange(txn *lmdb.Txn, index, epoch uint64, req *internal.DeleteRangeRequest) (res *internal.DeleteRangeResponse, err error) {
+func (sm *stateMachine) cmdDeleteRange(
+	txn *lmdb.Txn, index, epoch uint64,
+	req *internal.DeleteRangeRequest,
+) (res *internal.DeleteRangeResponse, err error) {
 	res = &internal.DeleteRangeResponse{}
 	prev, n, err := sm.dbKv.deleteRange(txn, index, req.Key, req.RangeEnd)
 	if err != nil {
@@ -435,7 +457,10 @@ func (sm *stateMachine) cmdDeleteRange(txn *lmdb.Txn, index, epoch uint64, req *
 	return
 }
 
-func (sm *stateMachine) cmdLeaseRevoke(txn *lmdb.Txn, index uint64, req *internal.LeaseRevokeRequest) (res *internal.LeaseRevokeResponse, val uint64, err error) {
+func (sm *stateMachine) cmdLeaseRevoke(
+	txn *lmdb.Txn, index uint64,
+	req *internal.LeaseRevokeRequest,
+) (res *internal.LeaseRevokeResponse, val uint64, err error) {
 	res = &internal.LeaseRevokeResponse{}
 	var item lease
 	if item, err = sm.dbLease.get(txn, uint64(req.ID)); err != nil {
@@ -466,7 +491,38 @@ func (sm *stateMachine) cmdLeaseRevoke(txn *lmdb.Txn, index uint64, req *interna
 	return
 }
 
-func (sm *stateMachine) queryRange(txn *lmdb.Txn, index uint64, req *internal.RangeRequest) (res *internal.RangeResponse, err error) {
+func (sm *stateMachine) cmdLeaseKeepAlive(
+	txn *lmdb.Txn, epoch uint64,
+	req *internal.LeaseKeepAliveRequest,
+) (res *internal.LeaseKeepAliveResponse, val uint64, err error) {
+	res = &internal.LeaseKeepAliveResponse{ID: req.ID}
+	val = 1
+	var item lease
+	if item, err = sm.dbLease.get(txn, uint64(req.ID)); err != nil {
+		return
+	}
+	if item.id == 0 {
+		return
+	}
+	res.TTL = int64(item.expires - item.renewed)
+	item.expires = epoch + uint64(res.TTL)
+	item.renewed = epoch
+	if err = sm.dbLease.put(txn, item); err != nil {
+		return
+	}
+	if err = sm.dbLeaseExp.put(txn, item); err != nil {
+		return
+	}
+	return
+}
+
+func (sm *stateMachine) queryRange(
+	txn *lmdb.Txn, index uint64,
+	req *internal.RangeRequest,
+) (res *internal.RangeResponse, err error) {
+	res = &internal.RangeResponse{
+		Header: sm.responseHeader(index),
+	}
 	if req.Revision > 0 {
 		min, err := sm.dbMeta.getRevisionMin(txn)
 		if err != nil {
@@ -478,9 +534,6 @@ func (sm *stateMachine) queryRange(txn *lmdb.Txn, index uint64, req *internal.Ra
 		if req.Revision > int64(index) {
 			return nil, internal.ErrGRPCFutureRev
 		}
-	}
-	res = &internal.RangeResponse{
-		Header: sm.responseHeader(index),
 	}
 	data, count, more, err := sm.dbKv.getRange(txn,
 		req.Key,
@@ -509,7 +562,10 @@ func (sm *stateMachine) queryRange(txn *lmdb.Txn, index uint64, req *internal.Ra
 	return
 }
 
-func (sm *stateMachine) txnOps(txn *lmdb.Txn, index, epoch uint64, ops []*internal.RequestOp) (res []*internal.ResponseOp, err error) {
+func (sm *stateMachine) txnOps(
+	txn *lmdb.Txn, index, epoch uint64,
+	ops []*internal.RequestOp,
+) (res []*internal.ResponseOp, err error) {
 	for _, op := range ops {
 		switch op.Request.(type) {
 		case *internal.RequestOp_RequestPut:

@@ -3,6 +3,7 @@ package icarus
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc/codes"
@@ -80,8 +81,32 @@ func (s *serviceLease) LeaseRevoke(
 // LeaseKeepAlive renews a lease to prevent it from expiring after TTL seconds
 func (s *serviceLease) LeaseKeepAlive(
 	server internal.Lease_LeaseKeepAliveServer,
-) (er error) {
-	// TODO - Implement Keepalive service
+) (err error) {
+	for {
+		req, err := server.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			break
+		}
+		b, err := proto.Marshal(req)
+		if err != nil {
+			return err
+		}
+		val, data, err := s.client.Apply(server.Context(), append(b, CMD_LEASE_KEEP_ALIVE))
+		if err != nil {
+			return err
+		}
+		if val != 1 {
+			err = fmt.Errorf("%s", string(data))
+			return err
+		}
+		res := &internal.LeaseKeepAliveResponse{}
+		err = proto.Unmarshal(data, res)
+		s.addTerm(res.Header)
+		server.Send(res)
+	}
 	return
 }
 

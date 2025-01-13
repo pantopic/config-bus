@@ -5,6 +5,7 @@ package icarus
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
@@ -1173,7 +1174,36 @@ func testLeaseRevoke(t *testing.T) {
 	})
 }
 
-func testLeaseKeepAlive(t *testing.T)  {}
+func testLeaseKeepAlive(t *testing.T) {
+	var lease1 int64
+	t.Run("success", func(t *testing.T) {
+		resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+			TTL: 600,
+		})
+		require.Nil(t, err, err)
+		assert.NotNil(t, resp)
+		assert.Empty(t, resp.Error)
+		assert.EqualValues(t, 600, resp.TTL)
+		assert.Greater(t, resp.ID, int64(0))
+		lease1 = resp.ID
+		s := &mockLeaseKeepAliveServer{
+			req: &internal.LeaseKeepAliveRequest{ID: lease1},
+		}
+		err = svcLease.LeaseKeepAlive(s)
+		require.Nil(t, err, err)
+		require.NotNil(t, s.res)
+		require.EqualValues(t, 600, s.res.TTL)
+	})
+	t.Run("failure", func(t *testing.T) {
+		s := &mockLeaseKeepAliveServer{
+			req: &internal.LeaseKeepAliveRequest{ID: 1e10},
+		}
+		err = svcLease.LeaseKeepAlive(s)
+		require.Nil(t, err, err)
+		require.EqualValues(t, 1e10, s.res.ID)
+		require.EqualValues(t, 0, s.res.TTL)
+	})
+}
 func testLeaseLeases(t *testing.T)     {}
 func testLeaseTimeToLive(t *testing.T) {}
 func testLeaseCheckpoint(t *testing.T) {}
@@ -1254,3 +1284,60 @@ func (svc parityLeaseService) LeaseGrant(ctx context.Context, req *internal.Leas
 func (svc parityLeaseService) LeaseRevoke(ctx context.Context, req *internal.LeaseRevokeRequest) (*internal.LeaseRevokeResponse, error) {
 	return svc.client.LeaseRevoke(ctx, req)
 }
+
+func (svc parityLeaseService) LeaseKeepAlive(server internal.Lease_LeaseKeepAliveServer) (err error) {
+	client, err := svc.client.LeaseKeepAlive(server.Context())
+	if err != nil {
+		return
+	}
+	for {
+		req, err := server.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		err = client.Send(req)
+		if err != nil {
+			break
+		}
+		res, err := client.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		err = server.Send(res)
+		if err != nil {
+			break
+		}
+		return nil
+	}
+	return
+}
+
+type mockLeaseKeepAliveServer struct {
+	grpc.ServerStream
+	req *internal.LeaseKeepAliveRequest
+	res *internal.LeaseKeepAliveResponse
+}
+
+func (s *mockLeaseKeepAliveServer) Send(res *internal.LeaseKeepAliveResponse) (err error) {
+	s.res = res
+	return
+}
+func (s *mockLeaseKeepAliveServer) Recv() (req *internal.LeaseKeepAliveRequest, err error) {
+	if s.res == nil {
+		req = s.req
+	} else {
+		err = io.EOF
+	}
+	return
+}
+func (s *mockLeaseKeepAliveServer) Context() context.Context {
+	return context.Background()
+}
+
+var _ internal.Lease_LeaseKeepAliveServer = new(mockLeaseKeepAliveServer)
