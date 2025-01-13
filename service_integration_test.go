@@ -44,13 +44,16 @@ func TestService(t *testing.T) {
 	t.Run("transaction", testTransaction)
 	t.Run("lease-grant", testLeaseGrant)
 	t.Run("lease-revoke", testLeaseRevoke)
-
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-	t.Run("lease-checkpoint", testLeaseCheckpoint)
 
 	// Watch
+
+	// Add leader ticker to make epoch work
+	// - Incr epoch
+	// - Sweep leases and keys
+	// - Create dead lease collection
 
 	// Status
 	// Defragment
@@ -1204,8 +1207,39 @@ func testLeaseKeepAlive(t *testing.T) {
 		require.EqualValues(t, 0, s.res.TTL)
 	})
 }
-func testLeaseLeases(t *testing.T)     {}
-func testLeaseTimeToLive(t *testing.T) {}
+
+func testLeaseLeases(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		resp, err := svcLease.LeaseLeases(ctx, &internal.LeaseLeasesRequest{})
+		require.Nil(t, err, err)
+		require.NotNil(t, resp)
+		assert.Greater(t, len(resp.Leases), 0)
+	})
+}
+
+func testLeaseTimeToLive(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+			TTL: 600,
+		})
+		require.Nil(t, err, err)
+		resp2, err := svcLease.LeaseTimeToLive(ctx, &internal.LeaseTimeToLiveRequest{
+			ID: resp.ID,
+		})
+		require.Nil(t, err, err)
+		require.NotNil(t, resp2)
+		assert.Greater(t, resp2.TTL, int64(598))
+	})
+	t.Run("failure", func(t *testing.T) {
+		resp2, err := svcLease.LeaseTimeToLive(ctx, &internal.LeaseTimeToLiveRequest{
+			ID: 1e10,
+		})
+		require.Nil(t, err, err)
+		require.NotNil(t, resp2)
+		assert.EqualValues(t, -1, resp2.TTL)
+	})
+}
+
 func testLeaseCheckpoint(t *testing.T) {}
 
 func delOp(req *internal.DeleteRangeRequest) *internal.RequestOp {
@@ -1316,6 +1350,20 @@ func (svc parityLeaseService) LeaseKeepAlive(server internal.Lease_LeaseKeepAliv
 		return nil
 	}
 	return
+}
+
+func (svc parityLeaseService) LeaseTimeToLive(
+	ctx context.Context,
+	req *internal.LeaseTimeToLiveRequest,
+) (res *internal.LeaseTimeToLiveResponse, err error) {
+	return svc.client.LeaseTimeToLive(ctx, req)
+}
+
+func (svc parityLeaseService) LeaseLeases(
+	ctx context.Context,
+	req *internal.LeaseLeasesRequest,
+) (res *internal.LeaseLeasesResponse, err error) {
+	return svc.client.LeaseLeases(ctx, req)
 }
 
 type mockLeaseKeepAliveServer struct {

@@ -69,3 +69,11 @@ func (db dbMeta) getLeaseID(txn *lmdb.Txn) (index uint64, err error) {
 func (db dbMeta) setLeaseID(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyLeaseID, index)
 }
+
+func (db dbMeta) getEpoch(txn *lmdb.Txn) (index uint64, err error) {
+	return db.getUint64(txn, metaKeyEpoch)
+}
+
+func (db dbMeta) setEpoch(txn *lmdb.Txn, index uint64) (err error) {
+	return db.putUint64(txn, metaKeyEpoch, index)
+}

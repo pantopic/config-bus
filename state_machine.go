@@ -93,8 +93,6 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var t = sm.clock.Now()
-	// TODO - Replace timestamp w/ real epoch
-	var epoch = uint64(t.Unix())
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
@@ -110,6 +108,10 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		sm.statUpdates = 0
 	}
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
+		epoch, err := sm.dbMeta.getEpoch(txn)
+		if err != nil {
+			return
+		}
 		for i, ent := range entries {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
@@ -225,51 +227,16 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				res := &internal.LeaseGrantResponse{}
-				res.Header = sm.responseHeader(ent.Index)
-				item := lease{id: uint64(req.ID)}
-				if item.id == 0 {
-					if item.id, err = sm.dbMeta.getLeaseID(txn); err != nil {
-						return
-					}
-					var found lease
-					for {
-						item.id++
-						if found, err = sm.dbLease.get(txn, item.id); err != nil {
-							return
-						}
-						if found.id == 0 {
-							break
-						}
-					}
-					if err = sm.dbMeta.setLeaseID(txn, item.id); err != nil {
-						return
-					}
-				} else {
-					if item, err = sm.dbLease.get(txn, item.id); err != nil {
-						return
-					}
-					item.id = uint64(req.ID)
-				}
-				if item.renewed != 0 {
-					res.Error = internal.ErrGRPCDuplicateKey.Error()
-				} else {
-					item.renewed = epoch
-					item.expires = epoch + uint64(req.TTL)
-					if err = sm.dbLease.put(txn, item); err != nil {
-						return
-					}
-					if err = sm.dbLeaseExp.put(txn, item); err != nil {
-						return
-					}
-					res.ID = int64(item.id)
-					res.TTL = req.TTL
-				}
-				entries[i].Result.Data, err = proto.Marshal(res)
+				res, val, err := sm.cmdLeaseGrant(txn, epoch, req)
 				if err != nil {
 					return err
 				}
-				entries[i].Result.Value = 1
+				res.Header = sm.responseHeader(ent.Index)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Value = val
+				if err != nil {
+					return err
+				}
 			case CMD_LEASE_REVOKE:
 				var req = &internal.LeaseRevokeRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
@@ -342,11 +309,69 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			return
 		} else {
 			if res.Data, err = proto.Marshal(resp); err != nil {
-				sm.log.Error("Invalid response", "res", fmt.Sprintf("%x", query))
+				sm.log.Error("Invalid response", "res", query)
 				return nil
 			}
 			res.Value = 1
 		}
+	case QUERY_LEASE_LEASES:
+		var req = &internal.LeaseLeasesRequest{}
+		if err := proto.Unmarshal(query[:len(query)-1], req); err != nil {
+			sm.log.Error("Invalid query", "query", query)
+			return
+		}
+		var index uint64
+		var resp *internal.LeaseLeasesResponse
+		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+			index, err = sm.dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			resp, err = sm.queryLeaseLeases(txn, req)
+			return
+		})
+		if err != nil {
+			sm.log.Error("Unknown error", "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		resp.Header = sm.responseHeader(index)
+		res.Data, err = proto.Marshal(resp)
+		if err != nil {
+			sm.log.Error("Invalid response", "resp", resp, "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		res.Value = 1
+	case QUERY_LEASE_TIME_TO_LIVE:
+		var req = &internal.LeaseTimeToLiveRequest{}
+		if err := proto.Unmarshal(query[:len(query)-1], req); err != nil {
+			sm.log.Error("Invalid query", "query", query)
+			return
+		}
+		var index uint64
+		var resp *internal.LeaseTimeToLiveResponse
+		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+			index, err = sm.dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			resp, err = sm.queryLeaseTimeToLive(txn, req)
+			return
+		})
+		if err != nil {
+			sm.log.Error("Unknown error", "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		resp.Header = sm.responseHeader(index)
+		res.Data, err = proto.Marshal(resp)
+		if err != nil {
+			sm.log.Error("Invalid response", "resp", resp, "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		res.Value = 1
 	}
 	return
 }
@@ -457,6 +482,53 @@ func (sm *stateMachine) cmdDeleteRange(
 	return
 }
 
+func (sm *stateMachine) cmdLeaseGrant(
+	txn *lmdb.Txn, epoch uint64,
+	req *internal.LeaseGrantRequest,
+) (res *internal.LeaseGrantResponse, val uint64, err error) {
+	res = &internal.LeaseGrantResponse{}
+	item := lease{id: uint64(req.ID)}
+	if item.id == 0 {
+		if item.id, err = sm.dbMeta.getLeaseID(txn); err != nil {
+			return
+		}
+		var found lease
+		for {
+			item.id++
+			if found, err = sm.dbLease.get(txn, item.id); err != nil {
+				return
+			}
+			if found.id == 0 {
+				break
+			}
+		}
+		if err = sm.dbMeta.setLeaseID(txn, item.id); err != nil {
+			return
+		}
+	} else {
+		if item, err = sm.dbLease.get(txn, item.id); err != nil {
+			return
+		}
+		item.id = uint64(req.ID)
+	}
+	if item.expires > 0 {
+		res.Error = internal.ErrGRPCDuplicateKey.Error()
+	} else {
+		item.renewed = epoch
+		item.expires = epoch + uint64(req.TTL)
+		if err = sm.dbLease.put(txn, item); err != nil {
+			return
+		}
+		if err = sm.dbLeaseExp.put(txn, item); err != nil {
+			return
+		}
+		res.ID = int64(item.id)
+		res.TTL = req.TTL
+	}
+	val = 1
+	return
+}
+
 func (sm *stateMachine) cmdLeaseRevoke(
 	txn *lmdb.Txn, index uint64,
 	req *internal.LeaseRevokeRequest,
@@ -558,6 +630,42 @@ func (sm *stateMachine) queryRange(
 			res.Kvs = append(res.Kvs, kv.ToProto())
 		}
 		res.More = more
+	}
+	return
+}
+
+func (sm *stateMachine) queryLeaseLeases(
+	txn *lmdb.Txn,
+	_ *internal.LeaseLeasesRequest,
+) (res *internal.LeaseLeasesResponse, err error) {
+	res = &internal.LeaseLeasesResponse{}
+	items, err := sm.dbLease.all(txn)
+	if err != nil {
+		return
+	}
+	for _, item := range items {
+		res.Leases = append(res.Leases, &internal.LeaseStatus{ID: int64(item.id)})
+	}
+	return
+}
+
+func (sm *stateMachine) queryLeaseTimeToLive(
+	txn *lmdb.Txn,
+	req *internal.LeaseTimeToLiveRequest,
+) (res *internal.LeaseTimeToLiveResponse, err error) {
+	res = &internal.LeaseTimeToLiveResponse{}
+	epoch, err := sm.dbMeta.getEpoch(txn)
+	if err != nil {
+		return
+	}
+	item, err := sm.dbLease.get(txn, uint64(req.ID))
+	if err != nil {
+		return
+	}
+	if item.expires > 0 {
+		res.TTL = int64(item.expires - epoch)
+	} else {
+		res.TTL = -1
 	}
 	return
 }
