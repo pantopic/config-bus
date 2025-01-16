@@ -21,6 +21,7 @@ import (
 const Uri = "zongzi://github.com/logbn/icarus"
 
 type stateMachine struct {
+	clock      clock.Clock
 	dbKv       dbKv
 	dbKvEvent  dbKvEvent
 	dbLease    dbLease
@@ -31,9 +32,9 @@ type stateMachine struct {
 	env        *lmdb.Env
 	envPath    string
 	log        *slog.Logger
+	proto      proto.MarshalOptions
 	replicaID  uint64
 	shardID    uint64
-	clock      clock.Clock
 
 	statUpdates int
 	statEntries int
@@ -93,6 +94,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
 	var t = sm.clock.Now()
+	var rev, newRev uint64
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
@@ -112,6 +114,11 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		if err != nil {
 			return
 		}
+		rev, err = sm.dbMeta.getRevision(txn)
+		if err != nil {
+			return
+		}
+		newRev = rev
 		for i, ent := range entries {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
@@ -150,6 +157,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				entries[i].Result.Value = val
+				newRev = ent.Index
 			case CMD_KV_DELETE_RANGE:
 				var reqDel = &internal.DeleteRangeRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], reqDel); err != nil {
@@ -165,6 +173,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				entries[i].Result.Value = 1
+				newRev = ent.Index
 			case CMD_KV_COMPACT:
 				var req = &internal.CompactionRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
@@ -179,9 +188,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if _, err = sm.dbKv.compact(txn, batch); err != nil {
 					return err
 				}
-				var res = &internal.CompactionResponse{}
-				res.Header = sm.responseHeader(ent.Index)
-				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Data, err = proto.Marshal(&internal.CompactionResponse{
+					Header: sm.responseHeader(ent.Index),
+				})
 				if err != nil {
 					return err
 				}
@@ -220,6 +229,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					res.Header = sm.responseHeader(ent.Index)
 					entries[i].Result.Data, err = proto.Marshal(res)
 					entries[i].Result.Value = 1
+					newRev = ent.Index
 				}
 			case CMD_LEASE_GRANT:
 				var req = &internal.LeaseGrantRequest{}
@@ -243,15 +253,19 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				res, val, err := sm.cmdLeaseRevoke(txn, ent.Index, req)
+				swept, val, err := sm.cmdLeaseRevoke(txn, ent.Index, req)
 				if err != nil {
 					return err
 				}
-				res.Header = sm.responseHeader(ent.Index)
-				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Data, err = proto.Marshal(&internal.LeaseRevokeResponse{
+					Header: sm.responseHeader(ent.Index),
+				})
 				entries[i].Result.Value = val
 				if err != nil {
 					return err
+				}
+				if swept > 0 {
+					newRev = ent.Index
 				}
 			case CMD_LEASE_KEEP_ALIVE:
 				var req = &internal.LeaseKeepAliveRequest{}
@@ -271,7 +285,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				}
 			}
 		}
-		sm.dbMeta.setRevision(txn, entries[len(entries)-1].Index)
+		if err = sm.dbMeta.setIndex(txn, entries[len(entries)-1].Index); err != nil {
+			return
+		}
+		if newRev > rev {
+			err = sm.dbMeta.setRevision(txn, newRev)
+		}
 		return
 	}); err != nil {
 		// TODO - Identify and log transient errors
@@ -377,6 +396,117 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 }
 
 func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *Result) {
+	var req = &internal.WatchCreateRequest{}
+	if err := proto.Unmarshal(query, req); err != nil {
+		sm.log.Error("Invalid query", "query", query)
+		return
+	}
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	since := uint64(req.StartRevision)
+	var filtered = map[uint8]bool{}
+	for _, f := range req.Filters {
+		filtered[uint8(f)] = true
+	}
+	var err error
+	var index uint64
+	// var watchId = req.WatchId
+	scan := func() (index uint64, sent int, err error) {
+		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
+			index, err = sm.dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			if since == 0 {
+				return
+			}
+			for evt := range sm.dbKvEvent.scan(txn, since) {
+				since = evt.revision
+				if bytes.Compare(evt.key, req.Key) < 0 {
+					continue
+				}
+				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+					continue
+				}
+				if _, ok := filtered[evt.etype]; ok {
+					continue
+				}
+				var current, prev kv
+				current, prev, err = sm.dbKv.getRev(txn, evt.key, evt.revision, req.PrevKv)
+				if err != nil {
+					sm.log.Error("Error getting event kv", "key", evt.key, "rev", evt.revision, "prevKv", req.PrevKv)
+					return
+				}
+				var resp = &internal.Event{
+					Type: internal.Event_EventType(evt.etype),
+				}
+				if current.revision > 0 {
+					resp.Kv = current.ToProto()
+				}
+				if prev.revision > 0 {
+					resp.PrevKv = prev.ToProto()
+				}
+				res := zongzi.GetResult()
+				res.Data = append(res.Data, WatchMessageType_EVENT)
+				if res.Data, err = sm.proto.MarshalAppend(res.Data, resp); err != nil {
+					sm.log.Error("Error serializing event kv", "err", err)
+					return
+				}
+				result <- res
+				sent++
+			}
+			if sent > 0 {
+				res := zongzi.GetResult()
+				res.Data = append(res.Data, WatchMessageType_SYNC)
+				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
+				if err != nil {
+					sm.log.Error("Error marshaling header", "err", err)
+					return
+				}
+				result <- res
+			}
+			return
+		})
+		since = index + 1
+		return
+	}
+	res := zongzi.GetResult()
+	res.Data = append(res.Data, WatchMessageType_INIT)
+	res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(0))
+	if err != nil {
+		sm.log.Error("Error sending init", "err", err)
+		return
+	}
+	result <- res
+	index, _, err = scan()
+	if err != nil {
+		sm.log.Error("Error scanning", "err", err)
+		return
+	}
+	var sent int
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case <-t.C:
+			index, sent, err = scan()
+			if err != nil {
+				sm.log.Error("Error reading events", "err", err)
+				break loop
+			}
+			if sent == 0 && req.ProgressNotify {
+				res := zongzi.GetResult()
+				res.Data = append(res.Data, WatchMessageType_NOTIFY)
+				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
+				if err != nil {
+					sm.log.Error("Error notifying progress", "err", err)
+					break loop
+				}
+				result <- res
+			}
+		}
+	}
 	return
 }
 
@@ -532,8 +662,7 @@ func (sm *stateMachine) cmdLeaseGrant(
 func (sm *stateMachine) cmdLeaseRevoke(
 	txn *lmdb.Txn, index uint64,
 	req *internal.LeaseRevokeRequest,
-) (res *internal.LeaseRevokeResponse, val uint64, err error) {
-	res = &internal.LeaseRevokeResponse{}
+) (swept int, val uint64, err error) {
 	var item lease
 	if item, err = sm.dbLease.get(txn, uint64(req.ID)); err != nil {
 		return
@@ -553,6 +682,7 @@ func (sm *stateMachine) cmdLeaseRevoke(
 		if err = sm.dbKv.deleteBatch(txn, index, batch); err != nil {
 			return
 		}
+		swept += len(batch)
 	}
 	if err = sm.dbLeaseExp.del(txn, item); err != nil {
 		return
@@ -674,43 +804,46 @@ func (sm *stateMachine) txnOps(
 	txn *lmdb.Txn, index, epoch uint64,
 	ops []*internal.RequestOp,
 ) (res []*internal.ResponseOp, err error) {
-	for _, op := range ops {
-		switch op.Request.(type) {
-		case *internal.RequestOp_RequestPut:
-			putReq := op.Request.(*internal.RequestOp_RequestPut).RequestPut
-			putRes, _, err := sm.cmdPut(txn, index, epoch, putReq)
-			if err != nil {
-				return nil, err
+	err = txn.Sub(func(txn *lmdb.Txn) (err error) {
+		for _, op := range ops {
+			switch op.Request.(type) {
+			case *internal.RequestOp_RequestPut:
+				putReq := op.Request.(*internal.RequestOp_RequestPut).RequestPut
+				putRes, _, err := sm.cmdPut(txn, index, epoch, putReq)
+				if err != nil {
+					return err
+				}
+				res = append(res, &internal.ResponseOp{
+					Response: &internal.ResponseOp_ResponsePut{
+						ResponsePut: putRes,
+					},
+				})
+			case *internal.RequestOp_RequestDeleteRange:
+				delReq := op.Request.(*internal.RequestOp_RequestDeleteRange).RequestDeleteRange
+				delRes, err := sm.cmdDeleteRange(txn, index, epoch, delReq)
+				if err != nil {
+					return err
+				}
+				res = append(res, &internal.ResponseOp{
+					Response: &internal.ResponseOp_ResponseDeleteRange{
+						ResponseDeleteRange: delRes,
+					},
+				})
+			case *internal.RequestOp_RequestRange:
+				rangeReq := op.Request.(*internal.RequestOp_RequestRange).RequestRange
+				rangeRes, err := sm.queryRange(txn, index, rangeReq)
+				if err != nil {
+					return err
+				}
+				res = append(res, &internal.ResponseOp{
+					Response: &internal.ResponseOp_ResponseRange{
+						ResponseRange: rangeRes,
+					},
+				})
 			}
-			res = append(res, &internal.ResponseOp{
-				Response: &internal.ResponseOp_ResponsePut{
-					ResponsePut: putRes,
-				},
-			})
-		case *internal.RequestOp_RequestDeleteRange:
-			delReq := op.Request.(*internal.RequestOp_RequestDeleteRange).RequestDeleteRange
-			delRes, err := sm.cmdDeleteRange(txn, index, epoch, delReq)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, &internal.ResponseOp{
-				Response: &internal.ResponseOp_ResponseDeleteRange{
-					ResponseDeleteRange: delRes,
-				},
-			})
-		case *internal.RequestOp_RequestRange:
-			rangeReq := op.Request.(*internal.RequestOp_RequestRange).RequestRange
-			rangeRes, err := sm.queryRange(txn, index, rangeReq)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, &internal.ResponseOp{
-				Response: &internal.ResponseOp_ResponseRange{
-					ResponseRange: rangeRes,
-				},
-			})
 		}
-	}
+		return
+	})
 	return
 }
 

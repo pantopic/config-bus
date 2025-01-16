@@ -27,6 +27,7 @@ var (
 	err      error
 	svcKv    internal.KVServer
 	svcLease internal.LeaseServer
+	svcWatch internal.WatchServer
 )
 
 func TestService(t *testing.T) {
@@ -44,16 +45,16 @@ func TestService(t *testing.T) {
 	t.Run("transaction", testTransaction)
 	t.Run("lease-grant", testLeaseGrant)
 	t.Run("lease-revoke", testLeaseRevoke)
+	// TODO - Keep Alive keeps itself alive
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-
-	// Watch
+	t.Run("watch", testWatch)
 
 	// Add leader ticker to make epoch work
 	// - Incr epoch
 	// - Sweep leases and keys
-	// - Create dead lease collection
+	// - Quarantine dead leases w/ amortized cleanup
 
 	// Status
 	// Defragment
@@ -140,6 +141,7 @@ func setupIcarus(t *testing.T) {
 	}))
 	svcKv = NewServiceKv(agents[0].Client(shard.ID))
 	svcLease = NewServiceLease(agents[0].Client(shard.ID))
+	svcWatch = NewServiceWatch(agents[0].Client(shard.ID))
 }
 
 func testInsert(t *testing.T) {
@@ -1240,7 +1242,119 @@ func testLeaseTimeToLive(t *testing.T) {
 	})
 }
 
-func testLeaseCheckpoint(t *testing.T) {}
+func testWatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := newMockWatchServer(ctx)
+	done := make(chan bool)
+	go func() {
+		err = svcWatch.Watch(s)
+		require.Nil(t, err, err)
+		close(done)
+	}()
+	sendWatchCancel := func(id int64) {
+		s.reqChan <- &internal.WatchRequest{
+			RequestUnion: &internal.WatchRequest_CancelRequest{
+				CancelRequest: &internal.WatchCancelRequest{
+					WatchId: id,
+				},
+			},
+		}
+	}
+	sendWatchCreate := func(req *internal.WatchCreateRequest) {
+		s.reqChan <- &internal.WatchRequest{
+			RequestUnion: &internal.WatchRequest_CreateRequest{
+				CreateRequest: req,
+			},
+		}
+	}
+	var watchID int64
+	t.Run("create", func(t *testing.T) {
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:      []byte(`test-watch-000`),
+			RangeEnd: []byte(`test-watch-100`),
+		})
+		res := <-s.resChan
+		require.Greater(t, res.WatchId, int64(0), res)
+		assert.True(t, res.Created)
+		assert.False(t, res.Canceled)
+		assert.Len(t, res.Events, 0)
+		assert.EqualValues(t, 0, res.CompactRevision)
+		watchID = res.WatchId
+	})
+	t.Run("receive", func(t *testing.T) {
+		t.Run("put", func(t *testing.T) {
+			req := &internal.PutRequest{
+				Key:   []byte(`test-watch-000`),
+				Value: []byte(`test-watch-value-000`),
+			}
+			_, err = svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+			res := <-s.resChan
+			assert.Equal(t, watchID, res.WatchId, res)
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			require.Len(t, res.Events, 1)
+			assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
+			assert.Nil(t, res.Events[0].PrevKv)
+			require.NotNil(t, req.Key, res.Events[0].Kv)
+			assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+		})
+	})
+	t.Run("multiple", func(t *testing.T) {})
+	t.Run("progress", func(t *testing.T) {
+		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
+	})
+	t.Run("revision", func(t *testing.T) {
+		// One response per revision containing all events for that revision (filtered)
+		// Revision in header of watch response should match revision of event list in response
+		// ProgressNotify responses should report last event revision after watch has reached head
+	})
+	t.Run("cancel", func(t *testing.T) {
+		sendWatchCancel(watchID)
+		res := <-s.resChan
+		require.Equal(t, watchID, res.WatchId)
+		require.False(t, res.Created)
+		require.True(t, res.Canceled)
+	})
+	t.Run("filter", func(t *testing.T) {
+		t.Run("put", func(t *testing.T) {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:      []byte(`test-watch-000`),
+				RangeEnd: []byte(`test-watch-100`),
+				Filters: []internal.WatchCreateRequest_FilterType{
+					internal.WatchCreateRequest_NOPUT,
+				},
+			})
+			res := <-s.resChan // WatchCreated
+			require.Greater(t, res.WatchId, int64(0), res)
+			assert.True(t, res.Created)
+			watchID = res.WatchId
+			req := &internal.PutRequest{
+				Key:   []byte(`test-watch-001`),
+				Value: []byte(`test-watch-value-001`),
+			}
+			_, err = svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+			_, err = svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key: []byte(`test-watch-001`),
+			})
+			require.Nil(t, err, err)
+			res = <-s.resChan // Delete
+			assert.Equal(t, watchID, res.WatchId, res)
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			require.Len(t, res.Events, 1)
+			assert.Equal(t, internal.Event_DELETE, res.Events[0].Type, res)
+		})
+		// NOPUT
+		// NODELETE
+	})
+	cancel()
+	assert.True(t, await(1, 100, func() bool {
+		<-done
+		return true
+	}))
+}
 
 func delOp(req *internal.DeleteRangeRequest) *internal.RequestOp {
 	return &internal.RequestOp{
@@ -1389,3 +1503,44 @@ func (s *mockLeaseKeepAliveServer) Context() context.Context {
 }
 
 var _ internal.Lease_LeaseKeepAliveServer = new(mockLeaseKeepAliveServer)
+
+type parityWatchService struct {
+	internal.UnimplementedWatchServer
+
+	client internal.WatchClient
+}
+
+type mockWatchServer struct {
+	grpc.ServerStream
+	ctx     context.Context
+	reqChan chan *internal.WatchRequest
+	resChan chan *internal.WatchResponse
+}
+
+func newMockWatchServer(ctx context.Context) *mockWatchServer {
+	return &mockWatchServer{
+		ctx:     ctx,
+		reqChan: make(chan *internal.WatchRequest),
+		resChan: make(chan *internal.WatchResponse),
+	}
+}
+
+func (s *mockWatchServer) Send(res *internal.WatchResponse) (err error) {
+	s.resChan <- res
+	return
+}
+
+func (s *mockWatchServer) Recv() (req *internal.WatchRequest, err error) {
+	select {
+	case req = <-s.reqChan:
+	case <-s.ctx.Done():
+		err = io.EOF
+	}
+	return
+}
+
+func (s *mockWatchServer) Context() context.Context {
+	return s.ctx
+}
+
+var _ internal.Watch_WatchServer = new(mockWatchServer)

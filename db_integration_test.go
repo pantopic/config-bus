@@ -8,22 +8,23 @@ import (
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/assert"
-	// "github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/require"
+
+	"github.com/logbn/icarus/internal"
 )
 
-func TestDb(t *testing.T) {
-	var err error
-	var (
-		dir = "/tmp/icarus/test-db"
-		log = slog.Default()
-	)
-	sm := &stateMachine{
+var (
+	dir = "/tmp/icarus/test-db"
+	sm  = &stateMachine{
 		shardID:   1,
 		replicaID: 1,
 		envPath:   dir,
-		log:       log,
+		log:       slog.Default(),
 		clock:     clock.New(),
 	}
+)
+
+func init() {
 	if err = os.RemoveAll(dir); err != nil {
 		panic(err)
 	}
@@ -31,6 +32,10 @@ func TestDb(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TestDb(t *testing.T) {
+	var err error
 	t.Run("checksum", func(t *testing.T) {
 		k := []byte(`test-key`)
 		v := []byte(`test-val`)
@@ -102,5 +107,72 @@ func TestDb(t *testing.T) {
 			return
 		})
 		assert.NotNil(t, err)
+	})
+}
+
+func TestDbKv(t *testing.T) {
+	t.Run("getRev", func(t *testing.T) {
+		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
+			items := []kv{
+				{revision: 1, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-00`)},
+				{revision: 2, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-01`)},
+				{revision: 3, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-02`)},
+			}
+			for _, item := range items {
+				_, _, _, err = sm.dbKv.put(txn, item.revision, 0, item.key, item.val, false, false)
+				require.Nil(t, err)
+			}
+			item, prev, err := sm.dbKv.getRev(txn, items[1].key, items[1].revision, true)
+			require.Nil(t, err)
+			assert.Equal(t, items[1].val, item.val, string(item.val))
+			assert.Equal(t, items[0].val, prev.val, string(prev.val))
+			item, prev, err = sm.dbKv.getRev(txn, items[2].key, items[2].revision, true)
+			require.Nil(t, err)
+			assert.Equal(t, items[2].val, item.val, string(item.val))
+			assert.Equal(t, items[1].val, prev.val, string(prev.val))
+			item, prev, err = sm.dbKv.getRev(txn, items[1].key, items[1].revision, false)
+			require.Nil(t, err)
+			assert.Equal(t, items[1].val, item.val, string(item.val))
+			assert.Len(t, prev.val, 0, string(prev.val))
+			item, prev, err = sm.dbKv.getRev(txn, items[0].key, items[0].revision, true)
+			require.Nil(t, err)
+			assert.Equal(t, items[0].val, item.val, string(item.val))
+			assert.Len(t, prev.val, 0, string(prev.val))
+			return
+		})
+		assert.Nil(t, err)
+	})
+}
+
+func TestDbKvEvent(t *testing.T) {
+	t.Run("scan", func(t *testing.T) {
+		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
+			events := []kvEvent{
+				{revision: 1, epoch: 1, key: []byte(`test-scan-00`)},
+				{revision: 1, epoch: 1, key: []byte(`test-scan-01`)},
+				{revision: 2, epoch: 1, key: []byte(`test-scan-01`)},
+			}
+			for _, evt := range events {
+				require.Nil(t, sm.dbKvEvent.put(txn, evt.revision, evt.epoch, evt.key))
+			}
+			require.Nil(t, sm.dbKvEvent.delete(txn, 3, 2, [][]byte{[]byte(`test-scan-00`)}))
+			var items []kvEvent
+			for item := range sm.dbKvEvent.scan(txn, 1) {
+				items = append(items, item)
+			}
+			require.Len(t, items, 4)
+			for i, evt := range events {
+				assert.Equal(t, evt.revision, items[i].revision, "revision")
+				assert.Equal(t, evt.epoch, items[i].epoch, "epoch")
+				assert.Equal(t, evt.etype, items[i].etype, "etype")
+				assert.Equal(t, evt.key, items[i].key, "key")
+			}
+			assert.Equal(t, uint64(3), items[3].revision, "revision")
+			assert.Equal(t, uint64(2), items[3].epoch, "epoch")
+			assert.Equal(t, byte(internal.Event_DELETE), items[3].etype, "etype")
+			assert.Equal(t, []byte(`test-scan-00`), items[3].key, "key")
+			return
+		})
+		assert.Nil(t, err)
 	})
 }

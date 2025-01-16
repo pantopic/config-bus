@@ -22,7 +22,7 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 
 func (db dbKv) put(
 	txn *lmdb.Txn,
-	index, lease uint64,
+	revision, lease uint64,
 	key, val []byte,
 	ignoreValue, ignoreLease bool,
 ) (prev, next kv, patched bool, err error) {
@@ -39,9 +39,9 @@ func (db dbKv) put(
 	}
 	if prev.created == 0 {
 		next = kv{
-			revision: index,
+			revision: revision,
 			version:  1,
-			created:  index,
+			created:  revision,
 			lease:    lease,
 			key:      key,
 			val:      val,
@@ -49,7 +49,7 @@ func (db dbKv) put(
 		err = txn.Put(db.i, key, next.Bytes(nil, nil), 0)
 		return
 	}
-	if prev.revision == index {
+	if prev.revision == revision {
 		if !ICARUS_TXN_MULTI_WRITE_ENABLED {
 			err = internal.ErrGRPCDuplicateKey
 			return
@@ -79,7 +79,7 @@ func (db dbKv) put(
 		return
 	}
 	next = kv{
-		revision: index,
+		revision: revision,
 		version:  prev.version + 1,
 		created:  prev.created,
 		lease:    lease,
@@ -378,6 +378,66 @@ func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 	}
 	if item.created == 0 {
 		item = kv{}
+	}
+	return
+}
+
+func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool) (item, prev kv, err error) {
+	cur, err := txn.OpenCursor(db.i)
+	if err != nil {
+		return
+	}
+	defer cur.Close()
+	var next [][]byte
+	var last []byte
+	k, v, err := cur.Get(key, nil, lmdb.SetRange)
+	if lmdb.IsNotFound(err) {
+		err = nil
+		return
+	}
+	if err != nil {
+		return
+	}
+	if !bytes.Equal(k, key) {
+		return
+	}
+	mod := math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
+	for revision > 0 && mod > revision {
+		next = append(next, v)
+		if k, v, err = cur.Get(nil, nil, lmdb.NextDup); err != nil {
+			break
+		}
+		mod = math.MaxUint64 - binary.BigEndian.Uint64(v[:8])
+	}
+	if lmdb.IsNotFound(err) {
+		err = nil
+		return
+	}
+	if err != nil {
+		return
+	}
+	if withPrev {
+		_, last, err = cur.Get(nil, nil, lmdb.NextDup)
+		if lmdb.IsNotFound(err) {
+			err = nil
+		}
+		if err != nil {
+			return
+		}
+	}
+	next = append(next, v)
+	item, err = item.FromBytes(k, next[0], nil, false)
+	if err != nil {
+		return
+	}
+	for _, p := range next[1:] {
+		item, err = item.FromBytes(k, p, item.val, false)
+		if err != nil {
+			return
+		}
+	}
+	if len(last) > 0 {
+		prev, err = prev.FromBytes(k, last, item.val, false)
 	}
 	return
 }
