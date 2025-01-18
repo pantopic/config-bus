@@ -49,6 +49,8 @@ func TestService(t *testing.T) {
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
+	// TODO - Watch at revision, progress notify
+	// TODO - Watch merge w/ multiplex, auto reconnect,
 	t.Run("watch", testWatch)
 
 	// Add leader ticker to make epoch work
@@ -73,6 +75,7 @@ func setupParity(t *testing.T) {
 	}
 	svcKv = newParityKvService(conn)
 	svcLease = newParityLeaseService(conn)
+	svcWatch = newParityWatchService(conn)
 
 	// Etcd bugs
 	ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED = false
@@ -1274,7 +1277,7 @@ func testWatch(t *testing.T) {
 			RangeEnd: []byte(`test-watch-100`),
 		})
 		res := <-s.resChan
-		require.Greater(t, res.WatchId, int64(0), res)
+		require.Equal(t, int64(0), res.WatchId, res)
 		assert.True(t, res.Created)
 		assert.False(t, res.Canceled)
 		assert.Len(t, res.Events, 0)
@@ -1300,15 +1303,6 @@ func testWatch(t *testing.T) {
 			assert.Equal(t, req.Key, res.Events[0].Kv.Key)
 		})
 	})
-	t.Run("multiple", func(t *testing.T) {})
-	t.Run("progress", func(t *testing.T) {
-		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
-	})
-	t.Run("revision", func(t *testing.T) {
-		// One response per revision containing all events for that revision (filtered)
-		// Revision in header of watch response should match revision of event list in response
-		// ProgressNotify responses should report last event revision after watch has reached head
-	})
 	t.Run("cancel", func(t *testing.T) {
 		sendWatchCancel(watchID)
 		res := <-s.resChan
@@ -1316,8 +1310,62 @@ func testWatch(t *testing.T) {
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
 	})
-	t.Run("filter", func(t *testing.T) {
+	t.Run("multiple", func(t *testing.T) {
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:      []byte(`test-watch-100`),
+			RangeEnd: []byte(`test-watch-200`),
+			WatchId:  100,
+		})
+		res := <-s.resChan
+		require.Equal(t, int64(100), res.WatchId, res)
+		assert.True(t, res.Created)
+		assert.False(t, res.Canceled)
+		assert.Len(t, res.Events, 0)
+		assert.EqualValues(t, 0, res.CompactRevision)
+		watchID1 := res.WatchId
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:      []byte(`test-watch-100`),
+			RangeEnd: []byte(`test-watch-200`),
+			WatchId:  101,
+		})
+		res = <-s.resChan
+		require.Equal(t, int64(101), res.WatchId, res)
+		assert.True(t, res.Created)
+		watchID2 := res.WatchId
 		t.Run("put", func(t *testing.T) {
+			req := &internal.PutRequest{
+				Key:   []byte(`test-watch-100`),
+				Value: []byte(`test-watch-value-000`),
+			}
+			_, err = svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+			for range 2 {
+				res := <-s.resChan
+				assert.True(t, res.WatchId == watchID1 || res.WatchId == watchID2, res.WatchId)
+				assert.False(t, res.Created)
+				assert.False(t, res.Canceled)
+				require.Len(t, res.Events, 1)
+				assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
+				assert.Nil(t, res.Events[0].PrevKv)
+				require.NotNil(t, req.Key, res.Events[0].Kv)
+				assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+			}
+		})
+		t.Run("cancel", func(t *testing.T) {
+			sendWatchCancel(watchID1)
+			res := <-s.resChan
+			require.Equal(t, watchID1, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
+			sendWatchCancel(watchID2)
+			res = <-s.resChan
+			require.Equal(t, watchID2, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
+		})
+	})
+	t.Run("filter", func(t *testing.T) {
+		t.Run("noput", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:      []byte(`test-watch-000`),
 				RangeEnd: []byte(`test-watch-100`),
@@ -1346,8 +1394,54 @@ func testWatch(t *testing.T) {
 			require.Len(t, res.Events, 1)
 			assert.Equal(t, internal.Event_DELETE, res.Events[0].Type, res)
 		})
-		// NOPUT
-		// NODELETE
+		t.Run("nodelete", func(t *testing.T) {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:      []byte(`test-watch-200`),
+				RangeEnd: []byte(`test-watch-300`),
+				Filters: []internal.WatchCreateRequest_FilterType{
+					internal.WatchCreateRequest_NODELETE,
+				},
+			})
+			res := <-s.resChan // WatchCreated
+			require.Greater(t, res.WatchId, int64(0), res)
+			assert.True(t, res.Created)
+			watchID = res.WatchId
+			req := &internal.PutRequest{
+				Key:   []byte(`test-watch-200`),
+				Value: []byte(`test-watch-value-000`),
+			}
+			_, err = svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+			res = <-s.resChan // Put
+			assert.Equal(t, watchID, res.WatchId, res)
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			require.Len(t, res.Events, 1)
+			assert.Equal(t, internal.Event_PUT, res.Events[0].Type, res)
+			_, err = svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key: []byte(`test-watch-200`),
+			})
+			require.Nil(t, err, err)
+			// No delete message received
+			var ok bool
+			select {
+			case msg := <-s.resChan: // Delete
+				t.Logf("Received: %#v", msg)
+				t.Logf("Event: %#v", msg.Events[0])
+				ok = false
+			case <-time.After(100 * time.Millisecond):
+				ok = true
+			}
+			assert.True(t, ok)
+		})
+	})
+	t.Run("progress", func(t *testing.T) {
+		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
+	})
+	t.Run("revision", func(t *testing.T) {
+		// One response per revision containing all events for that revision (filtered)
+		// Revision in header of watch response should match revision of event list in response
+		// ProgressNotify responses should report last event revision after watch has reached head
 	})
 	cancel()
 	assert.True(t, await(1, 100, func() bool {
@@ -1490,6 +1584,7 @@ func (s *mockLeaseKeepAliveServer) Send(res *internal.LeaseKeepAliveResponse) (e
 	s.res = res
 	return
 }
+
 func (s *mockLeaseKeepAliveServer) Recv() (req *internal.LeaseKeepAliveRequest, err error) {
 	if s.res == nil {
 		req = s.req
@@ -1498,6 +1593,7 @@ func (s *mockLeaseKeepAliveServer) Recv() (req *internal.LeaseKeepAliveRequest, 
 	}
 	return
 }
+
 func (s *mockLeaseKeepAliveServer) Context() context.Context {
 	return context.Background()
 }
@@ -1508,6 +1604,58 @@ type parityWatchService struct {
 	internal.UnimplementedWatchServer
 
 	client internal.WatchClient
+}
+
+func newParityWatchService(conn grpc.ClientConnInterface) internal.WatchServer {
+	return &parityWatchService{client: internal.NewWatchClient(conn)}
+}
+
+var _ internal.WatchServer = new(parityWatchService)
+
+func (svc *parityWatchService) Watch(server internal.Watch_WatchServer) (err error) {
+	client, err := svc.client.Watch(server.Context())
+	if err != nil {
+		return
+	}
+	go func() {
+		defer slog.Info("Server watch ending")
+		for {
+			slog.Info("Server watch Recving")
+			req, err := server.Recv()
+			slog.Info("Server watch Recvd")
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				return
+			}
+			err = client.Send(req)
+			if err != nil {
+				break
+			}
+		}
+	}()
+	defer slog.Info("Client watch ending")
+	for {
+		slog.Info("Client watch Recving")
+		res, err := client.Recv()
+		slog.Info("Client watch Recvd")
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		err = server.Send(res)
+		if err != nil {
+			break
+		}
+	}
+	return nil
+}
+
+func (s *parityWatchService) Context() context.Context {
+	return context.Background()
 }
 
 type mockWatchServer struct {

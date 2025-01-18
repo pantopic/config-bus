@@ -122,7 +122,7 @@ func (db dbKv) getRange(
 	defer cur.Close()
 	var k, v []byte
 	var isFullScan = bytes.Equal(key, []byte{0}) && bytes.Equal(end, []byte{0})
-	k, v, err = cur.Get(key, nil, lmdb.SetRange)
+	k, v, err = cur.Get(append(k, key...), v, lmdb.SetRange)
 	for !lmdb.IsNotFound(err) {
 		if err != nil {
 			return
@@ -196,7 +196,7 @@ func (db dbKv) getRange(
 			break
 		}
 	next:
-		k, v, err = cur.Get(nil, nil, lmdb.NextNoDup)
+		k, v, err = cur.Get(k, v, lmdb.NextNoDup)
 	}
 	if lmdb.IsNotFound(err) {
 		err = nil

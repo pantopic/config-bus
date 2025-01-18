@@ -52,8 +52,13 @@ var (
 
 	// ICARUS_RANGE_CORRECT_FILTER_COUNT_ENABLED determines whether to apply filters to the result count.
 	// This is a bug in etcd that they don't intend to fix.
-	// Min/max mod/created rev not used by Kubernetes so it is enabled by default since it is the correct behavior.
+	// Min/max mod/created rev are not used by Kubernetes so it is enabled by default since it is the correct behavior.
 	ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED = true
+
+	// ICARUS_ZERO_INDEX_WATCH_ID determines whether to start watch IDs at 0 rather than 1.
+	// This is poor API design because it fails to leverage the zero value as an empty state.
+	// Etcd starts watch IDs at zero, so this is enabled by default for parity.
+	ICARUS_ZERO_INDEX_WATCH_ID = true
 )
 
 var (
