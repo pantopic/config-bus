@@ -53,7 +53,7 @@ func TestService(t *testing.T) {
 	// TODO - Watch merge w/ multiplex, auto reconnect,
 	t.Run("watch", testWatch)
 
-	// Add leader ticker to make epoch work
+	// Add leader tick in controller to make epoch work
 	// - Incr epoch
 	// - Sweep leases and keys
 	// - Quarantine dead leases w/ amortized cleanup
@@ -364,6 +364,41 @@ func testRange(t *testing.T) {
 				require.NotNil(t, resp)
 				assert.Len(t, resp.Kvs, 10)
 				assert.Equal(t, int64(50), resp.Count)
+			})
+		})
+		t.Run("fake", func(t *testing.T) {
+			withGlobal(&ICARUS_KV_FAKE_COUNT_ENABLED, true, func() {
+				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+					Key:      []byte(`test-range-000`),
+					RangeEnd: []byte(`test-range-100`),
+					Limit:    10,
+				})
+				require.Nil(t, err, err)
+				require.NotNil(t, resp)
+				assert.Len(t, resp.Kvs, 10)
+				if parity {
+					// Full count always enabled for etcd
+					assert.Equal(t, int64(100), resp.Count)
+				} else {
+					assert.Equal(t, int64(11), resp.Count)
+				}
+				assert.True(t, resp.More)
+				resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+					Key:      []byte(`test-range-000`),
+					RangeEnd: []byte(`test-range-100`),
+					Revision: revs[49],
+					Limit:    10,
+				})
+				require.Nil(t, err, err)
+				require.NotNil(t, resp)
+				assert.Len(t, resp.Kvs, 10)
+				if parity {
+					// Full count always enabled for etcd
+					assert.Equal(t, int64(50), resp.Count)
+				} else {
+					assert.Equal(t, int64(11), resp.Count)
+				}
+				assert.True(t, resp.More)
 			})
 		})
 	})

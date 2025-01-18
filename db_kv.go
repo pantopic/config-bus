@@ -190,6 +190,8 @@ func (db dbKv) getRange(
 					}
 				}
 				items = append(items, item)
+			} else if ICARUS_KV_FAKE_COUNT_ENABLED {
+				break
 			}
 		}
 		if len(end) == 0 {

@@ -33,10 +33,15 @@ const (
 
 var (
 	// ICARUS_KV_FULL_COUNT_ENABLED determines whether to execute a full scan for every range request to generate count.
-	// Full count is used by Kubernetes in at least one place (api server storage).
 	// Disabling this would certainly improve performance of range requests covering lots of keys.
+	// Full count is used by Kubernetes in at least one place (api server storage) but only because More is missing.
 	// See https://github.com/kubernetes/kubernetes/blob/e85c72d4177fba224cb1baa1b5abfb5980e6d867/staging/src/k8s.io/apiserver/pkg/storage/etcd3/store.go#L762
 	ICARUS_KV_FULL_COUNT_ENABLED = true
+
+	// ICARUS_KV_FAKE_COUNT_ENABLED determines whether to return a count value 1 greater than the number of results
+	// when there are more results. This should be sufficient to trick Kubernetes into functioning correctly without
+	// incurring the cost of scanning the entire range to generate a count for each request. Not suitable for parity.
+	ICARUS_KV_FAKE_COUNT_ENABLED = false
 
 	// ICARUS_KV_PATCH_ENABLED determines whether to enable patches for non-current key revisions
 	// Icarus can use it transparently so it is enabled by default.
