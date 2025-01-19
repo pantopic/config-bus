@@ -8,6 +8,7 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/elliotchance/orderedmap/v3 v3.1.0
 	github.com/golang/snappy v0.0.4
+	github.com/logbn/intervalradix v0.1.0
 	github.com/logbn/zongzi v0.0.18
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.69.2
@@ -46,7 +47,6 @@ require (
 	github.com/lni/dragonboat/v4 v4.0.0-20231222133740-1d6e2d76cd57 // indirect
 	github.com/lni/goutils v1.4.0 // indirect
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376 // indirect
-	github.com/logbn/intervalradix v0.1.0 // indirect
 	github.com/miekg/dns v1.1.26 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
