@@ -501,10 +501,11 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 	defer t.Stop()
 	var set bool
 	var sent int
+loop:
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			break loop
 		case <-alert:
 			if set {
 				continue
@@ -515,7 +516,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 			index, sent, err = scan()
 			if err != nil {
 				sm.log.Error("Error reading events", "err", err)
-				break
+				break loop
 			}
 			if sent == 0 && req.ProgressNotify {
 				res := zongzi.GetResult()
@@ -523,7 +524,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
 				if err != nil {
 					sm.log.Error("Error notifying progress", "err", err)
-					break
+					break loop
 				}
 				result <- res
 			}

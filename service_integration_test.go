@@ -50,8 +50,8 @@ func TestService(t *testing.T) {
 	// TODO - Advance epoch to test lease TTL response
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-	// TODO - Watch at revision, progress notify
-	// TODO - Watch merge w/ multiplex, auto reconnect,
+	// TODO - Watch at revision, progress notify, drive watches async from kv_events
+	// TODO - Watch merge w/ multiplex, auto reconnect
 	t.Run("watch", testWatch)
 
 	// Add leader tick in controller to make epoch work
