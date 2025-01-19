@@ -47,6 +47,7 @@ func TestService(t *testing.T) {
 	t.Run("lease-revoke", testLeaseRevoke)
 	// TODO - Keep Alive keeps itself alive
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
+	// TODO - Advance epoch to test lease TTL response
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
 	// TODO - Watch at revision, progress notify
@@ -78,7 +79,7 @@ func setupParity(t *testing.T) {
 	svcWatch = newParityWatchService(conn)
 
 	// Etcd bugs
-	ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED = false
+	ICARUS_RANGE_COUNT_FILTER_CORRECT = false
 }
 
 // Run integration tests against bootstrapped icarus instance
@@ -326,7 +327,7 @@ func testRange(t *testing.T) {
 			require.Equal(t, int64(50), resp.Count)
 		})
 		t.Run("partial", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, false, func() {
+			withGlobal(&ICARUS_KV_RANGE_COUNT_FULL, false, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -344,7 +345,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("full", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_FULL_COUNT_ENABLED, true, func() {
+			withGlobal(&ICARUS_KV_RANGE_COUNT_FULL, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -367,7 +368,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("fake", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_FAKE_COUNT_ENABLED, true, func() {
+			withGlobal(&ICARUS_KV_RANGE_COUNT_FAKE, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -421,7 +422,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -434,7 +435,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -448,7 +449,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -463,7 +464,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -476,7 +477,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -490,7 +491,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -508,7 +509,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -524,7 +525,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_CORRECT_RANGE_FILTER_COUNT_ENABLED {
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -1028,7 +1029,7 @@ func testLeaseGrant(t *testing.T) {
 		require.NotNil(t, resp)
 		assert.Greater(t, resp.ID, int64(3))
 	})
-	t.Run("wihout", func(t *testing.T) {
+	t.Run("put-missing", func(t *testing.T) {
 		_, err := svcKv.Put(ctx, &internal.PutRequest{
 			Key:   []byte(`test-no-lease-00`),
 			Value: []byte(`test-no-lease-value-00`),

@@ -137,10 +137,3 @@ func (db dbKvEvent) scan(txn *lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
 		}
 	}
 }
-
-type kvEvent struct {
-	revision uint64
-	epoch    uint64
-	etype    uint8
-	key      []byte
-}

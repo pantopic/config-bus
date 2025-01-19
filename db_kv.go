@@ -139,7 +139,7 @@ func (db dbKv) getRange(
 		}
 		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
-			if !ICARUS_KV_FULL_COUNT_ENABLED {
+			if !ICARUS_KV_RANGE_COUNT_FULL && !ICARUS_KV_RANGE_COUNT_FAKE {
 				return
 			}
 			countOnly = true
@@ -190,7 +190,7 @@ func (db dbKv) getRange(
 					}
 				}
 				items = append(items, item)
-			} else if ICARUS_KV_FAKE_COUNT_ENABLED {
+			} else if ICARUS_KV_RANGE_COUNT_FAKE {
 				break
 			}
 		}
