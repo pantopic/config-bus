@@ -406,79 +406,82 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 	return
 }
 
+func (sm *stateMachine) watchScan(
+	req *internal.WatchCreateRequest,
+	since uint64,
+	result chan<- *Result,
+) (index uint64, sent int, err error) {
+	err = sm.env.View(func(txn *lmdb.Txn) (err error) {
+		index, err = sm.dbMeta.getRevision(txn)
+		if err != nil {
+			return
+		}
+		if since == 0 {
+			return
+		}
+		for evt := range sm.dbKvEvent.scan(txn, since) {
+			since = evt.revision
+			if bytes.Compare(evt.key, req.Key) < 0 {
+				continue
+			}
+			if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+				continue
+			}
+			for _, f := range req.Filters {
+				if evt.etype == uint8(f) {
+					continue
+				}
+			}
+			var current, prev kv
+			current, prev, err = sm.dbKv.getRev(txn, evt.key, evt.revision, req.PrevKv)
+			if err != nil {
+				sm.log.Error("Error getting event kv", "key", evt.key, "rev", evt.revision, "prevKv", req.PrevKv)
+				return
+			}
+			var resp = &internal.Event{
+				Type: internal.Event_EventType(evt.etype),
+			}
+			if current.revision > 0 {
+				resp.Kv = current.ToProto()
+			}
+			if prev.revision > 0 {
+				resp.PrevKv = prev.ToProto()
+			}
+			// Send EVENT
+			res := zongzi.GetResult()
+			res.Data = append(res.Data, WatchMessageType_EVENT)
+			if res.Data, err = sm.proto.MarshalAppend(res.Data, resp); err != nil {
+				sm.log.Error("Error serializing event kv", "err", err)
+				return
+			}
+			result <- res
+			sent++
+		}
+		if sent > 0 {
+			// Send SYNC - marking end of revision
+			res := zongzi.GetResult()
+			res.Data = append(res.Data, WatchMessageType_SYNC)
+			res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
+			if err != nil {
+				sm.log.Error("Error marshaling header", "err", err)
+				return
+			}
+			result <- res
+		}
+		return
+	})
+	return
+}
+
 func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *Result) {
 	var req = &internal.WatchCreateRequest{}
 	if err := proto.Unmarshal(query, req); err != nil {
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
-	since := uint64(req.StartRevision)
-	var filtered = map[uint8]bool{}
-	for _, f := range req.Filters {
-		filtered[uint8(f)] = true
-	}
 	var err error
-	var index uint64
-	// var watchId = req.WatchId
-	scan := func() (index uint64, sent int, err error) {
-		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
-			index, err = sm.dbMeta.getRevision(txn)
-			if err != nil {
-				return
-			}
-			if since == 0 {
-				return
-			}
-			for evt := range sm.dbKvEvent.scan(txn, since) {
-				since = evt.revision
-				if bytes.Compare(evt.key, req.Key) < 0 {
-					continue
-				}
-				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
-					continue
-				}
-				if _, ok := filtered[evt.etype]; ok {
-					continue
-				}
-				var current, prev kv
-				current, prev, err = sm.dbKv.getRev(txn, evt.key, evt.revision, req.PrevKv)
-				if err != nil {
-					sm.log.Error("Error getting event kv", "key", evt.key, "rev", evt.revision, "prevKv", req.PrevKv)
-					return
-				}
-				var resp = &internal.Event{
-					Type: internal.Event_EventType(evt.etype),
-				}
-				if current.revision > 0 {
-					resp.Kv = current.ToProto()
-				}
-				if prev.revision > 0 {
-					resp.PrevKv = prev.ToProto()
-				}
-				res := zongzi.GetResult()
-				res.Data = append(res.Data, WatchMessageType_EVENT)
-				if res.Data, err = sm.proto.MarshalAppend(res.Data, resp); err != nil {
-					sm.log.Error("Error serializing event kv", "err", err)
-					return
-				}
-				result <- res
-				sent++
-			}
-			if sent > 0 {
-				res := zongzi.GetResult()
-				res.Data = append(res.Data, WatchMessageType_SYNC)
-				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
-				if err != nil {
-					sm.log.Error("Error marshaling header", "err", err)
-					return
-				}
-				result <- res
-			}
-			return
-		})
-		since = index + 1
-		return
-	}
+	var index = uint64(req.StartRevision)
+	// Send INIT - indicating start of initial event sync
 	res := zongzi.GetResult()
 	res.Data = append(res.Data, WatchMessageType_INIT)
 	res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(0))
@@ -487,13 +490,16 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		return
 	}
 	result <- res
-	if index, _, err = scan(); err != nil {
+	// Perform initial scan from requested revision up to current index
+	if index, _, err = sm.watchScan(req, index, result); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
+	// Add watch w/ alert channel
 	var alert = make(chan uint64, 1e4)
 	defer sm.watches.Insert(req.Key, req.RangeEnd, alert).Remove()
-	if index, _, err = scan(); err != nil {
+	// Perform second scan to cover events up to (or beyond) watch start
+	if index, _, err = sm.watchScan(req, index+1, result); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
@@ -506,14 +512,15 @@ loop:
 		select {
 		case <-ctx.Done():
 			break loop
-		case <-alert:
-			if set {
+		case rev := <-alert:
+			// Ignore alerts for revisions covered by second scan
+			if set || rev <= index {
 				continue
 			}
 			t.Reset(WATCH_DEBOUNCE)
 			set = true
 		case <-t.C:
-			index, sent, err = scan()
+			index, sent, err = sm.watchScan(req, index+1, result)
 			if err != nil {
 				sm.log.Error("Error reading events", "err", err)
 				break loop
