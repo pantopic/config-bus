@@ -430,7 +430,6 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 				return
 			}
 			for evt := range sm.dbKvEvent.scan(txn, since) {
-				since = evt.revision
 				if bytes.Compare(evt.key, req.Key) < 0 {
 					continue
 				}
@@ -479,6 +478,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		since = index + 1
 		return
 	}
+	// Send INIT message
 	res := zongzi.GetResult()
 	res.Data = append(res.Data, WatchMessageType_INIT)
 	res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(0))
@@ -487,32 +487,43 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		return
 	}
 	result <- res
+	// First event scan
 	if index, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
+	// Alert watch Start
 	var alert = make(chan uint64, 1e4)
 	defer sm.watches.Insert(req.Key, req.RangeEnd, alert).Remove()
+	// Second event scan
 	if index, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
-	var t = time.NewTicker(time.Hour)
-	defer t.Stop()
-	var set bool
 	var sent int
+	var rev uint64
 loop:
 	for {
 		select {
 		case <-ctx.Done():
+			sm.log.Debug("Watcher done", "id", req.WatchId)
 			break loop
-		case <-alert:
-			if set {
+		case rev = <-alert:
+		alertLoop:
+			for {
+				select {
+				case rev = <-alert:
+					sm.log.Debug("Watch Alert Drain")
+				default:
+					break alertLoop
+				}
+			}
+			if rev <= index {
+				// Skip scan for stale alerts
+				// ie. Alerts received between `Alert watch start` and `Second event scan`
+				sm.log.Debug("Watch Alert Skip", "index", index, "rev", rev)
 				continue
 			}
-			t.Reset(WATCH_DEBOUNCE)
-			set = true
-		case <-t.C:
 			index, sent, err = scan()
 			if err != nil {
 				sm.log.Error("Error reading events", "err", err)
@@ -528,8 +539,6 @@ loop:
 				}
 				result <- res
 			}
-			set = false
-			t.Reset(time.Hour)
 		}
 	}
 	return
