@@ -1429,6 +1429,11 @@ func testWatch(t *testing.T) {
 			assert.False(t, res.Canceled)
 			require.Len(t, res.Events, 1)
 			assert.Equal(t, internal.Event_DELETE, res.Events[0].Type, res)
+			sendWatchCancel(watchID)
+			res = <-s.resChan
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
 		})
 		t.Run("nodelete", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
@@ -1440,7 +1445,7 @@ func testWatch(t *testing.T) {
 			})
 			res := <-s.resChan // WatchCreated
 			require.Greater(t, res.WatchId, int64(0), res)
-			assert.True(t, res.Created)
+			assert.True(t, res.Created, res)
 			watchID = res.WatchId
 			req := &internal.PutRequest{
 				Key:   []byte(`test-watch-200`),

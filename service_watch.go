@@ -21,9 +21,10 @@ func NewServiceWatch(client zongzi.ShardClient) *serviceWatch {
 	return &serviceWatch{client: client}
 }
 
-func (s *serviceWatch) addTerm(header *internal.ResponseHeader) {
+func (s *serviceWatch) addTerm(header *internal.ResponseHeader) *internal.ResponseHeader {
 	_, term := s.client.Leader()
 	header.RaftTerm = term
+	return header
 }
 
 // Watch runs a watch
@@ -59,7 +60,12 @@ func (s *serviceWatch) Watch(
 				}
 			} else {
 				req.WatchId = watchId
-				watchId++
+				_, ok := watches[req.WatchId]
+				for ok {
+					req.WatchId++
+					_, ok = watches[req.WatchId]
+				}
+				watchId = req.WatchId + 1
 			}
 			if err = s.watchResp(server, &internal.WatchResponse{
 				WatchId: req.WatchId,
@@ -114,33 +120,41 @@ func (s *serviceWatch) watch(
 	ctx, cancel = context.WithCancel(ctx)
 	result := make(chan *Result)
 	go func() {
-		var header = &internal.ResponseHeader{}
+		var memberID uint64
+		var clusterID uint64
 		var prev *internal.Event
 		var events []*internal.Event
 		var err error
 		for {
 			res, ok := <-result
-			if res == nil || !ok {
+			if res == nil || len(res.Data) == 0 || !ok {
 				slog.Debug("Closing watch", "id", id)
 				break
 			}
 			switch res.Data[0] {
 			case WatchMessageType_INIT:
+				var header = &internal.ResponseHeader{}
+				slog.Info("INIT", "id", id, "header", res.Data[1:])
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling init", "err", err)
 					return
 				}
+				memberID = header.MemberId
+				clusterID = header.ClusterId
 			case WatchMessageType_EVENT:
 				evt := &internal.Event{}
+				slog.Info("EVENT", "id", id, "data", res.Data[1:])
 				if err = proto.Unmarshal(res.Data[1:], evt); err != nil {
 					slog.Error("Error unmarshaling event", "err", err)
 					return
 				}
 				if prev != nil && prev.Kv != nil && prev.Kv.ModRevision != evt.Kv.ModRevision {
-					s.addTerm(header)
-					header.Revision = prev.Kv.ModRevision
 					if err = server.Send(&internal.WatchResponse{
-						Header:  header,
+						Header: s.addTerm(&internal.ResponseHeader{
+							MemberId:  memberID,
+							ClusterId: clusterID,
+							Revision:  prev.Kv.ModRevision,
+						}),
 						WatchId: id,
 						Events:  events,
 					}); err != nil {
@@ -154,13 +168,14 @@ func (s *serviceWatch) watch(
 					prev = evt
 				}
 			case WatchMessageType_SYNC:
+				var header = &internal.ResponseHeader{}
+				slog.Info("SYNC", "id", id, "header", res.Data[1:])
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
-					slog.Error("Error unmarshaling sync", "err", err)
+					slog.Error("Error unmarshaling sync", "err", err, "Adata", res.Data[1:])
 					return
 				}
-				s.addTerm(header)
 				if err = server.Send(&internal.WatchResponse{
-					Header:  header,
+					Header:  s.addTerm(header),
 					WatchId: id,
 					Events:  events,
 				}); err != nil {
@@ -170,18 +185,21 @@ func (s *serviceWatch) watch(
 				events = events[:0]
 				prev = nil
 			case WatchMessageType_NOTIFY:
+				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling notify", "err", err)
 					return
 				}
-				s.addTerm(header)
 				if err = server.Send(&internal.WatchResponse{
-					Header:  header,
+					Header:  s.addTerm(header),
 					WatchId: id,
 				}); err != nil {
 					slog.Error("Error sending response")
 					return
 				}
+			default:
+				slog.Error("Unrecognized response")
+				return
 			}
 		}
 	}()
