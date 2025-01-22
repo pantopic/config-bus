@@ -9,7 +9,7 @@ require (
 	github.com/elliotchance/orderedmap/v3 v3.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/logbn/intervalradix v0.1.0
-	github.com/logbn/zongzi v0.0.18
+	github.com/logbn/zongzi v0.0.19
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.1
