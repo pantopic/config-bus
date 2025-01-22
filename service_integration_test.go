@@ -84,11 +84,19 @@ func setupParity(t *testing.T) {
 
 // Run integration tests against bootstrapped icarus instance
 func setupIcarus(t *testing.T) {
+	logLevel := new(slog.LevelVar)
+	if os.Getenv("ICARUS_LOG_LEVEL") == "debug" {
+		logLevel.Set(slog.LevelDebug)
+	} else {
+		logLevel.Set(slog.LevelInfo)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
 	var (
 		agents = make([]*zongzi.Agent, 3)
 		dir    = "/tmp/icarus/test"
 		host   = "127.0.0.1"
-		log    = slog.Default()
 		port   = 19000
 		peers  = []string{
 			fmt.Sprintf(host+":%d", port+3),
