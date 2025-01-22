@@ -147,12 +147,12 @@ func (s *serviceWatch) watch(
 						slog.Error("Error sending response")
 						return
 					}
-					events = append(events[:0], evt)
-					prev = evt
-				} else {
-					events = append(events, evt)
-					prev = evt
+					// event slice cannot be recycled because `server.Send` may not serialize synchronously
+					// events = events[:0]
+					events = []*internal.Event{}
 				}
+				events = append(events, evt)
+				prev = evt
 			case WatchMessageType_SYNC:
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling sync", "err", err)
@@ -167,7 +167,9 @@ func (s *serviceWatch) watch(
 					slog.Error("Error sending response")
 					return
 				}
-				events = events[:0]
+				// event slice cannot be recycled because `server.Send` may not serialize synchronously
+				// events = events[:0]
+				events = []*internal.Event{}
 				prev = nil
 			case WatchMessageType_NOTIFY:
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
