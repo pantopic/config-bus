@@ -1345,6 +1345,7 @@ func testWatch(t *testing.T) {
 			assert.Nil(t, res.Events[0].PrevKv)
 			require.NotNil(t, req.Key, res.Events[0].Kv)
 			assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
 		})
 	})
 	t.Run("cancel", func(t *testing.T) {
@@ -1437,6 +1438,11 @@ func testWatch(t *testing.T) {
 			assert.False(t, res.Canceled)
 			require.Len(t, res.Events, 1)
 			assert.Equal(t, internal.Event_DELETE, res.Events[0].Type, res)
+			sendWatchCancel(watchID)
+			res = <-s.resChan
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
 		})
 		t.Run("nodelete", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
@@ -1469,7 +1475,7 @@ func testWatch(t *testing.T) {
 			// No delete message received
 			var ok bool
 			select {
-			case msg := <-s.resChan: // Delete
+			case msg := <-s.resChan: // Delete (not received)
 				t.Logf("Received: %#v", msg)
 				t.Logf("Event: %#v", msg.Events[0])
 				ok = false
@@ -1477,7 +1483,50 @@ func testWatch(t *testing.T) {
 				ok = true
 			}
 			assert.True(t, ok)
+			sendWatchCancel(watchID)
+			res = <-s.resChan
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
 		})
+	})
+	t.Run("alert", func(t *testing.T) {
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:      []byte(`test-watch-alert-000`),
+			RangeEnd: []byte(`test-watch-alert-999`),
+			Filters: []internal.WatchCreateRequest_FilterType{
+				internal.WatchCreateRequest_NODELETE,
+			},
+		})
+		res := <-s.resChan // WatchCreated
+		require.Greater(t, res.WatchId, int64(0), res)
+		assert.True(t, res.Created)
+		watchID = res.WatchId
+		for i := range 10 {
+			req := &internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-watch-alert-%03d`, i)),
+				Value: []byte(fmt.Sprintf(`test-watch-alert-value-%03d`, i)),
+			}
+			_, err = svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+		}
+		for i := range 10 {
+			res := <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			require.Len(t, res.Events, 1)
+			assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
+			assert.Nil(t, res.Events[0].PrevKv)
+			assert.Equal(t, fmt.Sprintf(`test-watch-alert-%03d`, i), string(res.Events[0].Kv.Key))
+			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
+			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.CreateRevision)
+		}
+		sendWatchCancel(watchID)
+		res = <-s.resChan
+		require.Equal(t, watchID, res.WatchId)
+		require.False(t, res.Created)
+		require.True(t, res.Canceled)
 	})
 	t.Run("progress", func(t *testing.T) {
 		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
