@@ -21,9 +21,10 @@ func NewServiceWatch(client zongzi.ShardClient) *serviceWatch {
 	return &serviceWatch{client: client}
 }
 
-func (s *serviceWatch) addTerm(header *internal.ResponseHeader) {
+func (s *serviceWatch) addTerm(header *internal.ResponseHeader) *internal.ResponseHeader {
 	_, term := s.client.Leader()
 	header.RaftTerm = term
+	return header
 }
 
 // Watch runs a watch
@@ -114,9 +115,10 @@ func (s *serviceWatch) watch(
 	ctx, cancel = context.WithCancel(ctx)
 	result := make(chan *Result)
 	go func() {
-		var header = &internal.ResponseHeader{}
 		var prev *internal.Event
 		var events []*internal.Event
+		var clusterID uint64
+		var memberID uint64
 		var err error
 		for {
 			res, ok := <-result
@@ -126,10 +128,13 @@ func (s *serviceWatch) watch(
 			}
 			switch res.Data[0] {
 			case WatchMessageType_INIT:
+				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling init", "err", err)
 					return
 				}
+				clusterID = header.ClusterId
+				memberID = header.MemberId
 			case WatchMessageType_EVENT:
 				evt := &internal.Event{}
 				if err = proto.Unmarshal(res.Data[1:], evt); err != nil {
@@ -137,10 +142,12 @@ func (s *serviceWatch) watch(
 					return
 				}
 				if prev != nil && prev.Kv != nil && prev.Kv.ModRevision != evt.Kv.ModRevision {
-					s.addTerm(header)
-					header.Revision = prev.Kv.ModRevision
 					if err = server.Send(&internal.WatchResponse{
-						Header:  header,
+						Header: s.addTerm(&internal.ResponseHeader{
+							ClusterId: clusterID,
+							MemberId:  memberID,
+							Revision:  prev.Kv.ModRevision,
+						}),
 						WatchId: id,
 						Events:  events,
 					}); err != nil {
@@ -154,6 +161,7 @@ func (s *serviceWatch) watch(
 				events = append(events, evt)
 				prev = evt
 			case WatchMessageType_SYNC:
+				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling sync", "err", err)
 					return
@@ -172,6 +180,7 @@ func (s *serviceWatch) watch(
 				events = []*internal.Event{}
 				prev = nil
 			case WatchMessageType_NOTIFY:
+				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling notify", "err", err)
 					return
