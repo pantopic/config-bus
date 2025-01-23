@@ -30,6 +30,11 @@ const (
 	WatchMessageType_NOTIFY
 
 	WATCH_DEBOUNCE = 50 * time.Millisecond
+
+	sizeMetaKeyValue      = 256
+	sizeMetaEvent         = 256
+	sizeMetaHeader        = 256
+	sizeMetaWatchResponse = 256
 )
 
 var (
@@ -66,6 +71,8 @@ var (
 	// This is poor API design because it fails to leverage the zero value as an empty state.
 	// Etcd starts watch IDs at zero, so this is enabled by default for parity.
 	ICARUS_ZERO_INDEX_WATCH_ID = true
+
+	ICARUS_RESPONSE_SIZE_MAX = 10 * 1024 * 1024
 )
 
 var (

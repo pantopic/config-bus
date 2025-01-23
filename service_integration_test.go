@@ -1510,17 +1510,61 @@ func testWatch(t *testing.T) {
 			_, err = svcKv.Put(ctx, req)
 			require.Nil(t, err, err)
 		}
+		for j := 0; j < 10; {
+			res = <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			require.Greater(t, len(res.Events), 0, res)
+			// t.Log("---", j, i, res.Events[i])
+			for i := range res.Events {
+				assert.Equal(t, internal.Event_PUT, res.Events[i].Type)
+				assert.Nil(t, res.Events[i].PrevKv)
+				assert.Equal(t, fmt.Sprintf(`test-watch-alert-%03d`, j), string(res.Events[i].Kv.Key))
+				j++
+			}
+		}
+		sendWatchCancel(watchID)
+		res = <-s.resChan
+		require.Equal(t, watchID, res.WatchId)
+		require.False(t, res.Created)
+		require.True(t, res.Canceled)
+	})
+	t.Run("revision", func(t *testing.T) {
+		var revs []int64
 		for i := range 10 {
+			req := &internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-watch-rev-%03d`, i)),
+				Value: []byte(fmt.Sprintf(`test-watch-rev-value-%03d`, i)),
+			}
+			resp, err := svcKv.Put(ctx, req)
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+		}
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:           []byte(`test-watch-rev-000`),
+			RangeEnd:      []byte(`test-watch-rev-999`),
+			StartRevision: revs[5],
+		})
+		res := <-s.resChan // WatchCreated
+		require.Greater(t, res.WatchId, int64(0), res)
+		assert.True(t, res.Created)
+		watchID = res.WatchId
+
+		for j := 0; j < 5; {
 			res := <-s.resChan
 			assert.True(t, res.WatchId == watchID, res.WatchId)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)
-			require.Len(t, res.Events, 1)
-			assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
-			assert.Nil(t, res.Events[0].PrevKv)
-			assert.Equal(t, fmt.Sprintf(`test-watch-alert-%03d`, i), string(res.Events[0].Kv.Key))
-			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
-			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.CreateRevision)
+			require.Greater(t, len(res.Events), 0)
+			assert.Equal(t, res.Header.Revision, res.Events[len(res.Events)-1].Kv.ModRevision)
+			assert.Equal(t, res.Header.Revision, res.Events[len(res.Events)-1].Kv.CreateRevision)
+			for i := range res.Events {
+				assert.Equal(t, internal.Event_PUT, res.Events[i].Type)
+				assert.Nil(t, res.Events[i].PrevKv)
+				assert.Equal(t, fmt.Sprintf(`test-watch-rev-%03d`, j+5), string(res.Events[i].Kv.Key))
+				j++
+			}
 		}
 		sendWatchCancel(watchID)
 		res = <-s.resChan
@@ -1530,11 +1574,6 @@ func testWatch(t *testing.T) {
 	})
 	t.Run("progress", func(t *testing.T) {
 		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
-	})
-	t.Run("revision", func(t *testing.T) {
-		// One response per revision containing all events for that revision (filtered)
-		// Revision in header of watch response should match revision of event list in response
-		// ProgressNotify responses should report last event revision after watch has reached head
 	})
 	cancel()
 	assert.True(t, await(1, 100, func() bool {
@@ -1711,11 +1750,11 @@ func (svc *parityWatchService) Watch(server internal.Watch_WatchServer) (err err
 		return
 	}
 	go func() {
-		defer slog.Info("Server watch ending")
+		defer slog.Debug("Server watch ending")
 		for {
-			slog.Info("Server watch Recving")
+			slog.Debug("Server watch Recving")
 			req, err := server.Recv()
-			slog.Info("Server watch Recvd")
+			slog.Debug("Server watch Recvd")
 			if err == io.EOF {
 				return
 			}
@@ -1728,11 +1767,11 @@ func (svc *parityWatchService) Watch(server internal.Watch_WatchServer) (err err
 			}
 		}
 	}()
-	defer slog.Info("Client watch ending")
+	defer slog.Debug("Client watch ending")
 	for {
-		slog.Info("Client watch Recving")
+		slog.Debug("Client watch Recving")
 		res, err := client.Recv()
-		slog.Info("Client watch Recvd")
+		slog.Debug("Client watch Recvd")
 		if err == io.EOF {
 			break
 		}

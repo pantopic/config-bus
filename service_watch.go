@@ -115,11 +115,14 @@ func (s *serviceWatch) watch(
 	ctx, cancel = context.WithCancel(ctx)
 	result := make(chan *Result)
 	go func() {
-		var prev *internal.Event
-		var events []*internal.Event
 		var clusterID uint64
 		var memberID uint64
 		var err error
+		var size int
+		var resp = &internal.WatchResponse{
+			Header:  &internal.ResponseHeader{},
+			WatchId: id,
+		}
 		for {
 			res, ok := <-result
 			if res == nil || !ok {
@@ -128,57 +131,65 @@ func (s *serviceWatch) watch(
 			}
 			switch res.Data[0] {
 			case WatchMessageType_INIT:
-				var header = &internal.ResponseHeader{}
-				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
+				if err = proto.Unmarshal(res.Data[1:], resp.Header); err != nil {
 					slog.Error("Error unmarshaling init", "err", err)
 					return
 				}
-				clusterID = header.ClusterId
-				memberID = header.MemberId
+				clusterID = resp.Header.ClusterId
+				memberID = resp.Header.MemberId
 			case WatchMessageType_EVENT:
 				evt := &internal.Event{}
 				if err = proto.Unmarshal(res.Data[1:], evt); err != nil {
 					slog.Error("Error unmarshaling event", "err", err)
 					return
 				}
-				if prev != nil && prev.Kv != nil && prev.Kv.ModRevision != evt.Kv.ModRevision {
-					if err = server.Send(&internal.WatchResponse{
-						Header: s.addTerm(&internal.ResponseHeader{
-							ClusterId: clusterID,
-							MemberId:  memberID,
-							Revision:  prev.Kv.ModRevision,
-						}),
-						WatchId: id,
-						Events:  events,
-					}); err != nil {
-						slog.Error("Error sending response")
-						return
-					}
-					// event slice cannot be recycled because `server.Send` may not serialize synchronously
-					// events = events[:0]
-					events = []*internal.Event{}
+				var sz = len(evt.Kv.Key) + len(evt.Kv.Value) + sizeMetaKeyValue + sizeMetaEvent
+				if evt.PrevKv != nil {
+					sz += len(evt.PrevKv.Key) + len(evt.PrevKv.Value) + sizeMetaKeyValue
 				}
-				events = append(events, evt)
-				prev = evt
-			case WatchMessageType_SYNC:
-				var header = &internal.ResponseHeader{}
-				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
-					slog.Error("Error unmarshaling sync", "err", err)
-					return
+				if size+sz < ICARUS_RESPONSE_SIZE_MAX {
+					resp.Header.Revision = evt.Kv.ModRevision
+					resp.Events = append(resp.Events, evt)
+					size += sz
+					continue
 				}
-				s.addTerm(header)
-				if err = server.Send(&internal.WatchResponse{
-					Header:  header,
-					WatchId: id,
-					Events:  events,
-				}); err != nil {
+				if resp.Header.Revision == evt.Kv.ModRevision {
+					resp.Fragment = true
+				}
+				s.addTerm(resp.Header)
+				if err = server.Send(resp); err != nil {
 					slog.Error("Error sending response")
 					return
 				}
-				// event slice cannot be recycled because `server.Send` may not serialize synchronously
-				// events = events[:0]
-				events = []*internal.Event{}
-				prev = nil
+				resp = &internal.WatchResponse{
+					Header: &internal.ResponseHeader{
+						ClusterId: clusterID,
+						MemberId:  memberID,
+					},
+					WatchId: id,
+				}
+				resp.Header.Revision = evt.Kv.ModRevision
+				resp.Events = append(resp.Events, evt)
+				size = sz + sizeMetaWatchResponse + sizeMetaHeader
+			case WatchMessageType_SYNC:
+				if err = proto.Unmarshal(res.Data[1:], resp.Header); err != nil {
+					slog.Error("Error unmarshaling sync", "err", err)
+					return
+				}
+				if len(resp.Events) > 0 {
+					s.addTerm(resp.Header)
+					if err = server.Send(resp); err != nil {
+						slog.Error("Error sending response")
+						return
+					}
+					resp = &internal.WatchResponse{
+						Header: &internal.ResponseHeader{
+							ClusterId: clusterID,
+							MemberId:  memberID,
+						},
+						WatchId: id,
+					}
+				}
 			case WatchMessageType_NOTIFY:
 				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
