@@ -50,7 +50,8 @@ func TestService(t *testing.T) {
 	// TODO - Advance epoch to test lease TTL response
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-	// TODO - Watch at revision, progress notify, drive watches async from kv_events
+	// TODO - Progress notify, drive watches async from kv_events
+	// TODO - Test message size boundary (txn) w/ Fragment
 	// TODO - Watch merge w/ multiplex, auto reconnect
 	t.Run("watch", testWatch)
 
