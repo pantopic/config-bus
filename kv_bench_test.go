@@ -6,18 +6,18 @@ import (
 
 func BenchmarkTestKv(b *testing.B) {
 	item := kv{
-		revision: 3,
-		version:  2,
-		created:  1,
-		key:      []byte(`test-key`),
-		val:      []byte(`test-val`),
+		rev:     newkeyrev(3, 0, false),
+		version: 2,
+		created: 1,
+		key:     []byte(`test-key`),
+		val:     []byte(`test-val`),
 	}
 	itemPatchCompress := kv{
-		revision: 3,
-		version:  2,
-		created:  1,
-		key:      []byte(`test-key`),
-		val:      []byte(`----------------------------------------`),
+		rev:     newkeyrev(3, 0, false),
+		version: 2,
+		created: 1,
+		key:     []byte(`test-key`),
+		val:     []byte(`----------------------------------------`),
 	}
 	nextPatch := []byte(`--------------------0-------------------`)
 	nextCompress := []byte(`........................................`)

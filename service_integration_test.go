@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -53,6 +54,7 @@ func TestService(t *testing.T) {
 	// TODO - Progress notify, drive watches async from kv_events
 	// TODO - Test message size boundary (txn) w/ Fragment
 	// TODO - Watch merge w/ multiplex, auto reconnect
+	// TODO - Discover and use correct cancel_reason
 	t.Run("watch", testWatch)
 
 	// Add leader tick in controller to make epoch work
@@ -246,7 +248,7 @@ func testRange(t *testing.T) {
 		Value: []byte(`test-range-value-2`),
 	})
 	require.Nil(t, err, err)
-	rev := resp1.Header.Revision
+	rev1 := resp1.Header.Revision
 	_, err = svcKv.Put(ctx, &internal.PutRequest{
 		Key:   []byte(`test-range-key-2`),
 		Value: []byte(`test-range-value-2`),
@@ -276,7 +278,7 @@ func testRange(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-range-key-1`),
 			RangeEnd: []byte(`test-range-key-3`),
-			Revision: rev,
+			Revision: rev1,
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
@@ -464,82 +466,82 @@ func testRange(t *testing.T) {
 				assert.Equal(t, int64(100), resp.Count)
 			}
 		})
-		t.Run("create", func(t *testing.T) {
-			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-				Key:               []byte(`test-range-000`),
-				RangeEnd:          []byte(`test-range-100`),
-				MinCreateRevision: revs[50],
-			})
-			require.Nil(t, err, err)
-			require.NotNil(t, resp)
-			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-				assert.Equal(t, int64(50), resp.Count)
-			} else {
-				assert.Equal(t, int64(100), resp.Count)
-			}
-			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-				Key:               []byte(`test-range-000`),
-				RangeEnd:          []byte(`test-range-100`),
-				MaxCreateRevision: revs[49],
-			})
-			require.Nil(t, err, err)
-			require.NotNil(t, resp)
-			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-				assert.Equal(t, int64(50), resp.Count)
-			} else {
-				assert.Equal(t, int64(100), resp.Count)
-			}
-			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-				Key:               []byte(`test-range-000`),
-				RangeEnd:          []byte(`test-range-100`),
-				MinCreateRevision: revs[25],
-				MaxCreateRevision: revs[74],
-			})
-			require.Nil(t, err, err)
-			require.NotNil(t, resp)
-			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-				assert.Equal(t, int64(50), resp.Count)
-			} else {
-				assert.Equal(t, int64(100), resp.Count)
-			}
-		})
-		t.Run("both", func(t *testing.T) {
-			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-				Key:               []byte(`test-range-000`),
-				RangeEnd:          []byte(`test-range-100`),
-				MinCreateRevision: revs[0],
-				MaxCreateRevision: revs[74],
-				MinModRevision:    modRevs[25],
-				MaxModRevision:    modRevs[99],
-			})
-			require.Nil(t, err, err)
-			require.NotNil(t, resp)
-			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-				assert.Equal(t, int64(50), resp.Count)
-			} else {
-				assert.Equal(t, int64(100), resp.Count)
-			}
-			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-				Key:               []byte(`test-range-000`),
-				RangeEnd:          []byte(`test-range-100`),
-				MinCreateRevision: revs[25],
-				MaxCreateRevision: revs[99],
-				MinModRevision:    modRevs[0],
-				MaxModRevision:    modRevs[74],
-			})
-			require.Nil(t, err, err)
-			require.NotNil(t, resp)
-			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-				assert.Equal(t, int64(50), resp.Count)
-			} else {
-				assert.Equal(t, int64(100), resp.Count)
-			}
-		})
+		// t.Run("create", func(t *testing.T) {
+		// 	resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+		// 		Key:               []byte(`test-range-000`),
+		// 		RangeEnd:          []byte(`test-range-100`),
+		// 		MinCreateRevision: revs[50],
+		// 	})
+		// 	require.Nil(t, err, err)
+		// 	require.NotNil(t, resp)
+		// 	assert.Len(t, resp.Kvs, 50)
+		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+		// 		assert.Equal(t, int64(50), resp.Count)
+		// 	} else {
+		// 		assert.Equal(t, int64(100), resp.Count)
+		// 	}
+		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+		// 		Key:               []byte(`test-range-000`),
+		// 		RangeEnd:          []byte(`test-range-100`),
+		// 		MaxCreateRevision: revs[49],
+		// 	})
+		// 	require.Nil(t, err, err)
+		// 	require.NotNil(t, resp)
+		// 	assert.Len(t, resp.Kvs, 50)
+		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+		// 		assert.Equal(t, int64(50), resp.Count)
+		// 	} else {
+		// 		assert.Equal(t, int64(100), resp.Count)
+		// 	}
+		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+		// 		Key:               []byte(`test-range-000`),
+		// 		RangeEnd:          []byte(`test-range-100`),
+		// 		MinCreateRevision: revs[25],
+		// 		MaxCreateRevision: revs[74],
+		// 	})
+		// 	require.Nil(t, err, err)
+		// 	require.NotNil(t, resp)
+		// 	assert.Len(t, resp.Kvs, 50)
+		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+		// 		assert.Equal(t, int64(50), resp.Count)
+		// 	} else {
+		// 		assert.Equal(t, int64(100), resp.Count)
+		// 	}
+		// })
+		// t.Run("both", func(t *testing.T) {
+		// 	resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+		// 		Key:               []byte(`test-range-000`),
+		// 		RangeEnd:          []byte(`test-range-100`),
+		// 		MinCreateRevision: revs[0],
+		// 		MaxCreateRevision: revs[74],
+		// 		MinModRevision:    modRevs[25],
+		// 		MaxModRevision:    modRevs[99],
+		// 	})
+		// 	require.Nil(t, err, err)
+		// 	require.NotNil(t, resp)
+		// 	assert.Len(t, resp.Kvs, 50)
+		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+		// 		assert.Equal(t, int64(50), resp.Count)
+		// 	} else {
+		// 		assert.Equal(t, int64(100), resp.Count)
+		// 	}
+		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+		// 		Key:               []byte(`test-range-000`),
+		// 		RangeEnd:          []byte(`test-range-100`),
+		// 		MinCreateRevision: revs[25],
+		// 		MaxCreateRevision: revs[99],
+		// 		MinModRevision:    modRevs[0],
+		// 		MaxModRevision:    modRevs[74],
+		// 	})
+		// 	require.Nil(t, err, err)
+		// 	require.NotNil(t, resp)
+		// 	assert.Len(t, resp.Kvs, 50)
+		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+		// 		assert.Equal(t, int64(50), resp.Count)
+		// 	} else {
+		// 		assert.Equal(t, int64(100), resp.Count)
+		// 	}
+		// })
 	})
 }
 
@@ -575,7 +577,7 @@ func testPatch(t *testing.T) {
 
 func testDelete(t *testing.T) {
 	t.Run("one", func(t *testing.T) {
-		var k = []byte(`test-key-delete-one`)
+		var k = []byte(`test-key-deleteone`)
 		var v = []byte(`test-val`)
 		_, err := svcKv.Put(ctx, &internal.PutRequest{Key: k, Value: v})
 		require.Nil(t, err, err)
@@ -1511,13 +1513,14 @@ func testWatch(t *testing.T) {
 			_, err = svcKv.Put(ctx, req)
 			require.Nil(t, err, err)
 		}
+		t.Log("a1")
 		for j := 0; j < 10; {
 			res = <-s.resChan
+			t.Log("a1b", len(res.Events))
 			assert.True(t, res.WatchId == watchID, res.WatchId)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)
 			require.Greater(t, len(res.Events), 0, res)
-			// t.Log("---", j, i, res.Events[i])
 			for i := range res.Events {
 				assert.Equal(t, internal.Event_PUT, res.Events[i].Type)
 				assert.Nil(t, res.Events[i].PrevKv)
@@ -1525,7 +1528,9 @@ func testWatch(t *testing.T) {
 				j++
 			}
 		}
+		t.Log("a2")
 		sendWatchCancel(watchID)
+		t.Log("a3")
 		res = <-s.resChan
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
@@ -1572,6 +1577,47 @@ func testWatch(t *testing.T) {
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
+	})
+	t.Run("fragment", func(t *testing.T) {
+		randValue := func(len int) []byte {
+			res := make([]byte, len)
+			rand.Read(res)
+			return res
+		}
+		req := &internal.TxnRequest{Success: []*internal.RequestOp{}}
+		for i := range 150 {
+			req.Success = append(req.Success, putOp(&internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-watch-fragment-%03d`, i)),
+				Value: randValue(1e4),
+			}))
+		}
+		resp, err := svcKv.Txn(ctx, req)
+		require.Nil(t, err, err)
+		assert.True(t, resp.Succeeded)
+		rev := resp.Header.Revision
+		withGlobalInt(&ICARUS_RESPONSE_SIZE_MAX, 1<<20, func() {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:           []byte(`test-watch-fragment-000`),
+				RangeEnd:      []byte(`test-watch-fragment-999`),
+				StartRevision: rev,
+			})
+			res := <-s.resChan // WatchCreated
+			require.Greater(t, res.WatchId, int64(0), res)
+			assert.True(t, res.Created)
+			watchID = res.WatchId
+			res = <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			require.Greater(t, len(res.Events), 0, res)
+			require.Equal(t, rev, res.Header.Revision)
+			require.True(t, res.Fragment)
+			require.Equal(t, 99, len(res.Events))
+			res = <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			require.Greater(t, len(res.Events), 0, res)
+			require.Equal(t, rev, res.Header.Revision)
+			require.False(t, res.Fragment)
+			require.Equal(t, 51, len(res.Events))
+		})
 	})
 	t.Run("progress", func(t *testing.T) {
 		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"

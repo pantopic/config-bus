@@ -93,17 +93,17 @@ func TestDb(t *testing.T) {
 		})
 	})
 	t.Run("bad-dbi", func(t *testing.T) {
-		i := sm.dbKv.i
-		defer func() { sm.dbKv.i = i }()
-		sm.dbKv.i = 0
+		i := sm.dbKv.key.i
+		defer func() { sm.dbKv.key.i = i }()
+		sm.dbKv.key.i = 0
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
-		sm.dbKv.i = 100000
+		sm.dbKv.key.i = 100000
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
@@ -114,27 +114,27 @@ func TestDbKv(t *testing.T) {
 	t.Run("getRev", func(t *testing.T) {
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 			items := []kv{
-				{revision: 1, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-00`)},
-				{revision: 2, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-01`)},
-				{revision: 3, key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-02`)},
+				{rev: newkeyrev(1, 0, false), key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-00`)},
+				{rev: newkeyrev(2, 0, false), key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-01`)},
+				{rev: newkeyrev(3, 0, false), key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-02`)},
 			}
 			for _, item := range items {
-				_, _, _, err = sm.dbKv.put(txn, item.revision, 0, item.key, item.val, false, false)
-				require.Nil(t, err)
+				_, _, _, err = sm.dbKv.put(txn, item.rev.upper(), item.rev.lower(), 0, item.key, item.val, false, false)
+				require.Nil(t, err, err)
 			}
-			item, prev, err := sm.dbKv.getRev(txn, items[1].key, items[1].revision, true)
+			item, prev, err := sm.dbKv.getRev(txn, items[1].key, items[1].rev.upper(), true)
 			require.Nil(t, err)
 			assert.Equal(t, items[1].val, item.val, string(item.val))
 			assert.Equal(t, items[0].val, prev.val, string(prev.val))
-			item, prev, err = sm.dbKv.getRev(txn, items[2].key, items[2].revision, true)
+			item, prev, err = sm.dbKv.getRev(txn, items[2].key, items[2].rev.upper(), true)
 			require.Nil(t, err)
 			assert.Equal(t, items[2].val, item.val, string(item.val))
 			assert.Equal(t, items[1].val, prev.val, string(prev.val))
-			item, prev, err = sm.dbKv.getRev(txn, items[1].key, items[1].revision, false)
+			item, prev, err = sm.dbKv.getRev(txn, items[1].key, items[1].rev.upper(), false)
 			require.Nil(t, err)
 			assert.Equal(t, items[1].val, item.val, string(item.val))
 			assert.Len(t, prev.val, 0, string(prev.val))
-			item, prev, err = sm.dbKv.getRev(txn, items[0].key, items[0].revision, true)
+			item, prev, err = sm.dbKv.getRev(txn, items[0].key, items[0].rev.upper(), true)
 			require.Nil(t, err)
 			assert.Equal(t, items[0].val, item.val, string(item.val))
 			assert.Len(t, prev.val, 0, string(prev.val))
