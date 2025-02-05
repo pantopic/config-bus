@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,6 +183,24 @@ func testInsert(t *testing.T) {
 		assert.Equal(t, put.Key, resp.Kvs[0].Key)
 		assert.Equal(t, put.Value, resp.Kvs[0].Value)
 	})
+	t.Run("huge-key", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(strings.Repeat("a", 480)),
+				Value: []byte(`test-value`),
+			})
+			require.Nil(t, err)
+			assert.NotNil(t, resp)
+		})
+		t.Run("failure", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(strings.Repeat("a", 481)),
+				Value: []byte(`test-value`),
+			})
+			require.NotNil(t, err)
+			assert.Nil(t, resp)
+		})
+	})
 }
 
 func testUpdate(t *testing.T) {
@@ -262,7 +281,7 @@ func testRange(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
-		require.Equal(t, 3, len(resp.Kvs))
+		require.Equal(t, 4, len(resp.Kvs))
 	})
 	t.Run("basic", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -754,6 +773,32 @@ func testTransaction(t *testing.T) {
 		assert.False(t, resp.Succeeded)
 		assert.Len(t, resp.Responses, len(req.Failure))
 		assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
+	})
+	t.Run("huge-key", func(t *testing.T) {
+		_, err = svcKv.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-txn-00`),
+			Value: []byte(`-----------`),
+		})
+		require.Nil(t, err, err)
+		req := &internal.TxnRequest{
+			Success: []*internal.RequestOp{
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-huge-01`),
+					Value: []byte(`-----------`),
+				}),
+				putOp(&internal.PutRequest{
+					Key:   []byte(strings.Repeat("a", 490)),
+					Value: []byte(`-----------`),
+				}),
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-huge-03`),
+					Value: []byte(`-----------`),
+				}),
+			},
+		}
+		resp, err := svcKv.Txn(ctx, req)
+		require.NotNil(t, err)
+		assert.Nil(t, resp)
 	})
 	leaseResp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{TTL: 600})
 	require.Nil(t, err)

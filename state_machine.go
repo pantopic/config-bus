@@ -148,7 +148,11 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					}
 				}
 				res, val, affected, err := sm.cmdPut(txn, ent.Index, 0, epoch, req)
-				if err != nil {
+				if err == internal.ErrGRPCKeyTooLong {
+					entries[i].Result.Data = []byte(err.Error())
+					err = nil
+					continue
+				} else if err != nil {
 					return err
 				}
 				res.Header = sm.responseHeader(ent.Index)
@@ -220,7 +224,8 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else {
 					res.Responses, affected, err = sm.txnOps(txn, ent.Index, epoch, req.Failure)
 				}
-				if err == internal.ErrGRPCDuplicateKey {
+				if err == internal.ErrGRPCDuplicateKey ||
+					err == internal.ErrGRPCKeyTooLong {
 					entries[i].Result.Data = []byte(err.Error())
 					err = nil
 				} else if err != nil {
@@ -579,6 +584,10 @@ func (sm *stateMachine) cmdPut(
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
+	if len(req.Key) > ICARUS_LIMIT_KEY_LENGTH {
+		err = internal.ErrGRPCKeyTooLong
+		return
+	}
 	prev, _, patched, err := sm.dbKv.put(txn, index, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return

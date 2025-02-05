@@ -43,6 +43,9 @@ const (
 	// ICARUS_TXN_OPS_LIMIT limits the maximum number of operations per transaction.
 	// Hard limit allows use of last 10 bits of revision to represent subrevision.
 	ICARUS_TXN_OPS_LIMIT = 1024
+
+	// ICARUS_LIMIT_KEY_LENGTH limits the maximum length of any key.
+	ICARUS_LIMIT_KEY_LENGTH = 480
 )
 
 var (
