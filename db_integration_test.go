@@ -9,8 +9,6 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/logbn/icarus/internal"
 )
 
 var (
@@ -97,13 +95,13 @@ func TestDb(t *testing.T) {
 		defer func() { sm.dbKv.rev.i = i }()
 		sm.dbKv.rev.i = 0
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
 		sm.dbKv.rev.i = 100000
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
+			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
@@ -119,7 +117,7 @@ func TestDbKv(t *testing.T) {
 				{rev: newkeyrev(3, 0, false), key: []byte(`test-get-rev-00`), val: []byte(`test-get-rev-val-02`)},
 			}
 			for _, item := range items {
-				_, _, _, err = sm.dbKv.put(txn, item.rev.upper(), item.rev.lower(), 0, item.key, item.val, false, false)
+				_, _, _, err = sm.dbKv.put(txn, item.rev.upper(), item.rev.lower(), 0, 0, item.key, item.val, false, false)
 				require.Nil(t, err, err)
 			}
 			item, prev, err := sm.dbKv.getRev(txn, items[1].key, items[1].rev.upper(), true)
@@ -138,39 +136,6 @@ func TestDbKv(t *testing.T) {
 			require.Nil(t, err)
 			assert.Equal(t, items[0].val, item.val, string(item.val))
 			assert.Len(t, prev.val, 0, string(prev.val))
-			return
-		})
-		assert.Nil(t, err)
-	})
-}
-
-func TestDbKvEvent(t *testing.T) {
-	t.Run("scan", func(t *testing.T) {
-		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-			events := []kvEvent{
-				{revision: 1, epoch: 1, key: []byte(`test-scan-00`)},
-				{revision: 1, epoch: 1, key: []byte(`test-scan-01`)},
-				{revision: 2, epoch: 1, key: []byte(`test-scan-01`)},
-			}
-			for _, evt := range events {
-				require.Nil(t, sm.dbKvEvent.put(txn, evt.revision, evt.epoch, evt.key))
-			}
-			require.Nil(t, sm.dbKvEvent.delete(txn, 3, 2, [][]byte{[]byte(`test-scan-00`)}))
-			var items []kvEvent
-			for item := range sm.dbKvEvent.scan(txn, 1) {
-				items = append(items, item)
-			}
-			require.Len(t, items, 4)
-			for i, evt := range events {
-				assert.Equal(t, evt.revision, items[i].revision, "revision")
-				assert.Equal(t, evt.epoch, items[i].epoch, "epoch")
-				assert.Equal(t, evt.etype, items[i].etype, "etype")
-				assert.Equal(t, evt.key, items[i].key, "key")
-			}
-			assert.Equal(t, uint64(3), items[3].revision, "revision")
-			assert.Equal(t, uint64(2), items[3].epoch, "epoch")
-			assert.Equal(t, byte(internal.Event_DELETE), items[3].etype, "etype")
-			assert.Equal(t, []byte(`test-scan-00`), items[3].key, "key")
 			return
 		})
 		assert.Nil(t, err)

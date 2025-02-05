@@ -180,7 +180,6 @@ func (kr keyrev) FromKey(key, buf []byte) (keyrev, error) {
 func (kr keyrev) Bytes(key, buf []byte) []byte {
 	buf = kr.invert().appendbytes(buf)
 	buf = binary.BigEndian.AppendUint32(buf, crc(key, buf))
-	// log.Printf("@@@ %s, %x %x", key, binary.BigEndian.Uint32(buf[len(buf)-4:]), crc(key, buf[:len(buf)-4]))
 	return buf
 }
 
@@ -195,7 +194,6 @@ func (kr keyrecord) FromBytes(key, buf []byte) (keyrecord, error) {
 		return kr, ErrChecksumMissing
 	}
 	if binary.BigEndian.Uint32(buf[len(buf)-4:]) != crc(key, buf[:len(buf)-4]) {
-		// log.Printf("!!! %s, %08x %08x ", key, binary.BigEndian.Uint32(buf[len(buf)-4:]), crc(key, buf[:len(buf)-4]))
 		return kr, ErrChecksumInvalid
 	}
 	kr.rev = keyrev(binary.BigEndian.Uint64(buf[:8])).invert()
@@ -212,6 +210,18 @@ func (kr keyrecord) Bytes(buf []byte) []byte {
 		buf = binary.AppendUvarint(buf, kr.lease)
 	}
 	buf = binary.BigEndian.AppendUint32(buf, crc(kr.key, buf))
-	// log.Printf("^^^ %s, %08x %08x %x", kr.key, binary.BigEndian.Uint32(buf[len(buf)-4:]), crc(kr.key, buf[:len(buf)-4]), buf)
 	return buf
+}
+
+type kvEvent struct {
+	epoch uint64
+	key   []byte
+	rev   keyrev
+}
+
+func (kr kvEvent) etype() uint8 {
+	if kr.rev.isdel() {
+		return uint8(internal.Event_DELETE)
+	}
+	return uint8(internal.Event_PUT)
 }

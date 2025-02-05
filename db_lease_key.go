@@ -17,7 +17,7 @@ func newDbLeaseKey(txn *lmdb.Txn) (db dbLeaseKey, err error) {
 	return
 }
 
-func (db dbLeaseKey) put(txn *lmdb.Txn, key []byte, id uint64) error {
+func (db dbLeaseKey) put(txn *lmdb.Txn, id uint64, key []byte) error {
 	k := append(binary.AppendUvarint(nil, id), key...)
 	v := db.addChecksum(k, nil)
 	return txn.Put(db.i, k, v, 0)

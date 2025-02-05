@@ -3,6 +3,7 @@ package icarus
 import (
 	"bytes"
 	"encoding/binary"
+	"iter"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 
@@ -28,7 +29,7 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 
 func (db dbKv) put(
 	txn *lmdb.Txn,
-	revision, subrev, lease uint64,
+	revision, subrev, lease, epoch uint64,
 	key, val []byte,
 	ignoreValue, ignoreLease bool,
 ) (prev, next kv, patched bool, err error) {
@@ -62,7 +63,14 @@ func (db dbKv) put(
 		if err = txn.Put(db.rev.i, key, krec.Bytes(nil), 0); err != nil {
 			return
 		}
-		err = txn.Put(db.val.i, next.rev.key(), next.Bytes(nil, nil), 0)
+		revkey := krec.rev.key()
+		if err = txn.Put(db.val.i, revkey, next.Bytes(nil, nil), 0); err != nil {
+			return
+		}
+		evt := append(binary.AppendUvarint(nil, epoch), key...)
+		if err = txn.Put(db.evt.i, revkey, db.evt.addChecksum(revkey, evt), 0); err != nil {
+			return
+		}
 		return
 	}
 	if krec.rev.upper() == revision && !ICARUS_TXN_MULTI_WRITE_ENABLED {
@@ -104,11 +112,12 @@ func (db dbKv) put(
 	if err = txn.Put(db.rev.i, key, krec.Bytes(nil), 0); err != nil {
 		return
 	}
-	rk := krec.rev.key()
-	if err = txn.Put(db.val.i, rk, next.Bytes(nil, nil), 0); err != nil {
+	revkey := krec.rev.key()
+	if err = txn.Put(db.val.i, revkey, next.Bytes(nil, nil), 0); err != nil {
 		return
 	}
-	if err = txn.Put(db.evt.i, rk, db.evt.addChecksum(rk, key), 0); err != nil {
+	evt := append(binary.AppendUvarint(nil, epoch), key...)
+	if err = txn.Put(db.evt.i, revkey, db.evt.addChecksum(revkey, evt), 0); err != nil {
 		return
 	}
 	return
@@ -212,7 +221,7 @@ func (db dbKv) getRange(
 	return
 }
 
-func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte) (items []keyrecord, count int64, err error) {
+func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end []byte) (items []keyrecord, count int64, err error) {
 	var prev keyrecord
 	var tombstone keyrev
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -247,7 +256,8 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte)
 				return
 			}
 			tk := tombstone.key()
-			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, k), 0); err != nil {
+			data := append(binary.AppendUvarint(nil, epoch), k...)
+			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, data), 0); err != nil {
 				return
 			}
 			items = append(items, prev)
@@ -264,7 +274,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte)
 	return
 }
 
-func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev uint64, keys [][]byte) (err error) {
+func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]byte) (err error) {
 	var prev, tombstone keyrecord
 	var k, v []byte
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -294,7 +304,8 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev uint64, keys [][]byte) (
 				return
 			}
 			tk := tombstone.rev.key()
-			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, key), 0); err != nil {
+			data := append(binary.AppendUvarint(nil, epoch), key...)
+			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, data), 0); err != nil {
 				return
 			}
 		}
@@ -480,5 +491,49 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 		}
 		prev, err = prev.FromBytes(prec.rev.key(), v, item.val, false)
 	}
+	return
+}
+
+func (db dbKv) scan(txn *lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
+	cur, err := txn.OpenCursor(db.evt.i)
+	if err != nil {
+		return nil
+	}
+	var evt kvEvent
+	k, v, err := cur.Get(binary.BigEndian.AppendUint64(nil, revision<<12), nil, lmdb.SetRange)
+	return func(yield func(kvEvent) bool) {
+		defer cur.Close()
+		for !lmdb.IsNotFound(err) {
+			if err != nil {
+				// log err
+				break
+			}
+			evt, err = db.evtFromBytes(k, v)
+			if err != nil {
+				// log err
+				return
+			}
+			if !yield(evt) {
+				break
+			}
+			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
+			if lmdb.IsNotFound(err) {
+				k, v, err = cur.Get(nil, nil, lmdb.Next)
+			}
+		}
+	}
+}
+
+func (db dbKv) evtFromBytes(k, v []byte) (evt kvEvent, err error) {
+	var n int
+	if evt.rev, err = evt.rev.FromKey(k, v); err != nil {
+		return
+	}
+	v, err = db.evt.trimChecksum(k, v)
+	if err != nil {
+		return
+	}
+	evt.epoch, n = binary.Uvarint(v)
+	evt.key = v[n:]
 	return
 }

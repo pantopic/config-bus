@@ -24,6 +24,7 @@ import (
 var (
 	ctx    = context.Background()
 	parity = os.Getenv("ICARUS_PARITY_CHECK") == "true"
+	debug  = os.Getenv("ICARUS_LOG_LEVEL") == "debug"
 
 	err      error
 	svcKv    internal.KVServer
@@ -88,7 +89,7 @@ func setupParity(t *testing.T) {
 // Run integration tests against bootstrapped icarus instance
 func setupIcarus(t *testing.T) {
 	logLevel := new(slog.LevelVar)
-	if os.Getenv("ICARUS_LOG_LEVEL") == "debug" {
+	if debug {
 		logLevel.Set(slog.LevelDebug)
 	} else {
 		logLevel.Set(slog.LevelInfo)

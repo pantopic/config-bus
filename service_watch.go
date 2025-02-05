@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +36,7 @@ func (s *serviceWatch) Watch(
 	if !ICARUS_ZERO_INDEX_WATCH_ID {
 		watchId++
 	}
+	var mu sync.RWMutex
 	watches := make(map[int64]func())
 	for {
 		req, err := server.Recv()
@@ -48,6 +50,7 @@ func (s *serviceWatch) Watch(
 		case *internal.WatchRequest_CreateRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_CreateRequest).CreateRequest
 			if req.WatchId > 0 {
+				mu.RLock()
 				if _, ok := watches[req.WatchId]; ok {
 					slog.Info("Watch already exists", "id", req.WatchId)
 					if err = s.watchResp(server, &internal.WatchResponse{
@@ -56,8 +59,10 @@ func (s *serviceWatch) Watch(
 						slog.Error("Unable to send watch response", "err", err.Error())
 						return err
 					}
+					mu.RUnlock()
 					break
 				}
+				mu.RUnlock()
 			} else {
 				req.WatchId = watchId
 				watchId++
@@ -68,21 +73,29 @@ func (s *serviceWatch) Watch(
 			}); err != nil {
 				return err
 			}
+			mu.Lock()
 			watches[req.WatchId] = s.watch(server.Context(), req, server, req.WatchId, func() {
 				// TODO - retry?
+				mu.Lock()
+				defer mu.Unlock()
 				delete(watches, req.WatchId)
 			})
+			mu.Unlock()
 		case *internal.WatchRequest_CancelRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_CancelRequest).CancelRequest
+			mu.RLock()
 			if _, ok := watches[req.WatchId]; !ok {
 				if err = s.watchResp(server, &internal.WatchResponse{
 					WatchId: req.WatchId,
 				}); err != nil {
 					slog.Warn("Watch not found in cancel", "req", req, "err", err.Error())
 				}
+				mu.RUnlock()
 				break
 			}
-			watches[req.WatchId]()
+			fn := watches[req.WatchId]
+			mu.RUnlock()
+			fn()
 			if err = s.watchResp(server, &internal.WatchResponse{
 				WatchId:  req.WatchId,
 				Canceled: true,
@@ -99,9 +112,11 @@ func (s *serviceWatch) Watch(
 			}
 		}
 	}
+	mu.Lock()
 	for _, cancel := range watches {
 		cancel()
 	}
+	mu.Unlock()
 	return
 }
 
