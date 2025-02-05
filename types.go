@@ -40,12 +40,6 @@ const (
 )
 
 const (
-	// ICARUS_LEASE_KEYS_MAX limits the number of keys allowed for a lease. This is a hard limit.
-	// Limiting lease key max enables subrevision to be represented using the last 10 bits of a revision.
-	// When all keys under a lease are deleted at a single revision, the last 10 bits represent the subrevision.
-	// See https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/storage/etcd3/lease_manager.go#L30
-	ICARUS_LEASE_KEYS_LIMIT = 1024
-
 	// ICARUS_TXN_OPS_LIMIT limits the maximum number of operations per transaction.
 	// Hard limit allows use of last 10 bits of revision to represent subrevision.
 	ICARUS_TXN_OPS_LIMIT = 1024

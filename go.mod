@@ -6,7 +6,6 @@ require (
 	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/elliotchance/orderedmap/v3 v3.1.0
 	github.com/golang/snappy v0.0.4
 	github.com/logbn/intervalradix v0.1.0
 	github.com/logbn/zongzi v0.0.19
