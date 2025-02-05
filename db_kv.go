@@ -204,6 +204,16 @@ func (db dbKv) getRange(
 						return
 					}
 				}
+				// Filtering on created revision is terribly ineffecient.
+				// It is not used by Kubernetes and should not be used by anyone.
+				if minCreated > 0 && item.created < minCreated {
+					count--
+					goto next
+				}
+				if maxCreated > 0 && item.created > maxCreated {
+					count--
+					goto next
+				}
 				items = append(items, item)
 			} else if ICARUS_KV_RANGE_COUNT_FAKE {
 				break

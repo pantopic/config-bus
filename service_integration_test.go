@@ -467,82 +467,82 @@ func testRange(t *testing.T) {
 				assert.Equal(t, int64(100), resp.Count)
 			}
 		})
-		// t.Run("create", func(t *testing.T) {
-		// 	resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-		// 		Key:               []byte(`test-range-000`),
-		// 		RangeEnd:          []byte(`test-range-100`),
-		// 		MinCreateRevision: revs[50],
-		// 	})
-		// 	require.Nil(t, err, err)
-		// 	require.NotNil(t, resp)
-		// 	assert.Len(t, resp.Kvs, 50)
-		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-		// 		assert.Equal(t, int64(50), resp.Count)
-		// 	} else {
-		// 		assert.Equal(t, int64(100), resp.Count)
-		// 	}
-		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-		// 		Key:               []byte(`test-range-000`),
-		// 		RangeEnd:          []byte(`test-range-100`),
-		// 		MaxCreateRevision: revs[49],
-		// 	})
-		// 	require.Nil(t, err, err)
-		// 	require.NotNil(t, resp)
-		// 	assert.Len(t, resp.Kvs, 50)
-		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-		// 		assert.Equal(t, int64(50), resp.Count)
-		// 	} else {
-		// 		assert.Equal(t, int64(100), resp.Count)
-		// 	}
-		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-		// 		Key:               []byte(`test-range-000`),
-		// 		RangeEnd:          []byte(`test-range-100`),
-		// 		MinCreateRevision: revs[25],
-		// 		MaxCreateRevision: revs[74],
-		// 	})
-		// 	require.Nil(t, err, err)
-		// 	require.NotNil(t, resp)
-		// 	assert.Len(t, resp.Kvs, 50)
-		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-		// 		assert.Equal(t, int64(50), resp.Count)
-		// 	} else {
-		// 		assert.Equal(t, int64(100), resp.Count)
-		// 	}
-		// })
-		// t.Run("both", func(t *testing.T) {
-		// 	resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-		// 		Key:               []byte(`test-range-000`),
-		// 		RangeEnd:          []byte(`test-range-100`),
-		// 		MinCreateRevision: revs[0],
-		// 		MaxCreateRevision: revs[74],
-		// 		MinModRevision:    modRevs[25],
-		// 		MaxModRevision:    modRevs[99],
-		// 	})
-		// 	require.Nil(t, err, err)
-		// 	require.NotNil(t, resp)
-		// 	assert.Len(t, resp.Kvs, 50)
-		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-		// 		assert.Equal(t, int64(50), resp.Count)
-		// 	} else {
-		// 		assert.Equal(t, int64(100), resp.Count)
-		// 	}
-		// 	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-		// 		Key:               []byte(`test-range-000`),
-		// 		RangeEnd:          []byte(`test-range-100`),
-		// 		MinCreateRevision: revs[25],
-		// 		MaxCreateRevision: revs[99],
-		// 		MinModRevision:    modRevs[0],
-		// 		MaxModRevision:    modRevs[74],
-		// 	})
-		// 	require.Nil(t, err, err)
-		// 	require.NotNil(t, resp)
-		// 	assert.Len(t, resp.Kvs, 50)
-		// 	if ICARUS_RANGE_COUNT_FILTER_CORRECT {
-		// 		assert.Equal(t, int64(50), resp.Count)
-		// 	} else {
-		// 		assert.Equal(t, int64(100), resp.Count)
-		// 	}
-		// })
+		t.Run("create", func(t *testing.T) {
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key:               []byte(`test-range-000`),
+				RangeEnd:          []byte(`test-range-100`),
+				MinCreateRevision: revs[50],
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Kvs, 50)
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key:               []byte(`test-range-000`),
+				RangeEnd:          []byte(`test-range-100`),
+				MaxCreateRevision: revs[49],
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Kvs, 50)
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key:               []byte(`test-range-000`),
+				RangeEnd:          []byte(`test-range-100`),
+				MinCreateRevision: revs[25],
+				MaxCreateRevision: revs[74],
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Kvs, 50)
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
+		})
+		t.Run("both", func(t *testing.T) {
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key:               []byte(`test-range-000`),
+				RangeEnd:          []byte(`test-range-100`),
+				MinCreateRevision: revs[0],
+				MaxCreateRevision: revs[74],
+				MinModRevision:    modRevs[25],
+				MaxModRevision:    modRevs[99],
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Kvs, 50)
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key:               []byte(`test-range-000`),
+				RangeEnd:          []byte(`test-range-100`),
+				MinCreateRevision: revs[25],
+				MaxCreateRevision: revs[99],
+				MinModRevision:    modRevs[0],
+				MaxModRevision:    modRevs[74],
+			})
+			require.Nil(t, err, err)
+			require.NotNil(t, resp)
+			assert.Len(t, resp.Kvs, 50)
+			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+				assert.Equal(t, int64(50), resp.Count)
+			} else {
+				assert.Equal(t, int64(100), resp.Count)
+			}
+		})
 	})
 }
 
