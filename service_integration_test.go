@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 var (
 	ctx    = context.Background()
 	parity = os.Getenv("ICARUS_PARITY_CHECK") == "true"
+	debug  = os.Getenv("ICARUS_LOG_LEVEL") == "debug"
 
 	err      error
 	svcKv    internal.KVServer
@@ -53,6 +56,7 @@ func TestService(t *testing.T) {
 	// TODO - Progress notify, drive watches async from kv_events
 	// TODO - Test message size boundary (txn) w/ Fragment
 	// TODO - Watch merge w/ multiplex, auto reconnect
+	// TODO - Discover and use correct cancel_reason
 	t.Run("watch", testWatch)
 
 	// Add leader tick in controller to make epoch work
@@ -86,7 +90,7 @@ func setupParity(t *testing.T) {
 // Run integration tests against bootstrapped icarus instance
 func setupIcarus(t *testing.T) {
 	logLevel := new(slog.LevelVar)
-	if os.Getenv("ICARUS_LOG_LEVEL") == "debug" {
+	if debug {
 		logLevel.Set(slog.LevelDebug)
 	} else {
 		logLevel.Set(slog.LevelInfo)
@@ -179,6 +183,24 @@ func testInsert(t *testing.T) {
 		assert.Equal(t, put.Key, resp.Kvs[0].Key)
 		assert.Equal(t, put.Value, resp.Kvs[0].Value)
 	})
+	t.Run("huge-key", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(strings.Repeat("a", 480)),
+				Value: []byte(`test-value`),
+			})
+			require.Nil(t, err)
+			assert.NotNil(t, resp)
+		})
+		t.Run("failure", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(strings.Repeat("a", 481)),
+				Value: []byte(`test-value`),
+			})
+			require.NotNil(t, err)
+			assert.Nil(t, resp)
+		})
+	})
 }
 
 func testUpdate(t *testing.T) {
@@ -246,7 +268,7 @@ func testRange(t *testing.T) {
 		Value: []byte(`test-range-value-2`),
 	})
 	require.Nil(t, err, err)
-	rev := resp1.Header.Revision
+	rev1 := resp1.Header.Revision
 	_, err = svcKv.Put(ctx, &internal.PutRequest{
 		Key:   []byte(`test-range-key-2`),
 		Value: []byte(`test-range-value-2`),
@@ -259,7 +281,7 @@ func testRange(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
-		require.Equal(t, 3, len(resp.Kvs))
+		require.Equal(t, 4, len(resp.Kvs))
 	})
 	t.Run("basic", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -276,7 +298,7 @@ func testRange(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-range-key-1`),
 			RangeEnd: []byte(`test-range-key-3`),
-			Revision: rev,
+			Revision: rev1,
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
@@ -575,7 +597,7 @@ func testPatch(t *testing.T) {
 
 func testDelete(t *testing.T) {
 	t.Run("one", func(t *testing.T) {
-		var k = []byte(`test-key-delete-one`)
+		var k = []byte(`test-key-deleteone`)
 		var v = []byte(`test-val`)
 		_, err := svcKv.Put(ctx, &internal.PutRequest{Key: k, Value: v})
 		require.Nil(t, err, err)
@@ -752,6 +774,32 @@ func testTransaction(t *testing.T) {
 		assert.Len(t, resp.Responses, len(req.Failure))
 		assert.Len(t, resp.Responses[1].Response.(*internal.ResponseOp_ResponseRange).ResponseRange.Kvs, 3)
 	})
+	t.Run("huge-key", func(t *testing.T) {
+		_, err = svcKv.Put(ctx, &internal.PutRequest{
+			Key:   []byte(`test-txn-00`),
+			Value: []byte(`-----------`),
+		})
+		require.Nil(t, err, err)
+		req := &internal.TxnRequest{
+			Success: []*internal.RequestOp{
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-huge-01`),
+					Value: []byte(`-----------`),
+				}),
+				putOp(&internal.PutRequest{
+					Key:   []byte(strings.Repeat("a", 490)),
+					Value: []byte(`-----------`),
+				}),
+				putOp(&internal.PutRequest{
+					Key:   []byte(`test-txn-huge-03`),
+					Value: []byte(`-----------`),
+				}),
+			},
+		}
+		resp, err := svcKv.Txn(ctx, req)
+		require.NotNil(t, err)
+		assert.Nil(t, resp)
+	})
 	leaseResp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{TTL: 600})
 	require.Nil(t, err)
 	resp, err := svcKv.Put(ctx, &internal.PutRequest{
@@ -784,66 +832,66 @@ func testTransaction(t *testing.T) {
 	t.Run("value", func(t *testing.T) {
 		resp3, err := valueCompare(internal.Compare_EQUAL, []byte(`b`))
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_EQUAL, []byte(`c`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_GREATER, []byte(`a`))
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_GREATER, []byte(`b`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_GREATER, []byte(`c`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_LESS, []byte(`c`))
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_LESS, []byte(`b`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_LESS, []byte(`a`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_NOT_EQUAL, []byte(`a`))
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = valueCompare(internal.Compare_NOT_EQUAL, []byte(`b`))
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 	})
 	intCompare := func(fn func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error), val int64) {
 		resp3, err := fn(internal.Compare_EQUAL, val)
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_EQUAL, 0)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_GREATER, 0)
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_GREATER, val)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_GREATER, val+1)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_LESS, val+1)
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_LESS, val)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_LESS, 0)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_NOT_EQUAL, 0)
 		require.Nil(t, err, err)
-		require.True(t, resp3.Succeeded)
+		assert.True(t, resp3.Succeeded)
 		resp3, err = fn(internal.Compare_NOT_EQUAL, val)
 		require.Nil(t, err, err)
-		require.False(t, resp3.Succeeded)
+		assert.False(t, resp3.Succeeded)
 	}
 	t.Run("version", func(t *testing.T) {
 		intCompare(func(result internal.Compare_CompareResult, val int64) (*internal.TxnResponse, error) {
@@ -1511,13 +1559,14 @@ func testWatch(t *testing.T) {
 			_, err = svcKv.Put(ctx, req)
 			require.Nil(t, err, err)
 		}
+		t.Log("a1")
 		for j := 0; j < 10; {
 			res = <-s.resChan
+			t.Log("a1b", len(res.Events))
 			assert.True(t, res.WatchId == watchID, res.WatchId)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)
 			require.Greater(t, len(res.Events), 0, res)
-			// t.Log("---", j, i, res.Events[i])
 			for i := range res.Events {
 				assert.Equal(t, internal.Event_PUT, res.Events[i].Type)
 				assert.Nil(t, res.Events[i].PrevKv)
@@ -1525,7 +1574,9 @@ func testWatch(t *testing.T) {
 				j++
 			}
 		}
+		t.Log("a2")
 		sendWatchCancel(watchID)
+		t.Log("a3")
 		res = <-s.resChan
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
@@ -1572,6 +1623,47 @@ func testWatch(t *testing.T) {
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
+	})
+	t.Run("fragment", func(t *testing.T) {
+		randValue := func(len int) []byte {
+			res := make([]byte, len)
+			rand.Read(res)
+			return res
+		}
+		req := &internal.TxnRequest{Success: []*internal.RequestOp{}}
+		for i := range 150 {
+			req.Success = append(req.Success, putOp(&internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-watch-fragment-%03d`, i)),
+				Value: randValue(1e4),
+			}))
+		}
+		resp, err := svcKv.Txn(ctx, req)
+		require.Nil(t, err, err)
+		assert.True(t, resp.Succeeded)
+		rev := resp.Header.Revision
+		withGlobalInt(&ICARUS_RESPONSE_SIZE_MAX, 1<<20, func() {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:           []byte(`test-watch-fragment-000`),
+				RangeEnd:      []byte(`test-watch-fragment-999`),
+				StartRevision: rev,
+			})
+			res := <-s.resChan // WatchCreated
+			require.Greater(t, res.WatchId, int64(0), res)
+			assert.True(t, res.Created)
+			watchID = res.WatchId
+			res = <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			require.Greater(t, len(res.Events), 0, res)
+			require.Equal(t, rev, res.Header.Revision)
+			require.True(t, res.Fragment)
+			require.Equal(t, 99, len(res.Events))
+			res = <-s.resChan
+			assert.True(t, res.WatchId == watchID, res.WatchId)
+			require.Greater(t, len(res.Events), 0, res)
+			require.Equal(t, rev, res.Header.Revision)
+			require.False(t, res.Fragment)
+			require.Equal(t, 51, len(res.Events))
+		})
 	})
 	t.Run("progress", func(t *testing.T) {
 		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"

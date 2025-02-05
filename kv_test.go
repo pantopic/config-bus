@@ -11,18 +11,18 @@ func TestKv(t *testing.T) {
 	assert.Equal(t, uint8(1), KV_FLAG_PATCH)
 	assert.Equal(t, uint8(2), KV_FLAG_COMPRESSED)
 	item := kv{
-		revision: 3,
-		version:  2,
-		created:  1,
-		key:      []byte(`test-key`),
-		val:      []byte(`----------------------------------------`),
+		rev:     newkeyrev(3, 0, false),
+		version: 2,
+		created: 1,
+		key:     []byte(`test-key`),
+		val:     []byte(`----------------------------------------`),
 	}
 	t.Run(`basic`, func(t *testing.T) {
-		buf := item.Bytes(nil, nil)
+		buf := item.Bytes(item.rev.key(), nil)
 		var item2 kv
-		item2, err := item2.FromBytes(item.key, buf, nil, false)
+		item2, err := item2.FromBytes(item.rev.key(), buf, nil, false)
 		require.Nil(t, err)
-		assert.Equal(t, item.revision, item2.revision)
+		assert.Equal(t, item.rev.upper(), item2.rev.upper())
 		assert.Equal(t, item.version, item2.version)
 		assert.Equal(t, item.created, item2.created)
 		assert.Equal(t, item.val, item2.val)
@@ -34,13 +34,13 @@ func TestKv(t *testing.T) {
 			buf := item.Bytes(next, nil)
 			t.Run(`enabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
-					item2, err := (kv{}).FromBytes(item.key, buf, next, false)
+					item2, err := (kv{}).FromBytes(item.rev.key(), buf, next, false)
 					require.Nil(t, err)
 					assert.Equal(t, KV_FLAG_PATCH, item2.flags&KV_FLAG_PATCH)
 					assert.Equal(t, item.val, item2.val)
 				})
 				t.Run(`invalid`, func(t *testing.T) {
-					_, err := (kv{}).FromBytes(item.key, buf, nil, false)
+					_, err := (kv{}).FromBytes(item.rev.key(), buf, nil, false)
 					require.Equal(t, ErrPatchInvalid, err)
 				})
 			})
@@ -49,13 +49,13 @@ func TestKv(t *testing.T) {
 			buf := item.Bytes(next, nil)
 			t.Run(`disabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
-					item2, err := (kv{}).FromBytes(item.key, buf, next, false)
+					item2, err := (kv{}).FromBytes(item.rev.key(), buf, next, false)
 					require.Nil(t, err)
 					assert.Equal(t, uint8(0), item2.flags&KV_FLAG_PATCH)
 					assert.Equal(t, item.val, item2.val)
 				})
 				t.Run(`valid`, func(t *testing.T) {
-					_, err := (kv{}).FromBytes(item.key, buf, nil, false)
+					_, err := (kv{}).FromBytes(item.rev.key(), buf, nil, false)
 					require.Nil(t, err)
 				})
 			})
@@ -67,7 +67,7 @@ func TestKv(t *testing.T) {
 			buf := item.Bytes(next, nil)
 			t.Run(`enabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
-					item2, err := (kv{}).FromBytes(item.key, buf, next, false)
+					item2, err := (kv{}).FromBytes(item.rev.key(), buf, next, false)
 					require.Nil(t, err)
 					assert.Equal(t, KV_FLAG_COMPRESSED, item2.flags&KV_FLAG_COMPRESSED)
 					assert.Equal(t, item.val, item2.val)
@@ -78,7 +78,7 @@ func TestKv(t *testing.T) {
 			buf := item.Bytes(next, nil)
 			t.Run(`disabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
-					item2, err := (kv{}).FromBytes(item.key, buf, next, false)
+					item2, err := (kv{}).FromBytes(item.rev.key(), buf, next, false)
 					require.Nil(t, err)
 					assert.Equal(t, uint8(0), item2.flags&KV_FLAG_COMPRESSED)
 					assert.Equal(t, item.val, item2.val)
@@ -89,6 +89,12 @@ func TestKv(t *testing.T) {
 }
 
 func withGlobal(flag *bool, val bool, fn func()) {
+	prev := *flag
+	*flag = val
+	fn()
+	*flag = prev
+}
+func withGlobalInt(flag *int, val int, fn func()) {
 	prev := *flag
 	*flag = val
 	fn()

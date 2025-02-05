@@ -19,6 +19,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Added
+var (
+	ErrGRPCKeyTooLong = status.New(codes.InvalidArgument, "etcdserver: key too long").Err()
+)
+
 // server-side error
 var (
 	ErrGRPCEmptyKey      = status.New(codes.InvalidArgument, "etcdserver: key is not provided").Err()
@@ -92,6 +97,8 @@ var (
 	ErrGRPCDeadlineExceeded = status.New(codes.DeadlineExceeded, "etcdserver: context deadline exceeded").Err()
 
 	errStringToError = map[string]error{
+		ErrorDesc(ErrGRPCKeyTooLong): ErrGRPCKeyTooLong,
+
 		ErrorDesc(ErrGRPCEmptyKey):      ErrGRPCEmptyKey,
 		ErrorDesc(ErrGRPCKeyNotFound):   ErrGRPCKeyNotFound,
 		ErrorDesc(ErrGRPCValueProvided): ErrGRPCValueProvided,
