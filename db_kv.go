@@ -3,7 +3,6 @@ package icarus
 import (
 	"bytes"
 	"encoding/binary"
-	"math"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 
@@ -11,19 +10,19 @@ import (
 )
 
 type dbKv struct {
-	del db
-	key db
+	evt db
+	rev db
 	val db
 }
 
 func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
-	if db.key.i, err = txn.OpenDBI("key", uint(lmdb.Create|lmdbDupFlags)); err != nil {
+	if db.rev.i, err = txn.OpenDBI("revision", uint(lmdb.Create|lmdbDupFlags)); err != nil {
 		return
 	}
-	if db.del.i, err = txn.OpenDBI("del", uint(lmdb.Create|lmdbDupFlags)); err != nil {
+	if db.evt.i, err = txn.OpenDBI("event", uint(lmdb.Create|lmdbDupFlags)); err != nil {
 		return
 	}
-	db.val.i, err = txn.OpenDBI("val", uint(lmdb.Create))
+	db.val.i, err = txn.OpenDBI("value", uint(lmdb.Create))
 	return
 }
 
@@ -33,7 +32,7 @@ func (db dbKv) put(
 	key, val []byte,
 	ignoreValue, ignoreLease bool,
 ) (prev, next kv, patched bool, err error) {
-	cur, err := txn.OpenCursor(db.key.i)
+	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
@@ -45,18 +44,10 @@ func (db dbKv) put(
 		if krec, err = krec.FromBytes(k, b); err != nil {
 			return
 		}
-		if !krec.rev.isdel() {
-			if v, err = txn.Get(db.val.i, krec.rev.key()); err != nil {
-				return
-			}
-			if prev, err = prev.FromBytes(krec.rev.key(), v, nil, false); err != nil {
-				return
-			}
-		}
 	} else if err != nil && !lmdb.IsNotFound(err) {
 		return
 	}
-	if prev.created == 0 {
+	if krec.rev == 0 || krec.rev.isdel() {
 		next = kv{
 			rev:     newkeyrev(revision, subrev, false),
 			version: 1,
@@ -68,14 +59,20 @@ func (db dbKv) put(
 		krec.key = key
 		krec.rev = next.rev
 		krec.lease = lease
-		if err = txn.Put(db.key.i, key, krec.Bytes(nil), 0); err != nil {
+		if err = txn.Put(db.rev.i, key, krec.Bytes(nil), 0); err != nil {
 			return
 		}
 		err = txn.Put(db.val.i, next.rev.key(), next.Bytes(nil, nil), 0)
 		return
 	}
-	if prev.rev.upper() == revision && !ICARUS_TXN_MULTI_WRITE_ENABLED {
+	if krec.rev.upper() == revision && !ICARUS_TXN_MULTI_WRITE_ENABLED {
 		err = internal.ErrGRPCDuplicateKey
+		return
+	}
+	if v, err = txn.Get(db.val.i, krec.rev.key()); err != nil {
+		return
+	}
+	if prev, err = prev.FromBytes(krec.rev.key(), v, nil, false); err != nil {
 		return
 	}
 	next = kv{
@@ -92,7 +89,7 @@ func (db dbKv) put(
 	if ignoreLease {
 		next.lease = prev.lease
 	}
-	if ICARUS_KV_PATCH_ENABLED {
+	if ICARUS_KV_PATCH_ENABLED && !krec.rev.isdel() {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
 		if patched {
@@ -104,10 +101,16 @@ func (db dbKv) put(
 	krec.key = key
 	krec.rev = next.rev
 	krec.lease = lease
-	if err = txn.Put(db.key.i, key, krec.Bytes(nil), 0); err != nil {
+	if err = txn.Put(db.rev.i, key, krec.Bytes(nil), 0); err != nil {
 		return
 	}
-	err = txn.Put(db.val.i, next.rev.key(), next.Bytes(nil, nil), 0)
+	rk := krec.rev.key()
+	if err = txn.Put(db.val.i, rk, next.Bytes(nil, nil), 0); err != nil {
+		return
+	}
+	if err = txn.Put(db.evt.i, rk, db.evt.addChecksum(rk, key), 0); err != nil {
+		return
+	}
 	return
 }
 
@@ -121,7 +124,7 @@ func (db dbKv) getRange(
 	var next []keyrev
 	var item kv
 	var rev keyrev
-	cur, err := txn.OpenCursor(db.key.i)
+	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
@@ -212,7 +215,7 @@ func (db dbKv) getRange(
 func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte) (items []keyrecord, count int64, err error) {
 	var prev keyrecord
 	var tombstone keyrev
-	cur, err := txn.OpenCursor(db.key.i)
+	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
@@ -240,11 +243,11 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte)
 				return
 			}
 			tkrec := keyrecord{rev: tombstone, key: k}
-			if err = txn.Put(db.key.i, k, tkrec.Bytes(nil), 0); err != nil {
+			if err = txn.Put(db.rev.i, k, tkrec.Bytes(nil), 0); err != nil {
 				return
 			}
 			tk := tombstone.key()
-			if err = txn.Put(db.del.i, tk, db.del.addChecksum(tk, k), 0); err != nil {
+			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, k), 0); err != nil {
 				return
 			}
 			items = append(items, prev)
@@ -264,7 +267,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev uint64, key, end []byte)
 func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev uint64, keys [][]byte) (err error) {
 	var prev, tombstone keyrecord
 	var k, v []byte
-	cur, err := txn.OpenCursor(db.key.i)
+	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
@@ -287,11 +290,11 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev uint64, keys [][]byte) (
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
 			tombstone = keyrecord{key: key, rev: newkeyrev(index, subrev, true)}
-			if err = txn.Put(db.key.i, k, tombstone.Bytes(nil), 0); err != nil {
+			if err = txn.Put(db.rev.i, k, tombstone.Bytes(nil), 0); err != nil {
 				return
 			}
 			tk := tombstone.rev.key()
-			if err = txn.Put(db.del.i, tk, db.del.addChecksum(tk, key), 0); err != nil {
+			if err = txn.Put(db.evt.i, tk, db.evt.addChecksum(tk, key), 0); err != nil {
 				return
 			}
 		}
@@ -301,116 +304,66 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev uint64, keys [][]byte) (
 
 func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 	var buf []byte
-	var rec1 keyrecord
-	var rev1, rev2 keyrev
-	curKey, err := txn.OpenCursor(db.key.i)
+	var rev keyrev
+	curRev, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
-	defer curKey.Close()
-	curVal, err := txn.OpenCursor(db.val.i)
+	defer curRev.Close()
+	curEvt, err := txn.OpenCursor(db.evt.i)
 	if err != nil {
 		return
 	}
-	defer curVal.Close()
-	k1, v1, err1 := curVal.Get(nil, nil, lmdb.Next)
-	if err1 != nil && !lmdb.IsNotFound(err1) {
-		err = err1
+	defer curEvt.Close()
+	k, v, err := curEvt.Get(nil, nil, lmdb.Next)
+	if err != nil && !lmdb.IsNotFound(err) {
 		return
 	}
-	if rec1, err = rec1.FromBytes(k1, v1); err != nil {
-		return
-	}
-	rev1 = rec1.rev
-	curDel, err := txn.OpenCursor(db.del.i)
-	if err != nil {
-		return
-	}
-	defer curDel.Close()
-	k2, v2, err2 := curDel.Get(nil, nil, lmdb.Next)
-	if err2 != nil && !lmdb.IsNotFound(err2) {
-		err = err2
-		return
-	}
-	if rev2, err = rev1.FromKey(k2, v2); err != nil {
+	if rev, err = rev.FromKey(k, v); err != nil {
 		return
 	}
 	var keys = map[string]keyrev{}
-	var keylen uint64
 	var key []byte
 	var done bool
 	for !done {
-		for !lmdb.IsNotFound(err1) && !lmdb.IsNotFound(err2) {
-			if (err1 != nil && !lmdb.IsNotFound(err1)) || (err2 != nil && !lmdb.IsNotFound(err2)) {
+		for !lmdb.IsNotFound(err) {
+			if err != nil {
 				done = true
 				break
 			}
-			if max > 0 && rev1.upper() >= max && rev2.upper() >= max {
+			if max > 0 && rev.upper() >= max {
 				done = true
 				break
 			}
 			if len(keys) >= limitCompactionMaxKeys {
 				break
 			}
-			if rev1 < rev2 {
-				index = rev1.upper()
-				if err = curVal.Del(lmdb.Current); err != nil {
-					return
-				}
-				buf, err = db.key.trimChecksum(k1, v1)
-				if err != nil {
-					return
-				}
-				r := bytes.NewBuffer(buf)
-				keylen, err = binary.ReadUvarint(r)
-				if err != nil {
-					return
-				}
-				key = r.Next(int(keylen))
-				if _, ok := keys[string(key)]; !ok {
-					keys[string(key)] = rev1
-				}
-				k1, v1, err1 = curVal.Get(nil, nil, lmdb.NextDup)
-				if lmdb.IsNotFound(err1) {
-					k1, v1, err1 = curVal.Get(nil, nil, lmdb.Next)
-				}
-				if err1 == nil {
-					rec1, err1 = rec1.FromBytes(k1, v1)
-					rev1 = rec1.rev
-				} else if lmdb.IsNotFound(err1) {
-					rev1 = math.MaxUint64
-				}
-			} else {
-				index = rev2.upper()
-				if err = curDel.Del(lmdb.Current); err != nil {
-					return
-				}
-				key, err = db.key.trimChecksum(k2, v2)
-				if err != nil {
-					return
-				}
-				if err = txn.Del(db.key.i, key, rev2.Bytes(key, nil)); err != nil {
-					return
-				}
-				k2, v2, err2 = curDel.Get(nil, nil, lmdb.NextDup)
-				if lmdb.IsNotFound(err2) {
-					k2, v2, err2 = curDel.Get(nil, nil, lmdb.Next)
-				}
-				if err2 == nil {
-					rev2, err2 = rev2.FromBytes(k2, v2)
-				} else if lmdb.IsNotFound(err2) {
-					rev2 = math.MaxUint64
-				}
+			index = rev.upper()
+			buf, err = db.rev.trimChecksum(k, v)
+			if err != nil {
+				return
+			}
+			_, n := binary.Uvarint(buf)
+			key = buf[n:]
+			if _, ok := keys[string(key)]; !ok {
+				keys[string(key)] = rev
+			}
+			if err = curEvt.Del(lmdb.Current); err != nil {
+				return
+			}
+			k, v, err = curEvt.Get(nil, nil, lmdb.NextDup)
+			if lmdb.IsNotFound(err) {
+				k, v, err = curEvt.Get(nil, nil, lmdb.Next)
+			}
+			if err == nil {
+				rev, err = rev.FromBytes(k, v)
 			}
 		}
-		if lmdb.IsNotFound(err) {
-			err = nil
-		}
-		var r keyrecord
+		var rec keyrecord
 		var k, v []byte
 		var hasNewer bool
 		for key, rev := range keys {
-			k, v, err = curKey.Get([]byte(key), nil, lmdb.SetRange)
+			k, v, err = curRev.Get([]byte(key), nil, lmdb.SetRange)
 			for !lmdb.IsNotFound(err) {
 				if err != nil {
 					return
@@ -418,37 +371,29 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 				if !bytes.Equal(k, []byte(key)) {
 					break
 				}
-				if r, err = r.FromBytes(k, v); err != nil {
+				if rec, err = rec.FromBytes(k, v); err != nil {
 					return
 				}
-				if r.rev > rev {
+				if rec.rev >= rev {
 					hasNewer = true
 					goto next
 				}
-				if r.rev == rev && !r.rev.isdel() {
-					hasNewer = true
-					goto next
-				}
-				if r.rev.isdel() {
-					if err = curKey.Del(lmdb.Current); err != nil {
+				if hasNewer && !rec.rev.isdel() {
+					if err = txn.Del(db.val.i, rec.rev.key(), nil); err != nil {
 						return
 					}
-					hasNewer = true
-					goto next
 				}
-				if hasNewer {
-					if err = curKey.Del(lmdb.Current); err != nil {
-						return
-					}
-					if err = txn.Del(db.val.i, r.rev.key(), nil); err != nil {
-						return
-					}
-					hasNewer = true
-					goto next
+				if err = curRev.Del(lmdb.Current); err != nil {
+					return
 				}
+				hasNewer = true
+				goto next
 			next:
-				k, v, err = curKey.Get(nil, nil, lmdb.NextDup)
+				k, v, err = curRev.Get(nil, nil, lmdb.NextDup)
 			}
+		}
+		if lmdb.IsNotFound(err) {
+			err = nil
 		}
 		if !done {
 			clear(keys)
@@ -463,13 +408,12 @@ func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 }
 
 func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool) (item, prev kv, err error) {
-	cur, err := txn.OpenCursor(db.key.i)
+	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
 	}
 	defer cur.Close()
 	var krec keyrecord
-	var prec keyrecord
 	var next []keyrev
 	k, v, err := cur.Get(key, nil, lmdb.SetRange)
 	if lmdb.IsNotFound(err) {
@@ -508,18 +452,18 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 	if krec.rev.isdel() {
 		return
 	}
-	var p []byte
 	next = append(next, krec.rev)
 	for _, rev := range next {
-		if p, err = txn.Get(db.val.i, rev.key()); err != nil {
+		if v, err = txn.Get(db.val.i, rev.key()); err != nil {
 			return
 		}
-		item, err = item.FromBytes(rev.key(), p, item.val, false)
+		item, err = item.FromBytes(rev.key(), v, item.val, false)
 		if err != nil {
 			return
 		}
 	}
 	if withPrev {
+		var prec keyrecord
 		k, v, err = cur.Get(nil, nil, lmdb.NextDup)
 		if lmdb.IsNotFound(err) {
 			err = nil
@@ -531,10 +475,10 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 		if prec, err = prec.FromBytes(k, v); err != nil {
 			return
 		}
-		if p, err = txn.Get(db.val.i, prec.rev.key()); err != nil {
+		if v, err = txn.Get(db.val.i, prec.rev.key()); err != nil {
 			return
 		}
-		prev, err = prev.FromBytes(prec.rev.key(), p, item.val, false)
+		prev, err = prev.FromBytes(prec.rev.key(), v, item.val, false)
 	}
 	return
 }

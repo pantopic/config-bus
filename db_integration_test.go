@@ -93,15 +93,15 @@ func TestDb(t *testing.T) {
 		})
 	})
 	t.Run("bad-dbi", func(t *testing.T) {
-		i := sm.dbKv.key.i
-		defer func() { sm.dbKv.key.i = i }()
-		sm.dbKv.key.i = 0
+		i := sm.dbKv.rev.i
+		defer func() { sm.dbKv.rev.i = i }()
+		sm.dbKv.rev.i = 0
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
 		})
 		assert.NotNil(t, err)
-		sm.dbKv.key.i = 100000
+		sm.dbKv.rev.i = 100000
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 			_, _, _, err = sm.dbKv.put(txn, 0, 0, 0, []byte(`test-key`), []byte(`test-val`), false, false)
 			return
