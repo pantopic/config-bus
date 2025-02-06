@@ -69,7 +69,7 @@ func BenchmarkTestKv(b *testing.B) {
 			var item2 kv
 			var buf = item.Bytes(nil, nil)
 			for range b.N {
-				item2, err = item2.FromBytes(item.key, buf, nil, false)
+				item2, err = item2.FromBytes(item.rev.key(), buf, nil, false)
 			}
 			b.SetBytes(int64(len(item2.val)))
 			if err != nil {
@@ -86,7 +86,7 @@ func BenchmarkTestKv(b *testing.B) {
 				})
 			})
 			for range b.N {
-				item2, err = item2.FromBytes(item.key, buf, nextPatch, false)
+				item2, err = item2.FromBytes(item.rev.key(), buf, nextPatch, false)
 			}
 			b.SetBytes(int64(len(item2.val)))
 			if err != nil {
@@ -103,7 +103,7 @@ func BenchmarkTestKv(b *testing.B) {
 				})
 			})
 			for range b.N {
-				item2, err = item2.FromBytes(item.key, buf, nextCompress, false)
+				item2, err = item2.FromBytes(item.rev.key(), buf, nextCompress, false)
 			}
 			b.SetBytes(int64(len(item2.val)))
 			if err != nil {

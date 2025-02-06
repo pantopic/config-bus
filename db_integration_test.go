@@ -23,6 +23,7 @@ var (
 )
 
 func init() {
+	var err error
 	if err = os.RemoveAll(dir); err != nil {
 		panic(err)
 	}
@@ -109,6 +110,7 @@ func TestDb(t *testing.T) {
 }
 
 func TestDbKv(t *testing.T) {
+	var err error
 	t.Run("getRev", func(t *testing.T) {
 		err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 			items := []kv{

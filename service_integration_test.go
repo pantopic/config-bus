@@ -53,7 +53,7 @@ func TestService(t *testing.T) {
 	// TODO - Advance epoch to test lease TTL response
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-	// TODO - Progress notify, drive watches async from kv_events
+	// TODO - Progress notify, drive watches async from events
 	// TODO - Test message size boundary (txn) w/ Fragment
 	// TODO - Watch merge w/ multiplex, auto reconnect
 	// TODO - Discover and use correct cancel_reason
@@ -61,8 +61,7 @@ func TestService(t *testing.T) {
 
 	// Add leader tick in controller to make epoch work
 	// - Incr epoch
-	// - Sweep leases and keys
-	// - Quarantine dead leases w/ amortized cleanup
+	// - Sweep leases
 
 	// Status
 	// Defragment
@@ -116,7 +115,7 @@ func setupIcarus(t *testing.T) {
 	var shard zongzi.Shard
 	for i := range len(agents) {
 		dir := fmt.Sprintf("%s/%d", dir, i)
-		if agents[i], err = zongzi.NewAgent("icarus", peers,
+		if agents[i], err = zongzi.NewAgent("icarus000", peers,
 			zongzi.WithRaftDir(dir+"/raft"),
 			zongzi.WithWALDir(dir+"/wal"),
 			zongzi.WithGossipAddress(fmt.Sprintf(host+":%d", port+(i*10)+1)),
@@ -126,17 +125,11 @@ func setupIcarus(t *testing.T) {
 			panic(err)
 		}
 		agents[i].StateMachineRegister(Uri, NewStateMachineFactory(log, dir+"/data"))
-		go func(i int) {
+		go func() {
 			if err = agents[i].Start(ctx); err != nil {
 				panic(err)
 			}
-			shard, _, err = agents[i].ShardCreate(ctx, Uri,
-				zongzi.WithName("icarus-standalone"),
-				zongzi.WithPlacementMembers(3))
-			if err != nil {
-				panic(err)
-			}
-		}(i)
+		}()
 	}
 	// 10 seconds to start the cluster.
 	require.True(t, await(10, 100, func() bool {
@@ -147,6 +140,13 @@ func setupIcarus(t *testing.T) {
 		}
 		return true
 	}), `%#v`, agents)
+	// Start shard
+	shard, _, err = agents[0].ShardCreate(ctx, Uri,
+		zongzi.WithName("standalone-001"),
+		zongzi.WithPlacementMembers(3))
+	if err != nil {
+		panic(err)
+	}
 	// 5 seconds for shard to have active leader
 	require.True(t, await(10, 100, func() bool {
 		agents[0].State(ctx, func(s *zongzi.State) {

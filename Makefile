@@ -11,7 +11,7 @@ parity:
 	@ICARUS_PARITY_CHECK=true go test -v
 
 bench:
-	@go test -bench=.
+	@go test -bench=. -run=_ -v
 
 unit:
 	@go test ./... -tags unit -v
@@ -26,4 +26,4 @@ gen:
 		--go-grpc_out=internal --go-grpc_opt=paths=source_relative -I internal
 
 cloc:
-	@cloc . --exclude-dir=_example,_dist --exclude-ext=pb.go
+	@cloc . --exclude-dir=_example,_dist,internal --exclude-ext=pb.go
