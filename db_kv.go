@@ -324,8 +324,6 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]
 }
 
 func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
-	var buf []byte
-	var rev keyrev
 	curRev, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
@@ -340,6 +338,7 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 	if err != nil && !lmdb.IsNotFound(err) {
 		return
 	}
+	var rev keyrev
 	if rev, err = rev.FromKey(k, v); err != nil {
 		return
 	}
@@ -360,12 +359,12 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 				break
 			}
 			index = rev.upper()
-			buf, err = db.rev.trimChecksum(k, v)
+			v, err = db.rev.trimChecksum(k, v)
 			if err != nil {
 				return
 			}
-			_, n := binary.Uvarint(buf)
-			key = buf[n:]
+			_, n := binary.Uvarint(v)
+			key = v[n:]
 			if _, ok := keys[string(key)]; !ok {
 				keys[string(key)] = rev
 			}

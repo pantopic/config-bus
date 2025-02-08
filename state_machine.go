@@ -259,7 +259,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				affected, val, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, req)
+				affected, val, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, uint64(req.ID))
 				if err != nil {
 					return err
 				}
@@ -290,6 +290,65 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
+			case CMD_INTERNAL_TICK:
+				var req = &internal.TickRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				term, err := sm.dbMeta.getTerm(txn)
+				if err != nil {
+					return err
+				}
+				if term > req.Term {
+					entries[i].Result.Data = []byte(ErrTermExpired.Error())
+					continue
+				}
+				epoch++
+				if err = sm.dbMeta.setEpoch(txn, epoch); err != nil {
+					return err
+				}
+				// TODO - Move lease expiration scan to controller (async) and issue autorevokes separately
+				for id := range sm.dbLeaseExp.scan(txn, epoch) {
+					affected, _, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, id)
+					if err != nil {
+						return err
+					}
+					if len(affected) > 0 {
+						newRev = ent.Index
+						keys = append(keys, affected...)
+					}
+					sm.log.Info("Lease Expired", "term", term, "epoch", epoch, "id", id, "keys", len(affected))
+				}
+				entries[i].Result.Data, err = proto.Marshal(&internal.TickResponse{
+					Epoch: epoch,
+				})
+				if err != nil {
+					return err
+				}
+				entries[i].Result.Value = ent.Index
+			case CMD_INTERNAL_TERM:
+				var req = &internal.TermRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				term, err := sm.dbMeta.getTerm(txn)
+				if err != nil {
+					return err
+				}
+				if term > req.Term {
+					entries[i].Result.Data = []byte(ErrTermExpired.Error())
+					continue
+				}
+				if err = sm.dbMeta.setTerm(txn, req.Term); err != nil {
+					return err
+				}
+				entries[i].Result.Data, err = proto.Marshal(&internal.TermResponse{})
+				if err != nil {
+					return err
+				}
+				entries[i].Result.Value = ent.Index
 			}
 		}
 		if err = sm.dbMeta.setIndex(txn, entries[len(entries)-1].Index); err != nil {
@@ -693,11 +752,10 @@ func (sm *stateMachine) cmdLeaseGrant(
 }
 
 func (sm *stateMachine) cmdLeaseRevoke(
-	txn *lmdb.Txn, index, epoch uint64,
-	req *internal.LeaseRevokeRequest,
+	txn *lmdb.Txn, index, epoch, id uint64,
 ) (keys [][]byte, val uint64, err error) {
 	var item lease
-	if item, err = sm.dbLease.get(txn, uint64(req.ID)); err != nil {
+	if item, err = sm.dbLease.get(txn, uint64(id)); err != nil {
 		return
 	}
 	if item.id == 0 {

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package etcdserverpb;
+
+option go_package = "github.com/logbn/icarus/internal";
+
+message TickRequest {
+  uint64 term = 1;
+}
+message TickResponse {
+  uint64 epoch = 1;
+}
+
+message TermRequest {
+  uint64 term = 1;
+}
+message TermResponse {
+}

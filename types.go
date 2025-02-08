@@ -18,6 +18,8 @@ const (
 	CMD_LEASE_GRANT
 	CMD_LEASE_REVOKE
 	CMD_LEASE_KEEP_ALIVE
+	CMD_INTERNAL_TICK
+	CMD_INTERNAL_TERM
 
 	QUERY_KV_RANGE byte = iota
 	QUERY_LEASE_LEASES
@@ -100,6 +102,7 @@ var (
 	ErrKeyMissing      = fmt.Errorf(`Key missing`)
 	ErrLeaseKeyInvalid = fmt.Errorf(`Lease key invalid`)
 	ErrNotFound        = fmt.Errorf(`Not found`)
+	ErrTermExpired     = fmt.Errorf(`Term expired`)
 )
 
 type (
