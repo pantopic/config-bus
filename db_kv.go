@@ -343,7 +343,6 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 		return
 	}
 	var keys = map[string]keyrev{}
-	var key []byte
 	var done bool
 	for !done {
 		for !lmdb.IsNotFound(err) {
@@ -364,10 +363,7 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 				return
 			}
 			_, n := binary.Uvarint(v)
-			key = v[n:]
-			if _, ok := keys[string(key)]; !ok {
-				keys[string(key)] = rev
-			}
+			keys[string(v[n:])] = rev
 			if err = curEvt.Del(lmdb.Current); err != nil {
 				return
 			}
@@ -376,7 +372,7 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 				k, v, err = curEvt.Get(nil, nil, lmdb.Next)
 			}
 			if err == nil {
-				rev, err = rev.FromBytes(k, v)
+				rev, err = rev.FromKey(k, v)
 			}
 		}
 		var rec keyrecord
@@ -411,6 +407,7 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 			next:
 				k, v, err = curRev.Get(nil, nil, lmdb.NextDup)
 			}
+			hasNewer = false
 		}
 		if lmdb.IsNotFound(err) {
 			err = nil

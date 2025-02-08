@@ -657,64 +657,109 @@ func testDelete(t *testing.T) {
 
 func testCompact(t *testing.T) {
 	var revs []int64
-	for i := range 10 {
-		resp, err := svcKv.Put(ctx, &internal.PutRequest{
-			Key:   []byte(fmt.Sprintf(`test-key-compact-%02d`, i)),
-			Value: []byte(`-------------------`),
+	t.Run("delete", func(t *testing.T) {
+		// Put 10 test keys
+		for i := range 10 {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-key-compact-%02d`, i)),
+				Value: []byte(`-------------------`),
+			})
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+		}
+		// Ensure they can be fetched by revision
+		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
+			Revision: revs[1],
 		})
 		require.Nil(t, err, err)
-		revs = append(revs, resp.Header.Revision)
-	}
-	resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
-		Revision: revs[1],
-	})
-	require.Nil(t, err, err)
-	assert.Equal(t, 2, len(resp.Kvs))
-	for i := range 10 {
-		resp, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
-			Key: []byte(fmt.Sprintf(`test-key-compact-%02d`, i)),
+		assert.Equal(t, 2, len(resp.Kvs))
+		// Delete all test keys
+		for i := range 10 {
+			resp, err := svcKv.DeleteRange(ctx, &internal.DeleteRangeRequest{
+				Key: []byte(fmt.Sprintf(`test-key-compact-%02d`, i)),
+			})
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+		}
+		// Ensure range returns 0
+		resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
 		})
 		require.Nil(t, err, err)
-		revs = append(revs, resp.Header.Revision)
-	}
-	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
+		assert.Equal(t, 0, len(resp.Kvs))
+		// Ensure they can still be fetched by revision
+		resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
+			Revision: revs[10],
+		})
+		require.Nil(t, err, err)
+		assert.Equal(t, 9, len(resp.Kvs))
+		// Compact at specific revision
+		_, err = svcKv.Compact(ctx, &internal.CompactionRequest{
+			Revision: revs[10],
+		})
+		require.Nil(t, err, err)
+		// Ensure deleted keys are still available at compacted revision
+		resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
+			Revision: revs[10],
+		})
+		require.Nil(t, err, err)
+		assert.Equal(t, 9, len(resp2.Kvs))
+		// Ensure querying compacted revision is not possible
+		resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
+			Revision: revs[9],
+		})
+		require.NotNil(t, err, err)
+		// Ensure ranging at future revision is not possible
+		resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-00`),
+			RangeEnd: []byte(`test-key-compact-10`),
+			Revision: 1e10,
+		})
+		require.NotNil(t, err, err)
 	})
-	require.Nil(t, err, err)
-	assert.Equal(t, 0, len(resp.Kvs))
-	resp, err = svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
-		Revision: revs[10],
+	revs = revs[:0]
+	t.Run("update", func(t *testing.T) {
+		// Insert 10 test keys
+		for i := range 10 {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-key-compact-%02d`, i+10)),
+				Value: []byte(`test-value-1`),
+			})
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+		}
+		// Udpate 10 test keys
+		for i := range 10 {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(fmt.Sprintf(`test-key-compact-%02d`, i+10)),
+				Value: []byte(`test-value-2`),
+			})
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+		}
+		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-key-compact-10`),
+			RangeEnd: []byte(`test-key-compact-20`),
+			Revision: revs[10],
+		})
+		require.Nil(t, err, err)
+		assert.Equal(t, "test-value-2", string(resp.Kvs[0].Value))
+		assert.Equal(t, "test-value-1", string(resp.Kvs[1].Value))
+		// Compact update
+		_, err = svcKv.Compact(ctx, &internal.CompactionRequest{
+			Revision: revs[15],
+		})
+		require.Nil(t, err, err)
 	})
-	require.Nil(t, err, err)
-	assert.Equal(t, 9, len(resp.Kvs))
-	_, err = svcKv.Compact(ctx, &internal.CompactionRequest{
-		Revision: revs[10],
-	})
-	require.Nil(t, err, err)
-	resp2, err := svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
-		Revision: revs[10],
-	})
-	require.Nil(t, err, err)
-	assert.Equal(t, 9, len(resp2.Kvs))
-	resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
-		Revision: revs[9],
-	})
-	require.NotNil(t, err, err)
-	resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
-		Key:      []byte(`test-key-compact-00`),
-		RangeEnd: []byte(`test-key-compact-10`),
-		Revision: 1e10,
-	})
-	require.NotNil(t, err, err)
 }
 
 func testTransaction(t *testing.T) {
@@ -1559,10 +1604,8 @@ func testWatch(t *testing.T) {
 			_, err = svcKv.Put(ctx, req)
 			require.Nil(t, err, err)
 		}
-		t.Log("a1")
 		for j := 0; j < 10; {
 			res = <-s.resChan
-			t.Log("a1b", len(res.Events))
 			assert.True(t, res.WatchId == watchID, res.WatchId)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)
@@ -1574,9 +1617,7 @@ func testWatch(t *testing.T) {
 				j++
 			}
 		}
-		t.Log("a2")
 		sendWatchCancel(watchID)
-		t.Log("a3")
 		res = <-s.resChan
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
