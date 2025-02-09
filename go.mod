@@ -7,7 +7,6 @@ require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang/snappy v0.0.4
-	github.com/jonboulle/clockwork v0.5.0
 	github.com/logbn/intervalradix v0.1.0
 	github.com/logbn/zongzi v0.0.19
 	github.com/stretchr/testify v1.10.0
