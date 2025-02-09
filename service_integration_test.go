@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/logbn/zongzi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,7 @@ var (
 	ctx    = context.Background()
 	parity = os.Getenv("ICARUS_PARITY_CHECK") == "true"
 	debug  = os.Getenv("ICARUS_LOG_LEVEL") == "debug"
+	wait   func(time.Duration)
 
 	err      error
 	svcKv    internal.KVServer
@@ -50,7 +52,6 @@ func TestService(t *testing.T) {
 	t.Run("lease-revoke", testLeaseRevoke)
 	// TODO - Keep Alive keeps itself alive
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
-	// TODO - Advance epoch to test lease TTL response
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
 	// TODO - Progress notify, drive watches async from events
@@ -58,10 +59,7 @@ func TestService(t *testing.T) {
 	// TODO - Watch merge w/ multiplex, auto reconnect
 	// TODO - Discover and use correct cancel_reason
 	t.Run("watch", testWatch)
-
-	// Add leader tick in controller to make epoch work
-	// - Incr epoch
-	// - Sweep leases
+	t.Run("controller", testController)
 
 	// Status
 	// Defragment
@@ -77,6 +75,9 @@ func setupParity(t *testing.T) {
 	conn, err := grpc.NewClient("127.0.0.1:2379", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
+	}
+	wait = func(t time.Duration) {
+		time.Sleep(t)
 	}
 	svcKv = newParityKvService(conn)
 	svcLease = newParityLeaseService(conn)
@@ -112,8 +113,18 @@ func setupIcarus(t *testing.T) {
 	if err = os.RemoveAll(dir); err != nil {
 		panic(err)
 	}
+	clk := clock.NewMock()
+	wait = func(t time.Duration) {
+		for t > 0 {
+			clk.Add(time.Second)
+			t -= time.Second
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	var ctrl []*controller
 	var shard zongzi.Shard
 	for i := range len(agents) {
+		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%d", dir, i)
 		if agents[i], err = zongzi.NewAgent("icarus000", peers,
 			zongzi.WithRaftDir(dir+"/raft"),
@@ -121,6 +132,7 @@ func setupIcarus(t *testing.T) {
 			zongzi.WithGossipAddress(fmt.Sprintf(host+":%d", port+(i*10)+1)),
 			zongzi.WithRaftAddress(fmt.Sprintf(host+":%d", port+(i*10)+2)),
 			zongzi.WithApiAddress(fmt.Sprintf(host+":%d", port+(i*10)+3)),
+			zongzi.WithRaftEventListener(ctrl[i]),
 		); err != nil {
 			panic(err)
 		}
@@ -156,9 +168,15 @@ func setupIcarus(t *testing.T) {
 		})
 		return shard.Leader > 0
 	}))
-	svcKv = NewServiceKv(agents[0].Client(shard.ID))
-	svcLease = NewServiceLease(agents[0].Client(shard.ID))
-	svcWatch = NewServiceWatch(agents[0].Client(shard.ID))
+	for i := range agents {
+		if err = ctrl[i].Start(agents[i], shard); err != nil {
+			panic(err)
+		}
+	}
+	client := agents[0].Client(shard.ID)
+	svcKv = NewServiceKv(client)
+	svcLease = NewServiceLease(client)
+	svcWatch = NewServiceWatch(client)
 }
 
 func testInsert(t *testing.T) {
@@ -1383,6 +1401,32 @@ func testLeaseTimeToLive(t *testing.T) {
 	})
 }
 
+func testController(t *testing.T) {
+	t.Run("lease-expire", func(t *testing.T) {
+		resp2, err := svcLease.LeaseLeases(ctx, &internal.LeaseLeasesRequest{})
+		require.Nil(t, err, err)
+		for _, lease := range resp2.Leases {
+			_, err = svcLease.LeaseRevoke(ctx, &internal.LeaseRevokeRequest{
+				ID: lease.ID,
+			})
+			require.Nil(t, err, err)
+		}
+		resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{TTL: 3})
+		require.Nil(t, err, err)
+		leaseID := resp.ID
+		resp2, err = svcLease.LeaseLeases(ctx, &internal.LeaseLeasesRequest{})
+		require.Nil(t, err, err)
+		require.NotNil(t, resp2)
+		require.Equal(t, 1, len(resp2.Leases))
+		assert.Equal(t, leaseID, resp2.Leases[0].ID)
+		wait(3 * time.Second)
+		resp2, err = svcLease.LeaseLeases(ctx, &internal.LeaseLeasesRequest{})
+		require.Nil(t, err, err)
+		require.NotNil(t, resp2)
+		assert.Equal(t, 0, len(resp2.Leases))
+	})
+}
+
 func testWatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := newMockWatchServer(ctx)
@@ -1410,17 +1454,29 @@ func testWatch(t *testing.T) {
 	}
 	var watchID int64
 	t.Run("create", func(t *testing.T) {
-		sendWatchCreate(&internal.WatchCreateRequest{
-			Key:      []byte(`test-watch-000`),
-			RangeEnd: []byte(`test-watch-100`),
+		t.Run("new", func(t *testing.T) {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:      []byte(`test-watch-000`),
+				RangeEnd: []byte(`test-watch-100`),
+			})
+			res := <-s.resChan
+			require.Equal(t, int64(1), res.WatchId, res)
+			assert.True(t, res.Created)
+			assert.False(t, res.Canceled)
+			assert.Len(t, res.Events, 0)
+			assert.EqualValues(t, 0, res.CompactRevision)
+			watchID = res.WatchId
 		})
-		res := <-s.resChan
-		require.Equal(t, int64(0), res.WatchId, res)
-		assert.True(t, res.Created)
-		assert.False(t, res.Canceled)
-		assert.Len(t, res.Events, 0)
-		assert.EqualValues(t, 0, res.CompactRevision)
-		watchID = res.WatchId
+		t.Run("existing", func(t *testing.T) {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:      []byte(`test-watch-000`),
+				RangeEnd: []byte(`test-watch-100`),
+				WatchId:  watchID,
+			})
+			res := <-s.resChan
+			require.Equal(t, watchID, res.WatchId, res)
+			assert.False(t, res.Created)
+		})
 	})
 	t.Run("receive", func(t *testing.T) {
 		t.Run("put", func(t *testing.T) {
@@ -1442,12 +1498,32 @@ func testWatch(t *testing.T) {
 			assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
 		})
 	})
-	t.Run("cancel", func(t *testing.T) {
-		sendWatchCancel(watchID)
+	t.Run("progress", func(t *testing.T) {
+		s.reqChan <- &internal.WatchRequest{
+			RequestUnion: &internal.WatchRequest_ProgressRequest{
+				ProgressRequest: &internal.WatchProgressRequest{},
+			},
+		}
 		res := <-s.resChan
-		require.Equal(t, watchID, res.WatchId)
+		require.EqualValues(t, -1, res.WatchId)
 		require.False(t, res.Created)
-		require.True(t, res.Canceled)
+		require.False(t, res.Canceled)
+	})
+	t.Run("cancel", func(t *testing.T) {
+		t.Run("existing", func(t *testing.T) {
+			sendWatchCancel(watchID)
+			res := <-s.resChan
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
+		})
+		t.Run("missing", func(t *testing.T) {
+			sendWatchCancel(watchID)
+			res := <-s.resChan
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.False(t, res.Canceled)
+		})
 	})
 	t.Run("multiple", func(t *testing.T) {
 		sendWatchCreate(&internal.WatchCreateRequest{
@@ -1705,9 +1781,6 @@ func testWatch(t *testing.T) {
 			require.False(t, res.Fragment)
 			require.Equal(t, 51, len(res.Events))
 		})
-	})
-	t.Run("progress", func(t *testing.T) {
-		// Connection level progress notifications return watchId: -1 and a single cursor when all watches are "synced"
 	})
 	cancel()
 	assert.True(t, await(1, 100, func() bool {

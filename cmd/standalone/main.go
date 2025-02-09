@@ -20,10 +20,10 @@ import (
 
 func main() {
 	zongzi.SetLogLevel(zongzi.LogLevelWarning)
-	ctx := context.Background()
-	cfg := getConfig()
-	log := slog.Default()
-	ctrl := icarus.NewController(ctx, log)
+	var cfg = getConfig()
+	var ctx = context.Background()
+	var log = slog.Default()
+	var ctrl = icarus.NewController(ctx, log)
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithRaftDir(cfg.Dir+"/raft"),
 		zongzi.WithWALDir(cfg.Dir+"/wal"),
@@ -31,11 +31,12 @@ func main() {
 		zongzi.WithRaftAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
 		zongzi.WithApiAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
 		zongzi.WithHostMemoryLimit(zongzi.HostMemory256),
-		zongzi.WithRaftEventListener(ctrl))
+		zongzi.WithRaftEventListener(ctrl),
+	)
 	if err != nil {
 		panic(err)
 	}
-	grpcServer := grpc.NewServer()
+	var grpcServer = grpc.NewServer()
 	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, cfg.Dir+"/data"))
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
@@ -46,10 +47,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
-	if err = ctrl.Start(agent, shard, client); err != nil {
+	if err = ctrl.Start(agent, shard); err != nil {
 		panic(err)
 	}
+	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 	internal.RegisterKVServer(grpcServer, icarus.NewServiceKv(client))
 	internal.RegisterLeaseServer(grpcServer, icarus.NewServiceLease(client))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))

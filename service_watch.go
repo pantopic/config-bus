@@ -37,7 +37,7 @@ func (s *serviceWatch) Watch(
 		watchId++
 	}
 	var mu sync.RWMutex
-	watches := make(map[int64]func())
+	watches := make(map[int64]*watch)
 	for {
 		req, err := server.Recv()
 		if err == io.EOF {
@@ -52,11 +52,11 @@ func (s *serviceWatch) Watch(
 			if req.WatchId > 0 {
 				mu.RLock()
 				if _, ok := watches[req.WatchId]; ok {
-					slog.Info("Watch already exists", "id", req.WatchId)
+					slog.Info("Ignoring request to create existing watch", "id", req.WatchId)
 					if err = s.watchResp(server, &internal.WatchResponse{
 						WatchId: req.WatchId,
 					}); err != nil {
-						slog.Error("Unable to send watch response", "err", err.Error())
+						slog.Error("Unable to send watch create failure response", "err", err.Error())
 						return err
 					}
 					mu.RUnlock()
@@ -84,39 +84,34 @@ func (s *serviceWatch) Watch(
 		case *internal.WatchRequest_CancelRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_CancelRequest).CancelRequest
 			mu.RLock()
-			if _, ok := watches[req.WatchId]; !ok {
+			w, ok := watches[req.WatchId]
+			mu.RUnlock()
+			if !ok {
+				slog.Info("Ignoring request to cancel non-existent watch", "id", req.WatchId)
 				if err = s.watchResp(server, &internal.WatchResponse{
 					WatchId: req.WatchId,
 				}); err != nil {
-					slog.Warn("Watch not found in cancel", "req", req, "err", err.Error())
+					slog.Error("Unable to send watch cancel failure response", "req", req, "err", err.Error())
 				}
-				mu.RUnlock()
 				break
 			}
-			fn := watches[req.WatchId]
-			mu.RUnlock()
-			fn()
+			w.Close()
 			if err = s.watchResp(server, &internal.WatchResponse{
 				WatchId:  req.WatchId,
 				Canceled: true,
 			}); err != nil {
-				slog.Warn("Unable to send watch cancel response", "req", req, "err", err.Error())
+				slog.Error("Unable to send watch cancel response", "req", req, "err", err.Error())
 			}
 		case *internal.WatchRequest_ProgressRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_ProgressRequest).ProgressRequest
 			// TODO - track watch progress and generate response
 			if err = s.watchResp(server, &internal.WatchResponse{
-				WatchId: watchId,
+				WatchId: -1,
 			}); err != nil {
-				slog.Warn("Watch not found in cancel", "req", req, "err", err.Error())
+				slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
 			}
 		}
 	}
-	mu.Lock()
-	for _, cancel := range watches {
-		cancel()
-	}
-	mu.Unlock()
 	return
 }
 
@@ -126,8 +121,9 @@ func (s *serviceWatch) watch(
 	server internal.Watch_WatchServer,
 	id int64,
 	done func(),
-) (cancel func()) {
-	ctx, cancel = context.WithCancel(ctx)
+) (w *watch) {
+	w = &watch{done: make(chan bool)}
+	ctx, w.cancel = context.WithCancel(ctx)
 	result := make(chan *Result)
 	go func() {
 		var clusterID uint64
@@ -225,6 +221,7 @@ func (s *serviceWatch) watch(
 	go func() {
 		defer close(result)
 		defer done()
+		defer close(w.done)
 		query, err := proto.Marshal(req)
 		if err != nil {
 			slog.Error("Error marshaling query", "err", err.Error())
@@ -249,4 +246,12 @@ func (s *serviceWatch) watchResp(
 	return server.Send(resp)
 }
 
-type watch struct{}
+type watch struct {
+	done   chan bool
+	cancel context.CancelFunc
+}
+
+func (w *watch) Close() {
+	w.cancel()
+	<-w.done
+}

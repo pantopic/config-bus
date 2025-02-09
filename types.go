@@ -83,7 +83,7 @@ var (
 	// ICARUS_ZERO_INDEX_WATCH_ID determines whether to start watch IDs at 0 rather than 1.
 	// This is poor API design because it fails to leverage the zero value as an empty state.
 	// Etcd starts watch IDs at zero, so this is enabled by default for parity.
-	ICARUS_ZERO_INDEX_WATCH_ID = true
+	ICARUS_ZERO_INDEX_WATCH_ID = false
 
 	// ICARUS_TXN_OPS_MAX sets the maximum number of operations allowed per transaction. Matches etcd by default.
 	// Cannot be set higher than ICARUS_TXN_OPS_LIMIT.
@@ -91,6 +91,9 @@ var (
 
 	// ICARUS_RESPONSE_SIZE_MAX sets the maximum request and response size.
 	ICARUS_RESPONSE_SIZE_MAX = 10 * 1024 * 1024
+
+	// ICARUS_WATCH_PROGRESS_NOTIFY_INTERVAL sets the duration of periodic watch progress notification.
+	ICARUS_WATCH_PROGRESS_NOTIFY_INTERVAL = 10 * time.Minute
 )
 
 var (

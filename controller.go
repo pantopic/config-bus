@@ -21,11 +21,11 @@ type Controller interface {
 type controller struct {
 	agent     *zongzi.Agent
 	client    zongzi.ShardClient
-	clock     clock.Clock
 	ctx       context.Context
 	ctxCancel context.CancelFunc
+	clock     clock.Clock
 	index     uint64
-	isLeader  bool
+	isLeader  map[uint64]bool
 	log       *slog.Logger
 	mutex     sync.RWMutex
 	shard     zongzi.Shard
@@ -36,16 +36,17 @@ type controller struct {
 
 func NewController(ctx context.Context, log *slog.Logger) *controller {
 	return &controller{
-		clock: clock.New(),
-		ctx:   ctx,
-		log:   log,
+		clock:    clock.New(),
+		ctx:      ctx,
+		log:      log,
+		isLeader: map[uint64]bool{},
 	}
 }
 
-func (c *controller) Start(agent *zongzi.Agent, shard zongzi.Shard, client zongzi.ShardClient) (err error) {
+func (c *controller) Start(agent *zongzi.Agent, shard zongzi.Shard) (err error) {
 	c.agent = agent
 	c.shard = shard
-	c.client = client
+	c.client = agent.Client(shard.ID)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
@@ -72,7 +73,7 @@ func (c *controller) tick() {
 	defer c.mutex.Unlock()
 	var hadErr bool
 	var index uint64
-	if c.isLeader {
+	if c.isLeader[c.shard.ID] {
 		if !c.termSet && c.term > 0 {
 			cmd, _ := proto.Marshal(&internal.TermRequest{Term: c.term})
 			if _, _, err := c.client.Apply(c.ctx, append(cmd, CMD_INTERNAL_TERM)); err != nil {
@@ -101,11 +102,8 @@ func (c *controller) tick() {
 func (c *controller) LeaderUpdated(info zongzi.LeaderInfo) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	if c.shard.ID == 0 || info.ShardID != c.shard.ID {
-		return
-	}
-	c.isLeader = info.LeaderID == info.ReplicaID
-	if c.isLeader && c.term != info.Term {
+	c.isLeader[info.ShardID] = info.LeaderID == info.ReplicaID
+	if c.shard.ID != 0 && c.isLeader[c.shard.ID] && c.term != info.Term {
 		req := &internal.TermRequest{
 			Term: info.Term,
 		}
