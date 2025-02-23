@@ -11,7 +11,7 @@ import (
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
-	"github.com/logbn/intervalradix"
+	"github.com/logbn/byteinterval"
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
@@ -35,7 +35,7 @@ type stateMachine struct {
 	proto      proto.MarshalOptions
 	replicaID  uint64
 	shardID    uint64
-	watches    *intervalradix.Tree[chan uint64]
+	watches    *byteinterval.Tree[chan uint64]
 
 	statUpdates int
 	statEntries int
@@ -51,7 +51,7 @@ func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMac
 			envPath:   fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
 			log:       logger,
 			clock:     clock.New(),
-			watches:   intervalradix.New[chan uint64](),
+			watches:   byteinterval.New[chan uint64](),
 		}
 	}
 }
