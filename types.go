@@ -30,9 +30,11 @@ const (
 	WatchMessageType_EVENT
 	WatchMessageType_SYNC
 	WatchMessageType_NOTIFY
+	WatchMessageType_ERR_COMPACTED
 
 	WATCH_DEBOUNCE = 50 * time.Millisecond
 
+	// grpc overhead costs for calculating ICARUS_RESPONSE_SIZE_MAX
 	sizeMetaKeyValue      = 256
 	sizeMetaEvent         = 256
 	sizeMetaHeader        = 256
@@ -42,57 +44,68 @@ const (
 )
 
 const (
-	// ICARUS_TXN_OPS_LIMIT limits the maximum number of operations per transaction.
-	// Hard limit allows use of last 10 bits of revision to represent subrevision.
+	// ICARUS_TXN_OPS_LIMIT limits the maximum number of operations per transaction. Hard limit allows use of last
+	// 10 bits of revision to represent subrevision. Max txn ops in K8s is set to 1000.
+	// Etcd default max is 128 but max can be set as high as MaxInt64. !!! VIOLATES PARITY !!!
 	ICARUS_TXN_OPS_LIMIT = 1024
 
 	// ICARUS_LIMIT_KEY_LENGTH limits the maximum length of any key.
+	// Key length is unlimited in etc. !!! VIOLATES PARITY !!!
 	ICARUS_LIMIT_KEY_LENGTH = 480
 )
 
 var (
 	// ICARUS_KV_RANGE_COUNT_FULL determines whether to execute a full scan for every range request to generate count.
-	// Disabling this would certainly improve performance of range requests covering lots of keys.
+	// Disabling this will likely improve performance of range requests covering lots of keys.
 	// Full count is used by Kubernetes in at least one place (api server storage) but only because More is missing.
 	// See https://github.com/kubernetes/kubernetes/blob/e85c72d4177fba224cb1baa1b5abfb5980e6d867/staging/src/k8s.io/apiserver/pkg/storage/etcd3/store.go#L762
+	// Enabled by default for parity.
 	ICARUS_KV_RANGE_COUNT_FULL = true
 
 	// ICARUS_KV_RANGE_COUNT_FAKE determines whether to return a count value 1 greater than the number of results
 	// when there are more results in a range query. This should be sufficient to trick Kubernetes into functioning
-	// correctly without incurring the cost of scanning the entire ky range to generate a count for each range request.
-	// Not suitable for parity.
+	// correctly without incurring the cost of scanning the entire key range to generate a count for each range request.
+	// Disabled by default for parity.
 	ICARUS_KV_RANGE_COUNT_FAKE = false
 
-	// ICARUS_RANGE_COUNT_FILTER_CORRECT determines whether to apply filters to the result count.
-	// This is a bug in etcd that they don't intend to fix.
-	// Min/max mod/created rev are not used by Kubernetes so it is enabled by default since it is the correct behavior.
+	// ICARUS_RANGE_COUNT_FILTER_CORRECT determines whether to apply filters to the result count. This is a bug in etcd
+	// that they don't intend to fix. Min/max mod/created rev are not used by Kubernetes so parity is unimportant.
+	// Enabled by default. !!! VIOLATES PARITY !!!
 	ICARUS_RANGE_COUNT_FILTER_CORRECT = true
 
 	// ICARUS_KV_PATCH_ENABLED determines whether to enable patches for non-current key revisions
-	// Icarus can use it transparently so it is enabled by default.
+	// Enabled by default due to transparently.
 	ICARUS_KV_PATCH_ENABLED = true
 
 	// ICARUS_KV_COMPRESSION_ENABLED determines whether to snappy compress values
-	// Icarus can use it transparently so it is enabled by default.
+	// Enabled by default due to transparently.
 	ICARUS_KV_COMPRESSION_ENABLED = true
 
 	// ICARUS_TXN_MULTI_WRITE_ENABLED determines whether to allow multiple writes to a single key during a transaction.
-	// Icarus supports it, but etcd does not so it is disabled by default.
+	// Disabled by default for parity.
 	ICARUS_TXN_MULTI_WRITE_ENABLED = false
 
-	// ICARUS_ZERO_INDEX_WATCH_ID determines whether to start watch IDs at 0 rather than 1.
-	// This is poor API design because it fails to leverage the zero value as an empty state.
-	// Etcd starts watch IDs at zero, so this is enabled by default for parity.
-	ICARUS_ZERO_INDEX_WATCH_ID = false
+	// ICARUS_WATCH_ID_ZERO_INDEX determines whether to start watch IDs at 0 rather than 1. This is bad API design
+	// because it confuses the zero value with the empty state. Sending an explicit watchID in a create request will
+	// fail if a watch with that ID already exists for all values of watchID except 0 which will generate a new ID.
+	// Disabled by default. !!! VIOLATES PARITY !!!
+	ICARUS_WATCH_ID_ZERO_INDEX = false
 
-	// ICARUS_TXN_OPS_MAX sets the maximum number of operations allowed per transaction. Matches etcd by default.
-	// Cannot be set higher than ICARUS_TXN_OPS_LIMIT.
+	// ICARUS_WATCH_CREATE_COMPACTED determines whether to create a watch and then immediately cancel it when a client
+	// requests a watch with a compacted StartRevision. This is bad API design. Only the cancellation should be sent.
+	// Enabled by default for parity.
+	ICARUS_WATCH_CREATE_COMPACTED = true
+
+	// ICARUS_TXN_OPS_MAX sets the maximum number of operations allowed per transaction.
+	// Matches etcd by default. Limited by ICARUS_TXN_OPS_LIMIT
 	ICARUS_TXN_OPS_MAX = 128
 
 	// ICARUS_RESPONSE_SIZE_MAX sets the maximum request and response size.
+	// Matches etcd by default.
 	ICARUS_RESPONSE_SIZE_MAX = 10 * 1024 * 1024
 
 	// ICARUS_WATCH_PROGRESS_NOTIFY_INTERVAL sets the duration of periodic watch progress notification.
+	// Matches etcd by default.
 	ICARUS_WATCH_PROGRESS_NOTIFY_INTERVAL = 10 * time.Minute
 )
 

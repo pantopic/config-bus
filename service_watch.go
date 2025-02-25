@@ -33,7 +33,7 @@ func (s *serviceWatch) Watch(
 	server internal.Watch_WatchServer,
 ) (err error) {
 	var watchId int64
-	if !ICARUS_ZERO_INDEX_WATCH_ID {
+	if !ICARUS_WATCH_ID_ZERO_INDEX {
 		watchId++
 	}
 	var mu sync.RWMutex
@@ -54,7 +54,10 @@ func (s *serviceWatch) Watch(
 				if _, ok := watches[req.WatchId]; ok {
 					slog.Info("Ignoring request to create existing watch", "id", req.WatchId)
 					if err = s.watchResp(server, &internal.WatchResponse{
-						WatchId: req.WatchId,
+						WatchId:      -1,
+						Created:      true,
+						Canceled:     true,
+						CancelReason: internal.ErrWatcherDuplicateID.Error(),
 					}); err != nil {
 						slog.Error("Unable to send watch create failure response", "err", err.Error())
 						return err
@@ -63,24 +66,23 @@ func (s *serviceWatch) Watch(
 					break
 				}
 				mu.RUnlock()
-			} else {
-				req.WatchId = watchId
-				watchId++
 			}
-			if err = s.watchResp(server, &internal.WatchResponse{
-				WatchId: req.WatchId,
-				Created: true,
-			}); err != nil {
-				return err
-			}
-			mu.Lock()
-			watches[req.WatchId] = s.watch(server.Context(), req, server, req.WatchId, func() {
+			var w *watch
+			w = s.watch(server.Context(), req, server, func() int64 {
+				mu.Lock()
+				defer mu.Unlock()
+				if req.WatchId == 0 {
+					req.WatchId = watchId
+					watchId++
+				}
+				watches[req.WatchId] = w
+				return req.WatchId
+			}, func() {
 				// TODO - retry?
 				mu.Lock()
 				defer mu.Unlock()
 				delete(watches, req.WatchId)
 			})
-			mu.Unlock()
 		case *internal.WatchRequest_CancelRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_CancelRequest).CancelRequest
 			mu.RLock()
@@ -105,9 +107,13 @@ func (s *serviceWatch) Watch(
 		case *internal.WatchRequest_ProgressRequest:
 			req := req.RequestUnion.(*internal.WatchRequest_ProgressRequest).ProgressRequest
 			// TODO - track watch progress and generate response
-			if err = s.watchResp(server, &internal.WatchResponse{
-				WatchId: -1,
-			}); err != nil {
+			// mu.RLock()
+			// w, ok := watches[req.WatchId]
+			// mu.RUnlock()
+			// if !req.ProgressNotify {
+
+			// }
+			if err = s.watchResp(server, &internal.WatchResponse{}); err != nil {
 				slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
 			}
 		}
@@ -119,20 +125,20 @@ func (s *serviceWatch) watch(
 	ctx context.Context,
 	req *internal.WatchCreateRequest,
 	server internal.Watch_WatchServer,
-	id int64,
+	idFunc func() int64,
 	done func(),
 ) (w *watch) {
 	w = &watch{done: make(chan bool)}
 	ctx, w.cancel = context.WithCancel(ctx)
 	result := make(chan *Result)
+	var id int64
 	go func() {
 		var clusterID uint64
 		var memberID uint64
 		var err error
 		var size int
 		var resp = &internal.WatchResponse{
-			Header:  &internal.ResponseHeader{},
-			WatchId: id,
+			Header: &internal.ResponseHeader{},
 		}
 		for {
 			res, ok := <-result
@@ -146,6 +152,15 @@ func (s *serviceWatch) watch(
 					slog.Error("Error unmarshaling init", "err", err)
 					return
 				}
+				id = idFunc()
+				if err = s.watchResp(server, &internal.WatchResponse{
+					WatchId: id,
+					Created: true,
+				}); err != nil {
+					slog.Error("Error sending create response", "err", err)
+					return
+				}
+				resp.WatchId = id
 				clusterID = resp.Header.ClusterId
 				memberID = resp.Header.MemberId
 			case WatchMessageType_EVENT:
@@ -214,6 +229,38 @@ func (s *serviceWatch) watch(
 				}); err != nil {
 					slog.Error("Error sending response")
 					return
+				}
+			case WatchMessageType_ERR_COMPACTED:
+				var header = &internal.ResponseHeader{}
+				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
+					slog.Error("Error unmarshaling compaction error", "err", err)
+					return
+				}
+				if ICARUS_WATCH_CREATE_COMPACTED {
+					id = idFunc()
+					if err = s.watchResp(server, &internal.WatchResponse{
+						WatchId: id,
+						Created: true,
+					}); err != nil {
+						slog.Error("Error sending watch created response", "err", err)
+						return
+					}
+					if err = s.watchResp(server, &internal.WatchResponse{
+						WatchId:         id,
+						Canceled:        true,
+						CompactRevision: header.Revision,
+					}); err != nil {
+						slog.Error("Error sending compacted error response", "err", err)
+						return
+					}
+				} else {
+					if err = s.watchResp(server, &internal.WatchResponse{
+						WatchId:         req.WatchId,
+						CompactRevision: header.Revision,
+					}); err != nil {
+						slog.Error("Error sending compacted error response", "err", err)
+						return
+					}
 				}
 			}
 		}

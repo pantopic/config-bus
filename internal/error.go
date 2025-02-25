@@ -15,6 +15,8 @@
 package internal
 
 import (
+	"errors"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -22,6 +24,13 @@ import (
 // Added
 var (
 	ErrGRPCKeyTooLong = status.New(codes.InvalidArgument, "etcdserver: key too long").Err()
+)
+
+// mvcc
+var (
+	ErrWatcherNotExist    = errors.New("mvcc: watcher does not exist")
+	ErrEmptyWatcherRange  = errors.New("mvcc: watcher range is empty")
+	ErrWatcherDuplicateID = errors.New("mvcc: duplicate watch ID provided on the WatchStream")
 )
 
 // server-side error

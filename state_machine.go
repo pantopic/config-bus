@@ -308,7 +308,6 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err = sm.dbMeta.setEpoch(txn, epoch); err != nil {
 					return err
 				}
-				// TODO - Move lease expiration scan to controller (async) and issue autorevokes separately
 				for id := range sm.dbLeaseExp.scan(txn, epoch) {
 					affected, _, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, id)
 					if err != nil {
@@ -469,14 +468,38 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
-	since := uint64(req.StartRevision)
+	var err error
+	var since = uint64(req.StartRevision)
+	var min uint64
+	err = sm.env.View(func(txn *lmdb.Txn) (err error) {
+		if min, err = sm.dbMeta.getRevisionMin(txn); err != nil {
+			return
+		}
+		if since > 0 && min > since {
+			err = internal.ErrGRPCCompacted
+		}
+		return
+	})
+	if err == internal.ErrGRPCCompacted {
+		sm.log.Info("Watch compacted", "since", since, "min", min)
+		res := zongzi.GetResult()
+		res.Data = append(res.Data, WatchMessageType_ERR_COMPACTED)
+		res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(min))
+		if err != nil {
+			sm.log.Error("Error notifying progress", "err", err)
+			return
+		}
+		result <- res
+		return
+	} else if err != nil {
+		sm.log.Error("Error checking min revision", "err", err)
+		return
+	}
 	var filtered = map[uint8]bool{}
 	for _, f := range req.Filters {
 		filtered[uint8(f)] = true
 	}
-	var err error
 	var index uint64
-	// var watchId = req.WatchId
 	scan := func() (index uint64, sent int, err error) {
 		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
 			index, err = sm.dbMeta.getRevision(txn)

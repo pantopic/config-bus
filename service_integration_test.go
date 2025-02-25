@@ -29,10 +29,12 @@ var (
 	debug  = os.Getenv("ICARUS_LOG_LEVEL") == "debug"
 	wait   func(time.Duration)
 
-	err      error
-	svcKv    internal.KVServer
-	svcLease internal.LeaseServer
-	svcWatch internal.WatchServer
+	err            error
+	svcKv          internal.KVServer
+	svcLease       internal.LeaseServer
+	svcWatch       internal.WatchServer
+	svcCluster     internal.ClusterServer
+	svcMaintenance internal.MaintenanceServer
 )
 
 func TestService(t *testing.T) {
@@ -50,14 +52,10 @@ func TestService(t *testing.T) {
 	t.Run("transaction", testTransaction)
 	t.Run("lease-grant", testLeaseGrant)
 	t.Run("lease-revoke", testLeaseRevoke)
-	// TODO - Keep Alive keeps itself alive
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
 	// TODO - Progress notify, drive watches async from events
-	// TODO - Test message size boundary (txn) w/ Fragment
-	// TODO - Watch merge w/ multiplex, auto reconnect
-	// TODO - Discover and use correct cancel_reason
 	t.Run("watch", testWatch)
 	t.Run("controller", testController)
 
@@ -82,9 +80,13 @@ func setupParity(t *testing.T) {
 	svcKv = newParityKvService(conn)
 	svcLease = newParityLeaseService(conn)
 	svcWatch = newParityWatchService(conn)
+	svcCluster = newParityClusterService(conn)
+	svcMaintenance = newParityMaintenanceService(conn)
 
 	// Etcd bugs
 	ICARUS_RANGE_COUNT_FILTER_CORRECT = false
+	ICARUS_WATCH_ID_ZERO_INDEX = true
+	ICARUS_WATCH_CREATE_COMPACTED = true
 }
 
 // Run integration tests against bootstrapped icarus instance
@@ -177,6 +179,8 @@ func setupIcarus(t *testing.T) {
 	svcKv = NewServiceKv(client)
 	svcLease = NewServiceLease(client)
 	svcWatch = NewServiceWatch(client)
+	svcCluster = NewServiceCluster(client)
+	svcMaintenance = NewServiceMaintenance(client)
 }
 
 func testInsert(t *testing.T) {
@@ -215,8 +219,13 @@ func testInsert(t *testing.T) {
 				Key:   []byte(strings.Repeat("a", 481)),
 				Value: []byte(`test-value`),
 			})
-			require.NotNil(t, err)
-			assert.Nil(t, resp)
+			if parity {
+				require.Nil(t, err)
+				assert.NotNil(t, resp)
+			} else {
+				require.NotNil(t, err)
+				assert.Nil(t, resp)
+			}
 		})
 	})
 }
@@ -299,7 +308,11 @@ func testRange(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
-		require.Equal(t, 4, len(resp.Kvs))
+		if parity {
+			require.Equal(t, 5, len(resp.Kvs))
+		} else {
+			require.Equal(t, 4, len(resp.Kvs))
+		}
 	})
 	t.Run("basic", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -860,8 +873,13 @@ func testTransaction(t *testing.T) {
 			},
 		}
 		resp, err := svcKv.Txn(ctx, req)
-		require.NotNil(t, err)
-		assert.Nil(t, resp)
+		if parity {
+			require.Nil(t, err)
+			assert.NotNil(t, resp)
+		} else {
+			require.NotNil(t, err)
+			assert.Nil(t, resp)
+		}
 	})
 	leaseResp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{TTL: 600})
 	require.Nil(t, err)
@@ -1419,7 +1437,7 @@ func testController(t *testing.T) {
 		require.NotNil(t, resp2)
 		require.Equal(t, 1, len(resp2.Leases))
 		assert.Equal(t, leaseID, resp2.Leases[0].ID)
-		wait(3 * time.Second)
+		wait(5 * time.Second)
 		resp2, err = svcLease.LeaseLeases(ctx, &internal.LeaseLeasesRequest{})
 		require.Nil(t, err, err)
 		require.NotNil(t, resp2)
@@ -1456,11 +1474,26 @@ func testWatch(t *testing.T) {
 	t.Run("create", func(t *testing.T) {
 		t.Run("new", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
-				Key:      []byte(`test-watch-000`),
-				RangeEnd: []byte(`test-watch-100`),
+				Key:            []byte(`test-watch-000`),
+				RangeEnd:       []byte(`test-watch-100`),
+				ProgressNotify: true,
 			})
 			res := <-s.resChan
-			require.Equal(t, int64(1), res.WatchId, res)
+			if ICARUS_WATCH_ID_ZERO_INDEX {
+				require.Equal(t, int64(0), res.WatchId, res)
+				sendWatchCancel(int64(0))
+				res = <-s.resChan
+				require.Equal(t, int64(0), res.WatchId, res)
+				assert.True(t, res.Canceled)
+				sendWatchCreate(&internal.WatchCreateRequest{
+					Key:            []byte(`test-watch-000`),
+					RangeEnd:       []byte(`test-watch-100`),
+					ProgressNotify: true,
+				})
+				res = <-s.resChan
+			} else {
+				require.Equal(t, int64(1), res.WatchId, res)
+			}
 			assert.True(t, res.Created)
 			assert.False(t, res.Canceled)
 			assert.Len(t, res.Events, 0)
@@ -1474,8 +1507,45 @@ func testWatch(t *testing.T) {
 				WatchId:  watchID,
 			})
 			res := <-s.resChan
-			require.Equal(t, watchID, res.WatchId, res)
-			assert.False(t, res.Created)
+			require.EqualValues(t, -1, res.WatchId, res)
+			assert.True(t, res.Created, res)
+			assert.True(t, res.Canceled)
+			assert.Equal(t, internal.ErrWatcherDuplicateID.Error(), res.CancelReason, res)
+		})
+		t.Run("compacted", func(t *testing.T) {
+			withGlobal(&ICARUS_WATCH_CREATE_COMPACTED, true, func() {
+				sendWatchCreate(&internal.WatchCreateRequest{
+					Key:           []byte(`test-watch-000`),
+					RangeEnd:      []byte(`test-watch-100`),
+					StartRevision: 2,
+				})
+				res := <-s.resChan
+				assert.Greater(t, res.WatchId, int64(0), res)
+				assert.True(t, res.Created)
+				assert.False(t, res.Canceled)
+				assert.Equal(t, int64(0), res.CompactRevision)
+				wid := res.WatchId
+				res = <-s.resChan
+				assert.EqualValues(t, wid, res.WatchId, res)
+				assert.False(t, res.Created)
+				assert.True(t, res.Canceled)
+				assert.Greater(t, res.CompactRevision, int64(1))
+			})
+			if !parity {
+				withGlobal(&ICARUS_WATCH_CREATE_COMPACTED, false, func() {
+					t.Run("no-create", func(t *testing.T) {
+						sendWatchCreate(&internal.WatchCreateRequest{
+							Key:           []byte(`test-watch-000`),
+							RangeEnd:      []byte(`test-watch-100`),
+							StartRevision: 2,
+						})
+						res := <-s.resChan
+						assert.EqualValues(t, 0, res.WatchId, res)
+						assert.False(t, res.Created)
+						assert.Greater(t, res.CompactRevision, int64(1))
+					})
+				})
+			}
 		})
 	})
 	t.Run("receive", func(t *testing.T) {
@@ -1499,15 +1569,19 @@ func testWatch(t *testing.T) {
 		})
 	})
 	t.Run("progress", func(t *testing.T) {
-		s.reqChan <- &internal.WatchRequest{
-			RequestUnion: &internal.WatchRequest_ProgressRequest{
-				ProgressRequest: &internal.WatchProgressRequest{},
-			},
+		// Apparently etcd returns nothing?
+		if !parity {
+			s.reqChan <- &internal.WatchRequest{
+				RequestUnion: &internal.WatchRequest_ProgressRequest{
+					ProgressRequest: &internal.WatchProgressRequest{},
+				},
+			}
+			res := <-s.resChan
+			require.EqualValues(t, 0, res.WatchId, res)
+			require.False(t, res.Created)
+			require.False(t, res.Canceled)
+			t.Log(res)
 		}
-		res := <-s.resChan
-		require.EqualValues(t, -1, res.WatchId)
-		require.False(t, res.Created)
-		require.False(t, res.Canceled)
 	})
 	t.Run("cancel", func(t *testing.T) {
 		t.Run("existing", func(t *testing.T) {
@@ -1518,11 +1592,14 @@ func testWatch(t *testing.T) {
 			require.True(t, res.Canceled)
 		})
 		t.Run("missing", func(t *testing.T) {
-			sendWatchCancel(watchID)
-			res := <-s.resChan
-			require.Equal(t, watchID, res.WatchId)
-			require.False(t, res.Created)
-			require.False(t, res.Canceled)
+			// Apparently etcd returns nothing?
+			if !parity {
+				sendWatchCancel(watchID)
+				res := <-s.resChan
+				require.Equal(t, watchID, res.WatchId)
+				require.False(t, res.Created)
+				require.False(t, res.Canceled)
+			}
 		})
 	})
 	t.Run("multiple", func(t *testing.T) {
@@ -1736,50 +1813,63 @@ func testWatch(t *testing.T) {
 			}
 		}
 		sendWatchCancel(watchID)
-		res = <-s.resChan
+		res = <-s.resChan // WatchCanceled
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
 	})
 	t.Run("fragment", func(t *testing.T) {
-		randValue := func(len int) []byte {
+		var randValue = func(len int) []byte {
 			res := make([]byte, len)
 			rand.Read(res)
 			return res
 		}
-		req := &internal.TxnRequest{Success: []*internal.RequestOp{}}
-		for i := range 150 {
-			req.Success = append(req.Success, putOp(&internal.PutRequest{
-				Key:   []byte(fmt.Sprintf(`test-watch-fragment-%03d`, i)),
-				Value: randValue(1e4),
-			}))
+		var rev []int64
+		var n = 4
+		var m = 12
+		for range n {
+			req := &internal.TxnRequest{Success: []*internal.RequestOp{}}
+			for i := range m {
+				req.Success = append(req.Success, putOp(&internal.PutRequest{
+					Key:   []byte(fmt.Sprintf(`test-watch-fragment-%03d`, i)),
+					Value: randValue(1e5),
+				}))
+			}
+			resp, err := svcKv.Txn(ctx, req)
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+			rev = append(rev, resp.Header.Revision)
 		}
-		resp, err := svcKv.Txn(ctx, req)
-		require.Nil(t, err, err)
-		assert.True(t, resp.Succeeded)
-		rev := resp.Header.Revision
-		withGlobalInt(&ICARUS_RESPONSE_SIZE_MAX, 1<<20, func() {
+		withGlobalInt(&ICARUS_RESPONSE_SIZE_MAX, 1<<20*2, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:           []byte(`test-watch-fragment-000`),
 				RangeEnd:      []byte(`test-watch-fragment-999`),
-				StartRevision: rev,
+				StartRevision: rev[0],
+				// Fragment:      true,
 			})
 			res := <-s.resChan // WatchCreated
 			require.Greater(t, res.WatchId, int64(0), res)
 			assert.True(t, res.Created)
 			watchID = res.WatchId
-			res = <-s.resChan
-			assert.True(t, res.WatchId == watchID, res.WatchId)
-			require.Greater(t, len(res.Events), 0, res)
-			require.Equal(t, rev, res.Header.Revision)
-			require.True(t, res.Fragment)
-			require.Equal(t, 99, len(res.Events))
-			res = <-s.resChan
-			assert.True(t, res.WatchId == watchID, res.WatchId)
-			require.Greater(t, len(res.Events), 0, res)
-			require.Equal(t, rev, res.Header.Revision)
-			require.False(t, res.Fragment)
-			require.Equal(t, 51, len(res.Events))
+			var total int
+			var num int
+			for {
+				res = <-s.resChan // Update
+				assert.True(t, res.WatchId == watchID, res.WatchId)
+				require.Greater(t, len(res.Events), 0, res)
+				require.Greater(t, res.Header.Revision, rev[0])
+				total += len(res.Events)
+				num++
+				for _, e := range res.Events {
+					slog.Info("Event", "batch", num, "version", e.Kv.Version, "key", string(e.Kv.Key))
+				}
+				if !res.Fragment {
+					break
+				}
+			}
+			require.Equal(t, rev[len(rev)-1], res.Header.Revision)
+			require.Equal(t, n*m, total)
+			require.Greater(t, num, 2)
 		})
 	})
 	cancel()
@@ -1823,6 +1913,7 @@ func await(d, n time.Duration, fn func() bool) bool {
 	return false
 }
 
+// KV Parity Service
 type parityKvService struct {
 	internal.UnimplementedKVServer
 
@@ -1848,6 +1939,7 @@ func (svc parityKvService) Compact(ctx context.Context, req *internal.Compaction
 	return svc.client.Compact(ctx, req)
 }
 
+// Lease Parity Service
 type parityLeaseService struct {
 	internal.UnimplementedLeaseServer
 
@@ -1899,15 +1991,13 @@ func (svc parityLeaseService) LeaseKeepAlive(server internal.Lease_LeaseKeepAliv
 	return
 }
 
-func (svc parityLeaseService) LeaseTimeToLive(
-	ctx context.Context,
+func (svc parityLeaseService) LeaseTimeToLive(ctx context.Context,
 	req *internal.LeaseTimeToLiveRequest,
 ) (res *internal.LeaseTimeToLiveResponse, err error) {
 	return svc.client.LeaseTimeToLive(ctx, req)
 }
 
-func (svc parityLeaseService) LeaseLeases(
-	ctx context.Context,
+func (svc parityLeaseService) LeaseLeases(ctx context.Context,
 	req *internal.LeaseLeasesRequest,
 ) (res *internal.LeaseLeasesResponse, err error) {
 	return svc.client.LeaseLeases(ctx, req)
@@ -1939,6 +2029,7 @@ func (s *mockLeaseKeepAliveServer) Context() context.Context {
 
 var _ internal.Lease_LeaseKeepAliveServer = new(mockLeaseKeepAliveServer)
 
+// Watch Parity Service
 type parityWatchService struct {
 	internal.UnimplementedWatchServer
 
@@ -1966,10 +2057,12 @@ func (svc *parityWatchService) Watch(server internal.Watch_WatchServer) (err err
 				return
 			}
 			if err != nil {
+				slog.Error("Server watch Recv error", "err", err)
 				return
 			}
 			err = client.Send(req)
 			if err != nil {
+				slog.Error("Server watch Send error", "err", err)
 				break
 			}
 		}
@@ -1983,10 +2076,12 @@ func (svc *parityWatchService) Watch(server internal.Watch_WatchServer) (err err
 			break
 		}
 		if err != nil {
+			slog.Error("Client watch Recv error", "err", err)
 			break
 		}
 		err = server.Send(res)
 		if err != nil {
+			slog.Error("Client watch Send error", "err", err)
 			break
 		}
 	}
@@ -2031,3 +2126,164 @@ func (s *mockWatchServer) Context() context.Context {
 }
 
 var _ internal.Watch_WatchServer = new(mockWatchServer)
+
+// Cluster Parity Service
+type parityClusterService struct {
+	internal.UnimplementedClusterServer
+
+	client internal.ClusterClient
+}
+
+func newParityClusterService(conn grpc.ClientConnInterface) internal.ClusterServer {
+	return &parityClusterService{client: internal.NewClusterClient(conn)}
+}
+
+func (svc parityClusterService) MemberAdd(ctx context.Context,
+	req *internal.MemberAddRequest,
+) (res *internal.MemberAddResponse, err error) {
+	return svc.client.MemberAdd(ctx, req)
+}
+func (svc parityClusterService) MemberRemove(ctx context.Context,
+	req *internal.MemberRemoveRequest,
+) (res *internal.MemberRemoveResponse, err error) {
+	return svc.client.MemberRemove(ctx, req)
+}
+
+func (svc parityClusterService) MemberUpdate(ctx context.Context,
+	req *internal.MemberUpdateRequest,
+) (res *internal.MemberUpdateResponse, err error) {
+	return svc.client.MemberUpdate(ctx, req)
+}
+
+func (svc parityClusterService) MemberList(ctx context.Context,
+	req *internal.MemberListRequest,
+) (res *internal.MemberListResponse, err error) {
+	return svc.client.MemberList(ctx, req)
+}
+
+func (svc parityClusterService) MemberPromote(ctx context.Context,
+	req *internal.MemberPromoteRequest,
+) (res *internal.MemberPromoteResponse, err error) {
+	return svc.client.MemberPromote(ctx, req)
+}
+
+// Maintenance Parity Service
+type parityMaintenanceService struct {
+	internal.UnimplementedMaintenanceServer
+
+	client internal.MaintenanceClient
+}
+
+func newParityMaintenanceService(conn grpc.ClientConnInterface) internal.MaintenanceServer {
+	return &parityMaintenanceService{client: internal.NewMaintenanceClient(conn)}
+}
+
+func (s *parityMaintenanceService) Context() context.Context {
+	return context.Background()
+}
+
+var _ internal.MaintenanceServer = new(parityMaintenanceService)
+
+func (svc *parityMaintenanceService) Alarm(ctx context.Context,
+	req *internal.AlarmRequest,
+) (res *internal.AlarmResponse, err error) {
+	return svc.client.Alarm(ctx, req)
+}
+
+func (svc *parityMaintenanceService) Status(ctx context.Context,
+	req *internal.StatusRequest,
+) (res *internal.StatusResponse, err error) {
+	return svc.client.Status(ctx, req)
+}
+
+func (svc *parityMaintenanceService) Defragment(ctx context.Context,
+	req *internal.DefragmentRequest,
+) (res *internal.DefragmentResponse, err error) {
+	return svc.client.Defragment(ctx, req)
+}
+
+func (svc *parityMaintenanceService) Hash(ctx context.Context,
+	req *internal.HashRequest,
+) (res *internal.HashResponse, err error) {
+	return svc.client.Hash(ctx, req)
+}
+
+func (svc *parityMaintenanceService) HashKV(ctx context.Context,
+	req *internal.HashKVRequest,
+) (res *internal.HashKVResponse, err error) {
+	return svc.client.HashKV(ctx, req)
+}
+
+func (svc *parityMaintenanceService) Snapshot(
+	req *internal.SnapshotRequest,
+	s internal.Maintenance_SnapshotServer,
+) (err error) {
+	client, err := svc.client.Snapshot(s.Context(), req)
+	if err != nil {
+		return
+	}
+	defer slog.Debug("Client watch ending")
+	for {
+		slog.Debug("Client watch Recving")
+		res, err := client.Recv()
+		slog.Debug("Client watch Recvd")
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		err = s.Send(res)
+		if err != nil {
+			break
+		}
+	}
+	return nil
+}
+
+func (svc *parityMaintenanceService) MoveLeader(ctx context.Context,
+	req *internal.MoveLeaderRequest,
+) (res *internal.MoveLeaderResponse, err error) {
+	return svc.client.MoveLeader(ctx, req)
+}
+
+func (svc *parityMaintenanceService) Downgrade(ctx context.Context,
+	req *internal.DowngradeRequest,
+) (res *internal.DowngradeResponse, err error) {
+	return svc.client.Downgrade(ctx, req)
+}
+
+type mockMaintenanceSnapshotServer struct {
+	grpc.ServerStream
+	ctx     context.Context
+	reqChan chan *internal.SnapshotRequest
+	resChan chan *internal.SnapshotResponse
+}
+
+func newMockMaintenanceSnapshotServer(ctx context.Context) *mockMaintenanceSnapshotServer {
+	return &mockMaintenanceSnapshotServer{
+		ctx:     ctx,
+		reqChan: make(chan *internal.SnapshotRequest),
+		resChan: make(chan *internal.SnapshotResponse),
+	}
+}
+
+func (s *mockMaintenanceSnapshotServer) Send(res *internal.SnapshotResponse) (err error) {
+	s.resChan <- res
+	return
+}
+
+func (s *mockMaintenanceSnapshotServer) Recv() (req *internal.SnapshotRequest, err error) {
+	select {
+	case req = <-s.reqChan:
+	case <-s.ctx.Done():
+		err = io.EOF
+	}
+	return
+}
+
+func (s *mockMaintenanceSnapshotServer) Context() context.Context {
+	return s.ctx
+}
+
+var _ internal.Maintenance_SnapshotServer = new(mockMaintenanceSnapshotServer)
