@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
 type serviceLease struct {

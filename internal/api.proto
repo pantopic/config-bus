@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package etcdserverpb;
 
-option go_package = "github.com/logbn/icarus/internal";
+option go_package = "github.com/pantopic/kvr/internal";
 
 message KeyValue {
   bytes key = 1;

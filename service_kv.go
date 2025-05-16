@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
 type kvService struct {

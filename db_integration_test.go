@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"log/slog"
@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	dir = "/tmp/icarus/test-db"
+	dir = "/tmp/kvr/test-db"
 	sm  = &stateMachine{
 		shardID:   1,
 		replicaID: 1,

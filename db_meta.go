@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"github.com/PowerDNS/lmdb-go/lmdb"

@@ -1,4 +1,4 @@
-module github.com/logbn/icarus
+module github.com/pantopic/kvr
 
 go 1.24.0
 

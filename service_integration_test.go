@@ -1,6 +1,6 @@
 //go:build !unit
 
-package icarus
+package kvr
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
 var (
 	ctx    = context.Background()
-	parity = os.Getenv("ICARUS_PARITY_CHECK") == "true"
-	debug  = os.Getenv("ICARUS_LOG_LEVEL") == "debug"
+	parity = os.Getenv("KVR_PARITY_CHECK") == "true"
+	debug  = os.Getenv("KVR_LOG_LEVEL") == "debug"
 	wait   func(time.Duration)
 
 	err            error
@@ -41,7 +41,7 @@ func TestService(t *testing.T) {
 	if parity {
 		t.Run("setup-parity", setupParity)
 	} else {
-		t.Run("setup-icarus", setupIcarus)
+		t.Run("setup-kvr", setupkvr)
 	}
 	t.Run("insert", testInsert)
 	t.Run("update", testUpdate)
@@ -55,15 +55,17 @@ func TestService(t *testing.T) {
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
-	// TODO - Progress notify, drive watches async from events
+	// TODO - Progress notify
 	t.Run("watch", testWatch)
 	t.Run("controller", testController)
 
-	// Status
-	// Defragment
-	// Hash
-	// HashKV
-	// MemberList
+	// TODO - Prometheus metrics
+
+	// TODO - Status
+	// TODO - Defragment
+	// TODO - Hash
+	// TODO - HashKV
+	// TODO - MemberList
 }
 
 // Run integration tests against locally running etcd instance
@@ -84,13 +86,13 @@ func setupParity(t *testing.T) {
 	svcMaintenance = newParityMaintenanceService(conn)
 
 	// Etcd bugs
-	ICARUS_RANGE_COUNT_FILTER_CORRECT = false
-	ICARUS_WATCH_ID_ZERO_INDEX = true
-	ICARUS_WATCH_CREATE_COMPACTED = true
+	KVR_RANGE_COUNT_FILTER_CORRECT = false
+	KVR_WATCH_ID_ZERO_INDEX = true
+	KVR_WATCH_CREATE_COMPACTED = true
 }
 
-// Run integration tests against bootstrapped icarus instance
-func setupIcarus(t *testing.T) {
+// Run integration tests against bootstrapped kvr instance
+func setupkvr(t *testing.T) {
 	logLevel := new(slog.LevelVar)
 	if debug {
 		logLevel.Set(slog.LevelDebug)
@@ -102,7 +104,7 @@ func setupIcarus(t *testing.T) {
 	}))
 	var (
 		agents = make([]*zongzi.Agent, 3)
-		dir    = "/tmp/icarus/test"
+		dir    = "/tmp/kvr/test"
 		host   = "127.0.0.1"
 		port   = 19000
 		peers  = []string{
@@ -128,7 +130,7 @@ func setupIcarus(t *testing.T) {
 	for i := range len(agents) {
 		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%d", dir, i)
-		if agents[i], err = zongzi.NewAgent("icarus000", peers,
+		if agents[i], err = zongzi.NewAgent("kvr000", peers,
 			zongzi.WithRaftDir(dir+"/raft"),
 			zongzi.WithWALDir(dir+"/wal"),
 			zongzi.WithGossipAddress(fmt.Sprintf(host+":%d", port+(i*10)+1)),
@@ -179,7 +181,7 @@ func setupIcarus(t *testing.T) {
 	svcKv = NewServiceKv(client)
 	svcLease = NewServiceLease(client)
 	svcWatch = NewServiceWatch(client)
-	svcCluster = NewServiceCluster(client)
+	svcCluster = NewServiceCluster(client, "")
 	svcMaintenance = NewServiceMaintenance(client)
 }
 
@@ -389,7 +391,7 @@ func testRange(t *testing.T) {
 			require.Equal(t, int64(50), resp.Count)
 		})
 		t.Run("partial", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_RANGE_COUNT_FULL, false, func() {
+			withGlobal(&KVR_RANGE_COUNT_FULL, false, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -407,7 +409,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("full", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_RANGE_COUNT_FULL, true, func() {
+			withGlobal(&KVR_RANGE_COUNT_FULL, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -430,7 +432,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("fake", func(t *testing.T) {
-			withGlobal(&ICARUS_KV_RANGE_COUNT_FAKE, true, func() {
+			withGlobal(&KVR_RANGE_COUNT_FAKE, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -484,7 +486,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -497,7 +499,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -511,7 +513,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -526,7 +528,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -539,7 +541,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -553,7 +555,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -571,7 +573,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -587,7 +589,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if ICARUS_RANGE_COUNT_FILTER_CORRECT {
+			if KVR_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -1051,7 +1053,7 @@ func testTransaction(t *testing.T) {
 		assert.True(t, resp.Succeeded)
 	})
 	t.Run("multi-write", func(t *testing.T) {
-		withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, false, func() {
+		withGlobal(&KVR_TXN_MULTI_WRITE_ENABLED, false, func() {
 			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 				Success: []*internal.RequestOp{
 					putOp(&internal.PutRequest{
@@ -1080,7 +1082,7 @@ func testTransaction(t *testing.T) {
 			require.NotNil(t, err, err)
 			assert.Nil(t, resp)
 		})
-		withGlobal(&ICARUS_TXN_MULTI_WRITE_ENABLED, true, func() {
+		withGlobal(&KVR_TXN_MULTI_WRITE_ENABLED, true, func() {
 			if parity {
 				return
 			}
@@ -1479,7 +1481,7 @@ func testWatch(t *testing.T) {
 				ProgressNotify: true,
 			})
 			res := <-s.resChan
-			if ICARUS_WATCH_ID_ZERO_INDEX {
+			if KVR_WATCH_ID_ZERO_INDEX {
 				require.Equal(t, int64(0), res.WatchId, res)
 				sendWatchCancel(int64(0))
 				res = <-s.resChan
@@ -1513,7 +1515,7 @@ func testWatch(t *testing.T) {
 			assert.Equal(t, internal.ErrWatcherDuplicateID.Error(), res.CancelReason, res)
 		})
 		t.Run("compacted", func(t *testing.T) {
-			withGlobal(&ICARUS_WATCH_CREATE_COMPACTED, true, func() {
+			withGlobal(&KVR_WATCH_CREATE_COMPACTED, true, func() {
 				sendWatchCreate(&internal.WatchCreateRequest{
 					Key:           []byte(`test-watch-000`),
 					RangeEnd:      []byte(`test-watch-100`),
@@ -1532,7 +1534,7 @@ func testWatch(t *testing.T) {
 				assert.Greater(t, res.CompactRevision, int64(1))
 			})
 			if !parity {
-				withGlobal(&ICARUS_WATCH_CREATE_COMPACTED, false, func() {
+				withGlobal(&KVR_WATCH_CREATE_COMPACTED, false, func() {
 					t.Run("no-create", func(t *testing.T) {
 						sendWatchCreate(&internal.WatchCreateRequest{
 							Key:           []byte(`test-watch-000`),
@@ -1840,7 +1842,7 @@ func testWatch(t *testing.T) {
 			assert.True(t, resp.Succeeded)
 			rev = append(rev, resp.Header.Revision)
 		}
-		withGlobalInt(&ICARUS_RESPONSE_SIZE_MAX, 1<<20*2, func() {
+		withGlobalInt(&KVR_RESPONSE_SIZE_MAX, 1<<20*2, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:           []byte(`test-watch-fragment-000`),
 				RangeEnd:      []byte(`test-watch-fragment-999`),

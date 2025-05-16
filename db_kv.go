@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
 type dbKv struct {
@@ -73,7 +73,7 @@ func (db dbKv) put(
 		}
 		return
 	}
-	if krec.rev.upper() == revision && !ICARUS_TXN_MULTI_WRITE_ENABLED {
+	if krec.rev.upper() == revision && !KVR_TXN_MULTI_WRITE_ENABLED {
 		err = internal.ErrGRPCDuplicateKey
 		return
 	}
@@ -97,7 +97,7 @@ func (db dbKv) put(
 	if ignoreLease {
 		next.lease = prev.lease
 	}
-	if ICARUS_KV_PATCH_ENABLED && !krec.rev.isdel() {
+	if KVR_PATCH_ENABLED && !krec.rev.isdel() {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
 		if patched {
@@ -157,7 +157,7 @@ func (db dbKv) getRange(
 		rev = krec.rev
 		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
-			if !ICARUS_KV_RANGE_COUNT_FULL && !ICARUS_KV_RANGE_COUNT_FAKE {
+			if !KVR_RANGE_COUNT_FULL && !KVR_RANGE_COUNT_FAKE {
 				return
 			}
 			countOnly = true
@@ -215,7 +215,7 @@ func (db dbKv) getRange(
 					goto next
 				}
 				items = append(items, item)
-			} else if ICARUS_KV_RANGE_COUNT_FAKE {
+			} else if KVR_RANGE_COUNT_FAKE {
 				break
 			}
 		}
@@ -257,7 +257,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end 
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
 			tombstone = newkeyrev(index, subrev, true)
-			if prev.rev.upper() == index && !ICARUS_TXN_MULTI_WRITE_ENABLED {
+			if prev.rev.upper() == index && !KVR_TXN_MULTI_WRITE_ENABLED {
 				err = internal.ErrGRPCDuplicateKey
 				return
 			}

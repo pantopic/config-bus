@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"hash"

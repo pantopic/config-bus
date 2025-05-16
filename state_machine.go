@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"bytes"
@@ -16,10 +16,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
-const Uri = "zongzi://github.com/logbn/icarus"
+const Uri = "zongzi://github.com/pantopic/kvr"
 
 type stateMachine struct {
 	clock      clock.Clock
@@ -562,7 +562,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		since = index + 1
 		return
 	}
-	// Send INIT message
+	// Send INIT
 	res := zongzi.GetResult()
 	res.Data = append(res.Data, WatchMessageType_INIT)
 	res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(0))
@@ -571,15 +571,15 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		return
 	}
 	result <- res
-	// First event scan
+	// Event scan 1
 	if index, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
-	// Alert watch Start
+	// Watch Start
 	var alert = make(chan uint64, 1e4)
 	defer sm.watches.Insert(req.Key, req.RangeEnd, alert).Remove()
-	// Second event scan
+	// Event scan 2
 	if index, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
@@ -603,8 +603,7 @@ loop:
 				}
 			}
 			if rev <= index {
-				// Skip scan for stale alerts
-				// ie. Alerts received between `Alert watch start` and `Second event scan`
+				// Skip scan for alerts received between Watch start and Event scan 2
 				sm.log.Debug("Watch Alert Skip", "index", index, "rev", rev)
 				continue
 			}
@@ -666,7 +665,7 @@ func (sm *stateMachine) cmdPut(
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
-	if len(req.Key) > ICARUS_LIMIT_KEY_LENGTH {
+	if len(req.Key) > KVR_LIMIT_KEY_LENGTH {
 		err = internal.ErrGRPCKeyTooLong
 		return
 	}
@@ -866,7 +865,7 @@ func (sm *stateMachine) queryRange(
 	if err != nil {
 		return nil, err
 	}
-	if req.CountOnly || ICARUS_KV_RANGE_COUNT_FULL || ICARUS_KV_RANGE_COUNT_FAKE {
+	if req.CountOnly || KVR_RANGE_COUNT_FULL || KVR_RANGE_COUNT_FAKE {
 		res.Count = int64(count)
 	}
 	if !req.CountOnly {

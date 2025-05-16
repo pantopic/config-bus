@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr/internal"
 )
 
 type serviceMaintenance struct {

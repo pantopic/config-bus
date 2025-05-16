@@ -7,37 +7,37 @@ x-variables:
       dockerfile: cmd/standalone/Dockerfile
       target: standalone
     networks:
-      - icarus
+      - kvr
     volumes:
       - type: tmpfs
-        target: /var/lib/icarus
+        target: /var/lib/kvr
         tmpfs:
           mode: 01777
 
 services:
-  icarus-0:
+  kvr-0:
     <<: *common
     environment:
-      ICARUS_HOST_NAME: icarus-0
+      KVR_HOST_NAME: kvr-0
     ports:
       - 19000:19000
       - 6060:6060
 
-  icarus-1:
+  kvr-1:
     <<: *common
     environment:
-      ICARUS_HOST_NAME: icarus-1
+      KVR_HOST_NAME: kvr-1
     ports:
       - 19001:19000
       - 6061:6060
 
-  icarus-2:
+  kvr-2:
     <<: *common
     environment:
-      ICARUS_HOST_NAME: icarus-2
+      KVR_HOST_NAME: kvr-2
     ports:
       - 19002:19000
       - 6062:6060
 
 networks:
-  icarus:
+  kvr:

@@ -14,8 +14,8 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
-	"github.com/logbn/icarus"
-	"github.com/logbn/icarus/internal"
+	"github.com/pantopic/kvr"
+	"github.com/pantopic/kvr/internal"
 )
 
 func main() {
@@ -23,7 +23,8 @@ func main() {
 	var cfg = getConfig()
 	var ctx = context.Background()
 	var log = slog.Default()
-	var ctrl = icarus.NewController(ctx, log)
+	var apiAddr = fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortApi)
+	var ctrl = kvr.NewController(ctx, log)
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithRaftDir(cfg.Dir+"/raft"),
 		zongzi.WithWALDir(cfg.Dir+"/wal"),
@@ -37,11 +38,11 @@ func main() {
 		panic(err)
 	}
 	var grpcServer = grpc.NewServer()
-	agent.StateMachineRegister(icarus.Uri, icarus.NewStateMachineFactory(log, cfg.Dir+"/data"))
+	agent.StateMachineRegister(kvr.Uri, kvr.NewStateMachineFactory(log, cfg.Dir+"/data"))
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
-	shard, _, err := agent.ShardCreate(ctx, icarus.Uri,
+	shard, _, err := agent.ShardCreate(ctx, kvr.Uri,
 		zongzi.WithName("standalone-000"),
 		zongzi.WithPlacementMembers(3))
 	if err != nil {
@@ -51,8 +52,9 @@ func main() {
 		panic(err)
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
-	internal.RegisterKVServer(grpcServer, icarus.NewServiceKv(client))
-	internal.RegisterLeaseServer(grpcServer, icarus.NewServiceLease(client))
+	internal.RegisterKVServer(grpcServer, kvr.NewServiceKv(client))
+	internal.RegisterLeaseServer(grpcServer, kvr.NewServiceLease(client))
+	internal.RegisterClusterServer(grpcServer, kvr.NewServiceCluster(client, apiAddr))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
 	if err != nil {
 		panic(err)

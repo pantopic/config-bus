@@ -1,4 +1,4 @@
-package icarus
+package kvr
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/snappy"
 
-	"github.com/logbn/icarus/internal"
-	"github.com/logbn/icarus/internal/patch"
+	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/kvr/internal/patch"
 )
 
 type kv struct {
@@ -30,14 +30,14 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 		buf = binary.AppendUvarint(buf, kv.created)
 		buf = binary.AppendUvarint(buf, kv.version)
 		buf = binary.AppendUvarint(buf, kv.lease)
-		if next != nil && ICARUS_KV_PATCH_ENABLED {
+		if next != nil && KVR_PATCH_ENABLED {
 			p := patch.Generate(next, kv.val, nil)
 			if len(p) < len(kv.val) {
 				kv.val = p
 				kv.flags |= KV_FLAG_PATCH
 			}
 		}
-		if ICARUS_KV_COMPRESSION_ENABLED && len(kv.val) > 16 {
+		if KVR_COMPRESSION_ENABLED && len(kv.val) > 16 {
 			p := snappy.Encode(nil, kv.val)
 			if len(p) < len(kv.val) {
 				kv.val = p

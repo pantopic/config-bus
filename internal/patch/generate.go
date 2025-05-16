@@ -3,7 +3,7 @@ package patch
 import (
 	"encoding/binary"
 
-	"github.com/logbn/icarus/internal/patch/lcs"
+	"github.com/pantopic/kvr/internal/patch/lcs"
 )
 
 // Generate returns a patch representing the difference between a and b
