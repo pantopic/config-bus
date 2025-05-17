@@ -43,12 +43,12 @@ func main() {
 		panic(err)
 	}
 	shard, _, err := agent.ShardCreate(ctx, kvr.Uri,
-		zongzi.WithName("standalone-000"),
+		zongzi.WithName("kvr"),
 		zongzi.WithPlacementMembers(3))
 	if err != nil {
 		panic(err)
 	}
-	if err = ctrl.Start(agent, shard); err != nil {
+	if err = ctrl.Start(agent.Client(shard.ID), shard); err != nil {
 		panic(err)
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())

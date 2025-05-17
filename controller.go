@@ -19,7 +19,6 @@ type Controller interface {
 }
 
 type controller struct {
-	agent     *zongzi.Agent
 	client    zongzi.ShardClient
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -43,10 +42,9 @@ func NewController(ctx context.Context, log *slog.Logger) *controller {
 	}
 }
 
-func (c *controller) Start(agent *zongzi.Agent, shard zongzi.Shard) (err error) {
-	c.agent = agent
+func (c *controller) Start(client zongzi.ShardClient, shard zongzi.Shard) (err error) {
 	c.shard = shard
-	c.client = agent.Client(shard.ID)
+	c.client = client
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())

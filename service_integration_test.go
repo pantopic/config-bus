@@ -173,7 +173,7 @@ func setupkvr(t *testing.T) {
 		return shard.Leader > 0
 	}))
 	for i := range agents {
-		if err = ctrl[i].Start(agents[i], shard); err != nil {
+		if err = ctrl[i].Start(agents[i].Client(shard.ID), shard); err != nil {
 			panic(err)
 		}
 	}
