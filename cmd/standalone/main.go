@@ -26,11 +26,11 @@ func main() {
 	var apiAddr = fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortApi)
 	var ctrl = kvr.NewController(ctx, log)
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
-		zongzi.WithRaftDir(cfg.Dir+"/raft"),
-		zongzi.WithWALDir(cfg.Dir+"/wal"),
-		zongzi.WithGossipAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
-		zongzi.WithRaftAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
-		zongzi.WithApiAddress(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
+		zongzi.WithDirRaft(cfg.Dir+"/raft"),
+		zongzi.WithDirWAL(cfg.Dir+"/wal"),
+		zongzi.WithAddrGossip(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
+		zongzi.WithAddrRaft(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
+		zongzi.WithAddrApi(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
 		zongzi.WithHostMemoryLimit(zongzi.HostMemory256),
 		zongzi.WithRaftEventListener(ctrl),
 	)

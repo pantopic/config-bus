@@ -131,11 +131,11 @@ func setupkvr(t *testing.T) {
 		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%d", dir, i)
 		if agents[i], err = zongzi.NewAgent("kvr000", peers,
-			zongzi.WithRaftDir(dir+"/raft"),
-			zongzi.WithWALDir(dir+"/wal"),
-			zongzi.WithGossipAddress(fmt.Sprintf(host+":%d", port+(i*10)+1)),
-			zongzi.WithRaftAddress(fmt.Sprintf(host+":%d", port+(i*10)+2)),
-			zongzi.WithApiAddress(fmt.Sprintf(host+":%d", port+(i*10)+3)),
+			zongzi.WithDirRaft(dir+"/raft"),
+			zongzi.WithDirWAL(dir+"/wal"),
+			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+(i*10)+1)),
+			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+(i*10)+2)),
+			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+(i*10)+3)),
 			zongzi.WithRaftEventListener(ctrl[i]),
 		); err != nil {
 			panic(err)

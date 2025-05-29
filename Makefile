@@ -1,5 +1,5 @@
 dev:
-	@go build -ldflags="-s -w" -o standalone ./cmd/standalone && cd cmd/standalone && docker compose up --build
+	@go build -ldflags="-s -w" -o _dist/standalone ./cmd/standalone && cd cmd/standalone && docker compose up --build
 
 test:
 	@go test
