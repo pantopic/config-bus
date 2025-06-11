@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package etcdserverpb;
 
-option go_package = "github.com/pantopic/kvr/internal";
+option go_package = "github.com/pantopic/krv/internal";
 
 message KeyValue {
   bytes key = 1;
@@ -56,7 +56,7 @@ service Maintenance {
   rpc Status(StatusRequest) returns (StatusResponse) {}
   rpc Defragment(DefragmentRequest) returns (DefragmentResponse) {}
   rpc Hash(HashRequest) returns (HashResponse) {}
-  rpc HashKV(HashKVRequest) returns (HashKVResponse) {}
+  rpc HashKV(HashKRVequest) returns (HashKRVesponse) {}
   rpc Snapshot(SnapshotRequest) returns (stream SnapshotResponse) {}
   rpc MoveLeader(MoveLeaderRequest) returns (MoveLeaderResponse) {}
   rpc Downgrade(DowngradeRequest) returns (DowngradeResponse) {}
@@ -191,10 +191,10 @@ message CompactionResponse {
   ResponseHeader header = 1;
 }
 
-message HashKVRequest {
+message HashKRVequest {
   int64 revision = 1;
 }
-message HashKVResponse {
+message HashKRVesponse {
   ResponseHeader header = 1;
   uint32 hash = 2;
   int64 compact_revision = 3;

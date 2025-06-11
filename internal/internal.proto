@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package etcdserverpb;
 
-option go_package = "github.com/pantopic/kvr/internal";
+option go_package = "github.com/pantopic/krv/internal";
 
 message TickRequest {
   uint64 term = 1;

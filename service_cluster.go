@@ -1,11 +1,11 @@
-package kvr
+package krv
 
 import (
 	"context"
 
 	"github.com/logbn/zongzi"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 type serviceCluster struct {

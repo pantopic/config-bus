@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"github.com/PowerDNS/lmdb-go/lmdb"

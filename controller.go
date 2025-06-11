@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 // Controller operates background processes like epoch advancement and election notices
 type Controller interface {
-	Start(agent *zongzi.Agent, shard zongzi.Shard, client zongzi.ShardClient) (err error)
+	Start(client zongzi.ShardClient, shard zongzi.Shard) (err error)
 }
 
 type controller struct {
@@ -41,6 +41,8 @@ func NewController(ctx context.Context, log *slog.Logger) *controller {
 		isLeader: map[uint64]bool{},
 	}
 }
+
+var _ Controller = new(controller)
 
 func (c *controller) Start(client zongzi.ShardClient, shard zongzi.Shard) (err error) {
 	c.shard = shard
@@ -119,7 +121,7 @@ func (c *controller) LeaderUpdated(info zongzi.LeaderInfo) {
 }
 
 func (c *controller) Stop() {
-	defer c.log.Info("Stopped kvr controller", "name", c.shard.Name)
+	defer c.log.Info("Stopped krv controller", "name", c.shard.Name)
 	if c.ctxCancel != nil {
 		c.ctxCancel()
 	}

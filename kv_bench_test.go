@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"testing"
@@ -29,8 +29,8 @@ func BenchmarkTestKv(b *testing.B) {
 			}
 			b.SetBytes(int64(len(buf)))
 		})
-		withGlobal(&KVR_PATCH_ENABLED, true, func() {
-			withGlobal(&KVR_COMPRESSION_ENABLED, false, func() {
+		withGlobal(&KRV_PATCH_ENABLED, true, func() {
+			withGlobal(&KRV_COMPRESSION_ENABLED, false, func() {
 				b.Run(`patch`, func(b *testing.B) {
 					var buf []byte
 					for range b.N {
@@ -40,8 +40,8 @@ func BenchmarkTestKv(b *testing.B) {
 				})
 			})
 		})
-		withGlobal(&KVR_COMPRESSION_ENABLED, true, func() {
-			withGlobal(&KVR_PATCH_ENABLED, false, func() {
+		withGlobal(&KRV_COMPRESSION_ENABLED, true, func() {
+			withGlobal(&KRV_PATCH_ENABLED, false, func() {
 				b.Run(`compress`, func(b *testing.B) {
 					var buf []byte
 					for range b.N {
@@ -51,8 +51,8 @@ func BenchmarkTestKv(b *testing.B) {
 				})
 			})
 		})
-		withGlobal(&KVR_COMPRESSION_ENABLED, true, func() {
-			withGlobal(&KVR_PATCH_ENABLED, true, func() {
+		withGlobal(&KRV_COMPRESSION_ENABLED, true, func() {
+			withGlobal(&KRV_PATCH_ENABLED, true, func() {
 				b.Run(`nopatch-compress`, func(b *testing.B) {
 					var buf []byte
 					for range b.N {
@@ -80,8 +80,8 @@ func BenchmarkTestKv(b *testing.B) {
 			var err error
 			var item2 kv
 			var buf []byte
-			withGlobal(&KVR_PATCH_ENABLED, true, func() {
-				withGlobal(&KVR_COMPRESSION_ENABLED, false, func() {
+			withGlobal(&KRV_PATCH_ENABLED, true, func() {
+				withGlobal(&KRV_COMPRESSION_ENABLED, false, func() {
 					buf = itemPatchCompress.Bytes(nextPatch, nil)
 				})
 			})
@@ -97,8 +97,8 @@ func BenchmarkTestKv(b *testing.B) {
 			var err error
 			var item2 kv
 			var buf []byte
-			withGlobal(&KVR_PATCH_ENABLED, false, func() {
-				withGlobal(&KVR_COMPRESSION_ENABLED, true, func() {
+			withGlobal(&KRV_PATCH_ENABLED, false, func() {
+				withGlobal(&KRV_COMPRESSION_ENABLED, true, func() {
 					buf = itemPatchCompress.Bytes(nextPatch, nil)
 				})
 			})

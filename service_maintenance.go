@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 type serviceMaintenance struct {
@@ -45,8 +45,8 @@ func (svc *serviceMaintenance) Hash(ctx context.Context,
 }
 
 func (svc *serviceMaintenance) HashKV(ctx context.Context,
-	req *internal.HashKVRequest,
-) (res *internal.HashKVResponse, err error) {
+	req *internal.HashKRVequest,
+) (res *internal.HashKRVesponse, err error) {
 	return
 }
 

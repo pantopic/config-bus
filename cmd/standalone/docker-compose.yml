@@ -7,37 +7,37 @@ x-variables:
       dockerfile: cmd/standalone/Dockerfile
       target: standalone
     networks:
-      - kvr
+      - krv
     volumes:
       - type: tmpfs
-        target: /var/lib/kvr
+        target: /var/lib/krv
         tmpfs:
           mode: 01777
 
 services:
-  kvr-0:
+  krv-0:
     <<: *common
     environment:
-      KVR_HOST_NAME: kvr-0
+      KRV_HOST_NAME: krv-0
     ports:
       - 19000:19000
       - 6060:6060
 
-  kvr-1:
+  krv-1:
     <<: *common
     environment:
-      KVR_HOST_NAME: kvr-1
+      KRV_HOST_NAME: krv-1
     ports:
       - 19001:19000
       - 6061:6060
 
-  kvr-2:
+  krv-2:
     <<: *common
     environment:
-      KVR_HOST_NAME: kvr-2
+      KRV_HOST_NAME: krv-2
     ports:
       - 19002:19000
       - 6062:6060
 
 networks:
-  kvr:
+  krv:

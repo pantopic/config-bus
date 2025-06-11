@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 type serviceLease struct {

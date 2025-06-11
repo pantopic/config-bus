@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"log/slog"
@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	dir = "/tmp/kvr/test-db"
+	dir = "/tmp/krv/test-db"
 	sm  = &stateMachine{
 		shardID:   1,
 		replicaID: 1,

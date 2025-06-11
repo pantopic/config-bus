@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"testing"
@@ -30,7 +30,7 @@ func TestKv(t *testing.T) {
 	})
 	t.Run(`patch`, func(t *testing.T) {
 		next := []byte(`--------------------0-------------------`)
-		withGlobal(&KVR_PATCH_ENABLED, true, func() {
+		withGlobal(&KRV_PATCH_ENABLED, true, func() {
 			buf := item.Bytes(next, nil)
 			t.Run(`enabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
@@ -45,7 +45,7 @@ func TestKv(t *testing.T) {
 				})
 			})
 		})
-		withGlobal(&KVR_PATCH_ENABLED, false, func() {
+		withGlobal(&KRV_PATCH_ENABLED, false, func() {
 			buf := item.Bytes(next, nil)
 			t.Run(`disabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestKv(t *testing.T) {
 	})
 	t.Run(`compress`, func(t *testing.T) {
 		next := []byte(`........................................`)
-		withGlobal(&KVR_COMPRESSION_ENABLED, true, func() {
+		withGlobal(&KRV_COMPRESSION_ENABLED, true, func() {
 			buf := item.Bytes(next, nil)
 			t.Run(`enabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {
@@ -74,7 +74,7 @@ func TestKv(t *testing.T) {
 				})
 			})
 		})
-		withGlobal(&KVR_COMPRESSION_ENABLED, false, func() {
+		withGlobal(&KRV_COMPRESSION_ENABLED, false, func() {
 			buf := item.Bytes(next, nil)
 			t.Run(`disabled`, func(t *testing.T) {
 				t.Run(`success`, func(t *testing.T) {

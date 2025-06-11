@@ -1,6 +1,6 @@
 //go:build !unit
 
-package kvr
+package krv
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 var (
 	ctx    = context.Background()
-	parity = os.Getenv("KVR_PARITY_CHECK") == "true"
-	debug  = os.Getenv("KVR_LOG_LEVEL") == "debug"
+	parity = os.Getenv("KRV_PARITY_CHECK") == "true"
+	debug  = os.Getenv("KRV_LOG_LEVEL") == "debug"
 	wait   func(time.Duration)
 
 	err            error
@@ -41,7 +41,7 @@ func TestService(t *testing.T) {
 	if parity {
 		t.Run("setup-parity", setupParity)
 	} else {
-		t.Run("setup-kvr", setupkvr)
+		t.Run("setup-krv", setupkrv)
 	}
 	t.Run("insert", testInsert)
 	t.Run("update", testUpdate)
@@ -86,13 +86,13 @@ func setupParity(t *testing.T) {
 	svcMaintenance = newParityMaintenanceService(conn)
 
 	// Etcd bugs
-	KVR_RANGE_COUNT_FILTER_CORRECT = false
-	KVR_WATCH_ID_ZERO_INDEX = true
-	KVR_WATCH_CREATE_COMPACTED = true
+	KRV_RANGE_COUNT_FILTER_CORRECT = false
+	KRV_WATCH_ID_ZERO_INDEX = true
+	KRV_WATCH_CREATE_COMPACTED = true
 }
 
-// Run integration tests against bootstrapped kvr instance
-func setupkvr(t *testing.T) {
+// Run integration tests against bootstrapped krv instance
+func setupkrv(t *testing.T) {
 	logLevel := new(slog.LevelVar)
 	if debug {
 		logLevel.Set(slog.LevelDebug)
@@ -104,7 +104,7 @@ func setupkvr(t *testing.T) {
 	}))
 	var (
 		agents = make([]*zongzi.Agent, 3)
-		dir    = "/tmp/kvr/test"
+		dir    = "/tmp/krv/test"
 		host   = "127.0.0.1"
 		port   = 19000
 		peers  = []string{
@@ -130,7 +130,7 @@ func setupkvr(t *testing.T) {
 	for i := range len(agents) {
 		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%d", dir, i)
-		if agents[i], err = zongzi.NewAgent("kvr000", peers,
+		if agents[i], err = zongzi.NewAgent("krv000", peers,
 			zongzi.WithDirRaft(dir+"/raft"),
 			zongzi.WithDirWAL(dir+"/wal"),
 			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+(i*10)+1)),
@@ -391,7 +391,7 @@ func testRange(t *testing.T) {
 			require.Equal(t, int64(50), resp.Count)
 		})
 		t.Run("partial", func(t *testing.T) {
-			withGlobal(&KVR_RANGE_COUNT_FULL, false, func() {
+			withGlobal(&KRV_RANGE_COUNT_FULL, false, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -409,7 +409,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("full", func(t *testing.T) {
-			withGlobal(&KVR_RANGE_COUNT_FULL, true, func() {
+			withGlobal(&KRV_RANGE_COUNT_FULL, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -432,7 +432,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("fake", func(t *testing.T) {
-			withGlobal(&KVR_RANGE_COUNT_FAKE, true, func() {
+			withGlobal(&KRV_RANGE_COUNT_FAKE, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -486,7 +486,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -499,7 +499,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -513,7 +513,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -528,7 +528,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -541,7 +541,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -555,7 +555,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -573,7 +573,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -589,7 +589,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KVR_RANGE_COUNT_FILTER_CORRECT {
+			if KRV_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -1053,7 +1053,7 @@ func testTransaction(t *testing.T) {
 		assert.True(t, resp.Succeeded)
 	})
 	t.Run("multi-write", func(t *testing.T) {
-		withGlobal(&KVR_TXN_MULTI_WRITE_ENABLED, false, func() {
+		withGlobal(&KRV_TXN_MULTI_WRITE_ENABLED, false, func() {
 			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 				Success: []*internal.RequestOp{
 					putOp(&internal.PutRequest{
@@ -1082,7 +1082,7 @@ func testTransaction(t *testing.T) {
 			require.NotNil(t, err, err)
 			assert.Nil(t, resp)
 		})
-		withGlobal(&KVR_TXN_MULTI_WRITE_ENABLED, true, func() {
+		withGlobal(&KRV_TXN_MULTI_WRITE_ENABLED, true, func() {
 			if parity {
 				return
 			}
@@ -1481,7 +1481,7 @@ func testWatch(t *testing.T) {
 				ProgressNotify: true,
 			})
 			res := <-s.resChan
-			if KVR_WATCH_ID_ZERO_INDEX {
+			if KRV_WATCH_ID_ZERO_INDEX {
 				require.Equal(t, int64(0), res.WatchId, res)
 				sendWatchCancel(int64(0))
 				res = <-s.resChan
@@ -1515,7 +1515,7 @@ func testWatch(t *testing.T) {
 			assert.Equal(t, internal.ErrWatcherDuplicateID.Error(), res.CancelReason, res)
 		})
 		t.Run("compacted", func(t *testing.T) {
-			withGlobal(&KVR_WATCH_CREATE_COMPACTED, true, func() {
+			withGlobal(&KRV_WATCH_CREATE_COMPACTED, true, func() {
 				sendWatchCreate(&internal.WatchCreateRequest{
 					Key:           []byte(`test-watch-000`),
 					RangeEnd:      []byte(`test-watch-100`),
@@ -1534,7 +1534,7 @@ func testWatch(t *testing.T) {
 				assert.Greater(t, res.CompactRevision, int64(1))
 			})
 			if !parity {
-				withGlobal(&KVR_WATCH_CREATE_COMPACTED, false, func() {
+				withGlobal(&KRV_WATCH_CREATE_COMPACTED, false, func() {
 					t.Run("no-create", func(t *testing.T) {
 						sendWatchCreate(&internal.WatchCreateRequest{
 							Key:           []byte(`test-watch-000`),
@@ -1842,7 +1842,7 @@ func testWatch(t *testing.T) {
 			assert.True(t, resp.Succeeded)
 			rev = append(rev, resp.Header.Revision)
 		}
-		withGlobalInt(&KVR_RESPONSE_SIZE_MAX, 1<<20*2, func() {
+		withGlobalInt(&KRV_RESPONSE_SIZE_MAX, 1<<20*2, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:           []byte(`test-watch-fragment-000`),
 				RangeEnd:      []byte(`test-watch-fragment-999`),
@@ -2211,8 +2211,8 @@ func (svc *parityMaintenanceService) Hash(ctx context.Context,
 }
 
 func (svc *parityMaintenanceService) HashKV(ctx context.Context,
-	req *internal.HashKVRequest,
-) (res *internal.HashKVResponse, err error) {
+	req *internal.HashKRVequest,
+) (res *internal.HashKRVesponse, err error) {
 	return svc.client.HashKV(ctx, req)
 }
 

@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"bytes"

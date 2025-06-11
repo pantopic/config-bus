@@ -1,4 +1,4 @@
-module github.com/pantopic/kvr
+module github.com/pantopic/krv
 
 go 1.24.0
 

@@ -5,22 +5,22 @@ import (
 )
 
 type config struct {
-	ClusterName string `env:"KVR_CLUSTER_NAME"`
-	Dir         string `env:"KVR_DIR"`
-	HostName    string `env:"KVR_HOST_NAME"`
-	HostPeers   string `env:"KVR_HOST_PEERS"`
-	PortApi     uint16 `env:"KVR_PORT_API"`
-	PortGossip  uint16 `env:"KVR_PORT_GOSSIP"`
-	PortRaft    uint16 `env:"KVR_PORT_RAFT"`
-	PortZongzi  uint16 `env:"KVR_PORT_ZONGZI"`
+	ClusterName string `env:"KRV_CLUSTER_NAME"`
+	Dir         string `env:"KRV_DIR"`
+	HostName    string `env:"KRV_HOST_NAME"`
+	HostPeers   string `env:"KRV_HOST_PEERS"`
+	PortApi     uint16 `env:"KRV_PORT_API"`
+	PortGossip  uint16 `env:"KRV_PORT_GOSSIP"`
+	PortRaft    uint16 `env:"KRV_PORT_RAFT"`
+	PortZongzi  uint16 `env:"KRV_PORT_ZONGZI"`
 }
 
 func getConfig() config {
 	cfg := config{
-		ClusterName: "kvr",
-		Dir:         "/var/lib/kvr",
-		HostName:    "kvr-0",
-		HostPeers:   "kvr-0:17003,kvr-1:17003,kvr-2:17003",
+		ClusterName: "krv",
+		Dir:         "/var/lib/krv",
+		HostName:    "krv-0",
+		HostPeers:   "krv-0:17003,krv-1:17003,krv-2:17003",
 		PortApi:     19000,
 		PortGossip:  17001,
 		PortRaft:    17002,

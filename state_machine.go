@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"bytes"
@@ -16,10 +16,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
-const Uri = "zongzi://github.com/pantopic/kvr"
+const Uri = "zongzi://github.com/pantopic/krv"
 
 type stateMachine struct {
 	clock      clock.Clock
@@ -97,7 +97,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 	sm.statUpdates++
 	sm.statEntries += len(entries)
 	if sm.statUpdates > 100 {
-		sm.log.Info("StateMachine Stats",
+		sm.log.Debug("StateMachine Stats",
 			"entries", sm.statEntries,
 			"average", sm.statEntries/sm.statUpdates,
 			"diffed", sm.statPatched,
@@ -665,7 +665,7 @@ func (sm *stateMachine) cmdPut(
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
-	if len(req.Key) > KVR_LIMIT_KEY_LENGTH {
+	if len(req.Key) > KRV_LIMIT_KEY_LENGTH {
 		err = internal.ErrGRPCKeyTooLong
 		return
 	}
@@ -865,7 +865,7 @@ func (sm *stateMachine) queryRange(
 	if err != nil {
 		return nil, err
 	}
-	if req.CountOnly || KVR_RANGE_COUNT_FULL || KVR_RANGE_COUNT_FAKE {
+	if req.CountOnly || KRV_RANGE_COUNT_FULL || KRV_RANGE_COUNT_FAKE {
 		res.Count = int64(count)
 	}
 	if !req.CountOnly {

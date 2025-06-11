@@ -8,7 +8,7 @@ integration:
 	@go test ./...
 
 parity:
-	@KVR_PARITY_CHECK=true go test -v
+	@KRV_PARITY_CHECK=true go test -v
 
 bench:
 	@go test -bench=. -run=_ -v

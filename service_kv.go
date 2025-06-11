@@ -1,4 +1,4 @@
-package kvr
+package krv
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/kvr/internal"
+	"github.com/pantopic/krv/internal"
 )
 
 type kvService struct {
