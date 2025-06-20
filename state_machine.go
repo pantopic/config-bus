@@ -65,7 +65,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 	}
 	sm.env, err = lmdb.NewEnv()
 	sm.env.SetMaxDBs(255)
-	sm.env.SetMapSize(int64(1 << 33)) // 8 GB
+	sm.env.SetMapSize(int64(8 << 30)) // 8 GiB
 	sm.env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
 	err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		if sm.dbMeta, index, err = newDbMeta(txn); err != nil {
@@ -624,7 +624,6 @@ loop:
 			}
 		}
 	}
-	return
 }
 
 func (sm *stateMachine) PrepareSnapshot() (cursor any, err error) {

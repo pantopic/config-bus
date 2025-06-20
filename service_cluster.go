@@ -19,11 +19,6 @@ func NewServiceCluster(client zongzi.ShardClient, apiAddr string) *serviceCluste
 	return &serviceCluster{client: client, apiAddr: apiAddr}
 }
 
-func (s *serviceCluster) addTerm(header *internal.ResponseHeader) {
-	_, term := s.client.Leader()
-	header.RaftTerm = term
-}
-
 func (s serviceCluster) MemberAdd(ctx context.Context,
 	req *internal.MemberAddRequest,
 ) (res *internal.MemberAddResponse, err error) {

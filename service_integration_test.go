@@ -288,7 +288,6 @@ func testUpdate(t *testing.T) {
 		require.Equal(t, len(resp2.Kvs), 1)
 		assert.Equal(t, []byte(`test-value-3`), resp2.Kvs[0].Value)
 	})
-	return
 }
 
 func testRange(t *testing.T) {
