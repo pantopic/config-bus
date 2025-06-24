@@ -1,15 +1,14 @@
-package krv
+package main
 
 import (
 	"bytes"
 	"encoding/binary"
-	// "log"
 	"math"
 
 	"github.com/golang/snappy"
 
-	"github.com/pantopic/krv/internal"
-	"github.com/pantopic/krv/internal/patch"
+	"github.com/pantopic/krv/module/state_machine/internal"
+	"github.com/pantopic/krv/module/state_machine/patch"
 )
 
 type kv struct {

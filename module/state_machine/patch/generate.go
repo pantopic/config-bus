@@ -3,7 +3,7 @@ package patch
 import (
 	"encoding/binary"
 
-	"github.com/pantopic/krv/internal/patch/lcs"
+	"github.com/pantopic/krv/module/state_machine/patch/lcs"
 )
 
 // Generate returns a patch representing the difference between a and b

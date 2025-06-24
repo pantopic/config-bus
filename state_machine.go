@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
 	"github.com/logbn/byteinterval"
 	"github.com/logbn/zongzi"
@@ -17,6 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/wazero-lmdb/lmdb-go"
 )
 
 const Uri = "zongzi://github.com/pantopic/krv"
@@ -48,7 +48,7 @@ func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMac
 		return &stateMachine{
 			shardID:   shardID,
 			replicaID: replicaID,
-			envPath:   fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
+			envPath:   fmt.Sprintf("%s/%016x/env", dataDir, shardID),
 			log:       logger,
 			clock:     clock.New(),
 			watches:   byteinterval.New[chan uint64](),
@@ -67,27 +67,6 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 	sm.env.SetMaxDBs(255)
 	sm.env.SetMapSize(int64(8 << 30)) // 8 GiB
 	sm.env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
-	err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
-		if sm.dbMeta, index, err = newDbMeta(txn); err != nil {
-			return
-		}
-		if sm.dbStats, err = newDbStats(txn); err != nil {
-			return
-		}
-		if sm.dbKv, err = newDbKv(txn); err != nil {
-			return
-		}
-		if sm.dbLease, err = newDbLease(txn); err != nil {
-			return
-		}
-		if sm.dbLeaseExp, err = newDbLeaseExp(txn); err != nil {
-			return
-		}
-		if sm.dbLeaseKey, err = newDbLeaseKey(txn); err != nil {
-			return
-		}
-		return
-	})
 	return
 }
 
@@ -652,7 +631,7 @@ func (sm *stateMachine) RecoverFromSnapshot(r io.Reader, close <-chan struct{}) 
 }
 
 func (sm *stateMachine) Sync() error {
-	return sm.env.Sync(true)
+	return sm.env.Sync()
 }
 
 func (sm *stateMachine) Close() error {
@@ -1007,18 +986,4 @@ func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader
 		ClusterId: sm.shardID,
 		MemberId:  sm.replicaID,
 	}
-}
-
-func txnIntCompare(cond internal.Compare_CompareResult, a, b int64) bool {
-	switch cond {
-	case internal.Compare_EQUAL:
-		return a == b
-	case internal.Compare_GREATER:
-		return a > b
-	case internal.Compare_LESS:
-		return a < b
-	case internal.Compare_NOT_EQUAL:
-		return a != b
-	}
-	return false
 }

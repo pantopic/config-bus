@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.12.4
-// source: api.proto
+// source: internal/api.proto
 
 package internal
 
@@ -269,7 +269,7 @@ var KV_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api.proto",
+	Metadata: "internal/api.proto",
 }
 
 const (
@@ -365,7 +365,7 @@ var Watch_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "api.proto",
+	Metadata: "internal/api.proto",
 }
 
 const (
@@ -614,7 +614,7 @@ var Lease_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "api.proto",
+	Metadata: "internal/api.proto",
 }
 
 const (
@@ -868,7 +868,7 @@ var Cluster_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api.proto",
+	Metadata: "internal/api.proto",
 }
 
 const (
@@ -1240,5 +1240,5 @@ var Maintenance_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "api.proto",
+	Metadata: "internal/api.proto",
 }

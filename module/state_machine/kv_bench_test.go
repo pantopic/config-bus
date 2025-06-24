@@ -1,4 +1,4 @@
-package krv
+package main
 
 import (
 	"testing"

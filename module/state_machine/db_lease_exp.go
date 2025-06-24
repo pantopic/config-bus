@@ -1,34 +1,33 @@
-package krv
+package main
 
 import (
 	"encoding/binary"
 	"iter"
 
-	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/pantopic/wazero-lmdb/lmdb-go"
 )
 
-type dbLeaseExp struct {
+type dbLeaseExpImpl struct {
 	db
 }
 
-func newDbLeaseExp(txn *lmdb.Txn) (db dbLeaseExp, err error) {
-	db.i, err = txn.OpenDBI("lease_exp", uint(lmdb.Create))
-	return
+func (db dbLeaseExpImpl) init(txn *lmdb.Txn) {
+	db.open(txn)
 }
 
-func (db dbLeaseExp) put(txn *lmdb.Txn, item lease) error {
+func (db dbLeaseExpImpl) put(txn *lmdb.Txn, item lease) error {
 	k := binary.BigEndian.AppendUint64(nil, item.expires)
 	k = binary.AppendUvarint(k, item.id)
 	return txn.Put(db.i, k, db.addChecksum(k, nil), 0)
 }
 
-func (db dbLeaseExp) del(txn *lmdb.Txn, item lease) (err error) {
+func (db dbLeaseExpImpl) del(txn *lmdb.Txn, item lease) (err error) {
 	key := binary.BigEndian.AppendUint64(nil, item.expires)
 	key = binary.AppendUvarint(key, item.id)
 	return txn.Del(db.i, key, nil)
 }
 
-func (db dbLeaseExp) scan(txn *lmdb.Txn, expires uint64) iter.Seq[uint64] {
+func (db dbLeaseExpImpl) scan(txn *lmdb.Txn, expires uint64) iter.Seq[uint64] {
 	cur, err := txn.OpenCursor(db.i)
 	if err != nil {
 		return nil

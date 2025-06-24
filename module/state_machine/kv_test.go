@@ -1,4 +1,4 @@
-package krv
+package main
 
 import (
 	"testing"
@@ -94,6 +94,7 @@ func withGlobal(flag *bool, val bool, fn func()) {
 	fn()
 	*flag = prev
 }
+
 func withGlobalInt(flag *int, val int, fn func()) {
 	prev := *flag
 	*flag = val

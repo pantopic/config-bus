@@ -1,9 +1,8 @@
 module github.com/pantopic/krv
 
-go 1.24.0
+go 1.24.3
 
 require (
-	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang/snappy v0.0.4

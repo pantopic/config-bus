@@ -1,12 +1,8 @@
-package krv
+package main
 
 import (
-	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/pantopic/wazero-lmdb/lmdb-go"
 )
-
-type dbMeta struct {
-	db
-}
 
 var (
 	// Logical clock representing seconds of uptime since shard creation
@@ -25,8 +21,13 @@ var (
 	metaKeyTerm = []byte(`term`)
 )
 
-func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
-	db.i, err = txn.OpenDBI("meta", uint(lmdb.Create))
+type dbMetaImpl struct {
+	db
+}
+
+func (db dbMetaImpl) init(txn *lmdb.Txn) (index uint64) {
+	var err error
+	db.open(txn)
 	for _, k := range [][]byte{
 		metaKeyEpoch,
 		metaKeyIndex,
@@ -40,65 +41,67 @@ func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 			err = db.putUint64(txn, k, 0)
 		}
 		if err != nil {
-			return
+			panic(err)
 		}
 	}
-	index, err = db.getIndex(txn)
+	if index, err = db.getIndex(txn); err != nil {
+		panic(err)
+	}
 	return
 }
 
-func (db dbMeta) getEpoch(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getEpoch(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyEpoch)
 }
 
-func (db dbMeta) setEpoch(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setEpoch(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyEpoch, index)
 }
 
-func (db dbMeta) getIndex(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getIndex(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyIndex)
 }
 
-func (db dbMeta) setIndex(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setIndex(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyIndex, index)
 }
 
-func (db dbMeta) getLeaseID(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getLeaseID(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyLeaseID)
 }
 
-func (db dbMeta) setLeaseID(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setLeaseID(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyLeaseID, index)
 }
 
-func (db dbMeta) getRevision(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getRevision(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyRevision)
 }
 
-func (db dbMeta) setRevision(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setRevision(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyRevision, index)
 }
 
-func (db dbMeta) getRevisionCompacted(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getRevisionCompacted(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyRevisionCompacted)
 }
 
-func (db dbMeta) setRevisionCompacted(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setRevisionCompacted(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyRevisionCompacted, index)
 }
 
-func (db dbMeta) getRevisionMin(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getRevisionMin(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyRevisionMin)
 }
 
-func (db dbMeta) setRevisionMin(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setRevisionMin(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyRevisionMin, index)
 }
 
-func (db dbMeta) getTerm(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMetaImpl) getTerm(txn *lmdb.Txn) (index uint64, err error) {
 	return db.getUint64(txn, metaKeyTerm)
 }
 
-func (db dbMeta) setTerm(txn *lmdb.Txn, index uint64) (err error) {
+func (db dbMetaImpl) setTerm(txn *lmdb.Txn, index uint64) (err error) {
 	return db.putUint64(txn, metaKeyTerm, index)
 }

@@ -1,33 +1,28 @@
-package krv
+package main
 
 import (
 	"bytes"
 	"encoding/binary"
 	"iter"
 
-	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/pantopic/wazero-lmdb/lmdb-go"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/krv/module/state_machine/internal"
 )
 
-type dbKv struct {
+type kvStoreImpl struct {
 	evt db
 	rev db
 	val db
 }
 
-func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
-	if db.rev.i, err = txn.OpenDBI("revision", uint(lmdb.Create|lmdbDupFlags)); err != nil {
-		return
-	}
-	if db.evt.i, err = txn.OpenDBI("event", uint(lmdb.Create|lmdbDupFlags)); err != nil {
-		return
-	}
-	db.val.i, err = txn.OpenDBI("value", uint(lmdb.Create))
-	return
+func (db kvStoreImpl) init(txn *lmdb.Txn) {
+	db.evt.open(txn)
+	db.rev.open(txn)
+	db.val.open(txn)
 }
 
-func (db dbKv) put(
+func (db kvStoreImpl) put(
 	txn *lmdb.Txn,
 	revision, subrev, lease, epoch uint64,
 	key, val []byte,
@@ -123,7 +118,7 @@ func (db dbKv) put(
 	return
 }
 
-func (db dbKv) getRange(
+func (db kvStoreImpl) getRange(
 	txn *lmdb.Txn,
 	key, end []byte,
 	revision, minMod, maxMod, minCreated, maxCreated, limit uint64,
@@ -231,7 +226,7 @@ func (db dbKv) getRange(
 	return
 }
 
-func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end []byte) (items []keyrecord, count int64, err error) {
+func (db kvStoreImpl) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end []byte) (items []keyrecord, count int64, err error) {
 	var prev keyrecord
 	var tombstone keyrev
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -284,7 +279,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end 
 	return
 }
 
-func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]byte) (err error) {
+func (db kvStoreImpl) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]byte) (err error) {
 	var prev, tombstone keyrecord
 	var k, v []byte
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -323,7 +318,7 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]
 	return
 }
 
-func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
+func (db kvStoreImpl) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 	curRev, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
@@ -419,12 +414,12 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 	return
 }
 
-func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
+func (db kvStoreImpl) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 	item, _, err = db.getRev(txn, key, 0, false)
 	return
 }
 
-func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool) (item, prev kv, err error) {
+func (db kvStoreImpl) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool) (item, prev kv, err error) {
 	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
@@ -500,7 +495,7 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 	return
 }
 
-func (db dbKv) scan(txn *lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
+func (db kvStoreImpl) scan(txn *lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
 	cur, err := txn.OpenCursor(db.evt.i)
 	if err != nil {
 		return nil
@@ -530,7 +525,7 @@ func (db dbKv) scan(txn *lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
 	}
 }
 
-func (db dbKv) evtFromBytes(k, v []byte) (evt kvEvent, err error) {
+func (db kvStoreImpl) evtFromBytes(k, v []byte) (evt kvEvent, err error) {
 	var n int
 	if evt.rev, err = evt.rev.FromKey(k, v); err != nil {
 		return

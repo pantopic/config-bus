@@ -22,8 +22,21 @@ cover:
 	@go tool cover -html=_dist/coverage.out -o _dist/coverage.html
 
 gen:
-	@protoc internal/*.proto --go_out=internal --go_opt=paths=source_relative \
-		--go-grpc_out=internal --go-grpc_opt=paths=source_relative -I internal
+	@protoc internal/*.proto --go_out=internal \
+		--go-grpc_out=internal -I internal
+	@protoc \
+		--go_out=module/state_machine/internal --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
+		--go-grpc_out=module/state_machine/internal --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		--go-vtproto_out=module/state_machine/internal --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
+		--go-vtproto_opt=features=marshal+unmarshal+size \
+		internal/*.proto;
+	@mv module/state_machine/proto/github.com/pantopic/krv/internal module/state_machine
+	@rm -rf module/state_machine/internal/github.com
+
+gen-install:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@latest
 
 cloc:
 	@cloc . --exclude-dir=_example,_dist,internal --exclude-ext=pb.go

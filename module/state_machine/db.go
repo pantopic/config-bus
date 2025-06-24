@@ -1,18 +1,38 @@
-package krv
+package main
 
 import (
 	"encoding/binary"
+	"strconv"
 
-	"github.com/PowerDNS/lmdb-go/lmdb"
+	"github.com/pantopic/wazero-lmdb/lmdb-go"
 )
 
 var (
-	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync
-	lmdbDupFlags = lmdb.DupSort
+	dbMeta  = dbMetaImpl{db{`meta`, 1}}
+	dbStats = dbStatsImpl{db{`stats`, 2}}
+	kvStore = kvStoreImpl{
+		rev: db{`revision`, 3},
+		evt: db{`event`, 4},
+		val: db{`value`, 5},
+	}
+	dbLease    = dbLeaseImpl{db{`lease`, 6}}
+	dbLeaseExp = dbLeaseExpImpl{db{`lease_exp`, 7}}
+	dbLeaseKey = dbLeaseKeyImpl{db{`lease_key`, 8}}
 )
 
 type db struct {
-	i lmdb.DBI
+	name string
+	i    lmdb.DBI
+}
+
+func (db db) open(txn *lmdb.Txn) {
+	i, err := txn.OpenDBI(db.name, lmdb.Create)
+	if err != nil {
+		panic(err)
+	}
+	if i != db.i {
+		panic("Incorrect DBI: " + db.name + "(" + strconv.Itoa(int(i)) + ")")
+	}
 }
 
 func (db db) trimChecksum(key, val []byte) ([]byte, error) {
