@@ -4,6 +4,7 @@ go 1.24.3
 
 require (
 	github.com/golang/snappy v1.0.0
+	github.com/pantopic/cluster/guest/state_machine v0.0.0-20250624203702-9bb5907b41ec
 	github.com/pantopic/wazero-lmdb/lmdb-go v0.0.6
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10
 	github.com/stretchr/testify v1.10.0

@@ -1,18 +1,25 @@
 package main
 
 import (
-	// sm "github.com/pantopic/cluster/module/state_machine_persistent/guest"
+	sm "github.com/pantopic/cluster/guest/state_machine"
 
 	"github.com/pantopic/wazero-lmdb/lmdb-go"
 )
 
-func main() {}
+var (
+	txn *lmdb.Txn
+)
 
-func openDb(txn *lmdb.Txn, db db) {
+func main() {
+	sm.RegisterPersistent(
+		open,
+		update,
+		finish,
+		read,
+	)
 }
 
-//export Open
-func Open() (index uint64) {
+func open() (index uint64) {
 	lmdb.Update(func(txn *lmdb.Txn) (err error) {
 		index = dbMeta.init(txn)
 		dbStats.init(txn)
@@ -25,10 +32,27 @@ func Open() (index uint64) {
 	return
 }
 
-//export Update
-func Update() {
-	txn, err := lmdb.BeginTxn(nil, 0)
-	if err != nil {
+func update(index uint64, cmd []byte) (value uint64, data []byte) {
+	var err error
+	if txn == nil {
+		txn, err = lmdb.BeginTxn(nil, 0)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return
+}
+
+func finish() {
+	if err := txn.Commit(); err != nil {
 		panic(err)
 	}
+}
+
+func read(query []byte) (code uint64, res []byte) {
+	// txn, err := lmdb.BeginTxn(nil, 0)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	return
 }

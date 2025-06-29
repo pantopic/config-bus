@@ -14,6 +14,9 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
+	"github.com/pantopic/wazero"
+	"github.com/pantopic/wazero-lmdb/host"
+
 	"github.com/pantopic/krv"
 	"github.com/pantopic/krv/internal"
 )
@@ -37,8 +40,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var grpcServer = grpc.NewServer()
-	agent.StateMachineRegister(krv.Uri, krv.NewStateMachineFactory(log, cfg.Dir+"/data"))
+	var binary []byte
+	runtime := wazero.NewRuntime(ctx)
+	runtime.ExtensionRegister(wazero_lmdb.New(cfg.Dir + "/data"))
+	sm, err := runtime.StateMachineFactory(binary)
+	if err != nil {
+		panic(err)
+	}
+	agent.StateMachineRegister(krv.Uri, sm)
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
@@ -52,6 +61,7 @@ func main() {
 		panic(err)
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
+	var grpcServer = grpc.NewServer()
 	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
 	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
 	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))

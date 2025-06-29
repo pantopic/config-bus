@@ -5,9 +5,9 @@ go 1.24.3
 require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/golang/snappy v0.0.4
 	github.com/logbn/byteinterval v0.0.1
 	github.com/logbn/zongzi v0.0.19
+	github.com/pantopic/wazero-lmdb/lmdb-go v0.0.6
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.5
@@ -27,6 +27,7 @@ require (
 	github.com/elliotchance/orderedmap/v2 v2.2.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

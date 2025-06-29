@@ -890,7 +890,7 @@ type MaintenanceClient interface {
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	Defragment(ctx context.Context, in *DefragmentRequest, opts ...grpc.CallOption) (*DefragmentResponse, error)
 	Hash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error)
-	HashKV(ctx context.Context, in *HashKRVequest, opts ...grpc.CallOption) (*HashKRVesponse, error)
+	HashKV(ctx context.Context, in *HashKVRequest, opts ...grpc.CallOption) (*HashKVResponse, error)
 	Snapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SnapshotResponse], error)
 	MoveLeader(ctx context.Context, in *MoveLeaderRequest, opts ...grpc.CallOption) (*MoveLeaderResponse, error)
 	Downgrade(ctx context.Context, in *DowngradeRequest, opts ...grpc.CallOption) (*DowngradeResponse, error)
@@ -944,9 +944,9 @@ func (c *maintenanceClient) Hash(ctx context.Context, in *HashRequest, opts ...g
 	return out, nil
 }
 
-func (c *maintenanceClient) HashKV(ctx context.Context, in *HashKRVequest, opts ...grpc.CallOption) (*HashKRVesponse, error) {
+func (c *maintenanceClient) HashKV(ctx context.Context, in *HashKVRequest, opts ...grpc.CallOption) (*HashKVResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HashKRVesponse)
+	out := new(HashKVResponse)
 	err := c.cc.Invoke(ctx, Maintenance_HashKV_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -1001,7 +1001,7 @@ type MaintenanceServer interface {
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	Defragment(context.Context, *DefragmentRequest) (*DefragmentResponse, error)
 	Hash(context.Context, *HashRequest) (*HashResponse, error)
-	HashKV(context.Context, *HashKRVequest) (*HashKRVesponse, error)
+	HashKV(context.Context, *HashKVRequest) (*HashKVResponse, error)
 	Snapshot(*SnapshotRequest, grpc.ServerStreamingServer[SnapshotResponse]) error
 	MoveLeader(context.Context, *MoveLeaderRequest) (*MoveLeaderResponse, error)
 	Downgrade(context.Context, *DowngradeRequest) (*DowngradeResponse, error)
@@ -1027,7 +1027,7 @@ func (UnimplementedMaintenanceServer) Defragment(context.Context, *DefragmentReq
 func (UnimplementedMaintenanceServer) Hash(context.Context, *HashRequest) (*HashResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Hash not implemented")
 }
-func (UnimplementedMaintenanceServer) HashKV(context.Context, *HashKRVequest) (*HashKRVesponse, error) {
+func (UnimplementedMaintenanceServer) HashKV(context.Context, *HashKVRequest) (*HashKVResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HashKV not implemented")
 }
 func (UnimplementedMaintenanceServer) Snapshot(*SnapshotRequest, grpc.ServerStreamingServer[SnapshotResponse]) error {
@@ -1133,7 +1133,7 @@ func _Maintenance_Hash_Handler(srv interface{}, ctx context.Context, dec func(in
 }
 
 func _Maintenance_HashKV_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HashKRVequest)
+	in := new(HashKVRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1145,7 +1145,7 @@ func _Maintenance_HashKV_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: Maintenance_HashKV_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MaintenanceServer).HashKV(ctx, req.(*HashKRVequest))
+		return srv.(MaintenanceServer).HashKV(ctx, req.(*HashKVRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

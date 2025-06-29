@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
 	"github.com/logbn/byteinterval"
 	"github.com/logbn/zongzi"
@@ -16,26 +17,28 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/pantopic/krv/internal"
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero"
 )
 
-const Uri = "zongzi://github.com/pantopic/krv"
+const (
+	Uri = "github.com/pantopic/krv"
+
+	lmdbEnvFlags    = lmdb.NoMemInit | lmdb.NoReadahead | lmdb.NoSync | lmdb.NoMetaSync | lmdb.NoLock | lmdb.NoSubdir | lmdb.Create
+	ctxKeyShardID   = `pantopic_shard_id`
+	ctxKeyReplicaID = `pantopic_replica_id`
+)
 
 type stateMachine struct {
-	clock      clock.Clock
-	dbKv       dbKv
-	dbLease    dbLease
-	dbLeaseExp dbLeaseExp
-	dbLeaseKey dbLeaseKey
-	dbMeta     dbMeta
-	dbStats    dbStats
-	env        *lmdb.Env
-	envPath    string
-	log        *slog.Logger
-	proto      proto.MarshalOptions
-	replicaID  uint64
-	shardID    uint64
-	watches    *byteinterval.Tree[chan uint64]
+	clock     clock.Clock
+	ctx       context.Context
+	env       *lmdb.Env
+	envPath   string
+	log       *slog.Logger
+	pool      *wazero.InstancePoolStateMachinePersistent
+	proto     proto.MarshalOptions
+	replicaID uint64
+	shardID   uint64
+	watches   *byteinterval.Tree[chan uint64]
 
 	statUpdates int
 	statEntries int
@@ -43,31 +46,46 @@ type stateMachine struct {
 	statPatched int
 }
 
-func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
+func NewStateMachineFactory(logger *slog.Logger, runtime *wazero.Runtime, dataDir string) zongzi.StateMachinePersistentFactory {
 	return func(shardID uint64, replicaID uint64) zongzi.StateMachinePersistent {
+		envPath := fmt.Sprintf("%s/%016x", dataDir, shardID)
+		err := os.MkdirAll(envPath, 0700)
+		if err != nil {
+			panic(err)
+		}
+		env, err := lmdb.NewEnv()
+		env.SetMaxDBs(255)
+		env.SetMapSize(int64(8 << 30)) // 8 GiB
+		if err = env.Open(envPath+"/data.mdb", uint(lmdbEnvFlags), 0700); err != nil {
+			panic(err)
+		}
+		ctx := context.Background()
+		ctx = context.WithValue(ctx, ctxKeyShardID, shardID)
+		ctx = context.WithValue(ctx, ctxKeyReplicaID, replicaID)
+		pool, err := runtime.InstancePool(ctx, Uri)
+		if err != nil {
+			panic(err)
+		}
 		return &stateMachine{
-			shardID:   shardID,
-			replicaID: replicaID,
-			envPath:   fmt.Sprintf("%s/%016x/env", dataDir, shardID),
-			log:       logger,
 			clock:     clock.New(),
+			ctx:       context.WithValue(context.Background(), `wazero_lmdb_env`, env), // TODO: get base context from runtime module manager
+			env:       env,
+			envPath:   fmt.Sprintf("%s/%016x/data.mdb", dataDir, shardID),
+			log:       logger,
+			pool:      pool.StateMachinePersistent(),
+			replicaID: replicaID,
+			shardID:   shardID,
 			watches:   byteinterval.New[chan uint64](),
 		}
 	}
 }
 
-var _ zongzi.StateMachinePersistentFactory = NewStateMachineFactory(nil, "")
+var _ zongzi.StateMachinePersistentFactory = NewStateMachineFactory(nil, nil, "")
 
 func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
-	err = os.MkdirAll(sm.envPath, 0700)
-	if err != nil {
-		return
-	}
-	sm.env, err = lmdb.NewEnv()
-	sm.env.SetMaxDBs(255)
-	sm.env.SetMapSize(int64(8 << 30)) // 8 GiB
-	sm.env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
-	return
+	inst := sm.pool.Get()
+	defer sm.pool.Put(inst)
+	return inst.Open(stopc)
 }
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
@@ -87,6 +105,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		sm.statTime = 0
 		sm.statUpdates = 0
 	}
+	// TODO - send updates to guest module
 	var keys [][]byte
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		epoch, err := sm.dbMeta.getEpoch(txn)
@@ -101,7 +120,6 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		for i, ent := range entries {
 			switch ent.Cmd[len(ent.Cmd)-1] {
 			case CMD_KV_PUT:
-				// TODO - Add sync pool for protobuf messages
 				var req = &internal.PutRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))

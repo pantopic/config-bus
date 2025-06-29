@@ -56,7 +56,7 @@ service Maintenance {
   rpc Status(StatusRequest) returns (StatusResponse) {}
   rpc Defragment(DefragmentRequest) returns (DefragmentResponse) {}
   rpc Hash(HashRequest) returns (HashResponse) {}
-  rpc HashKV(HashKRVequest) returns (HashKRVesponse) {}
+  rpc HashKV(HashKVRequest) returns (HashKVResponse) {}
   rpc Snapshot(SnapshotRequest) returns (stream SnapshotResponse) {}
   rpc MoveLeader(MoveLeaderRequest) returns (MoveLeaderResponse) {}
   rpc Downgrade(DowngradeRequest) returns (DowngradeResponse) {}
@@ -191,10 +191,10 @@ message CompactionResponse {
   ResponseHeader header = 1;
 }
 
-message HashKRVequest {
+message HashKVRequest {
   int64 revision = 1;
 }
-message HashKRVesponse {
+message HashKVResponse {
   ResponseHeader header = 1;
   uint32 hash = 2;
   int64 compact_revision = 3;
