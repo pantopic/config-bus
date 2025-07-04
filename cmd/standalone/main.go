@@ -14,7 +14,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
-	"github.com/pantopic/wazero"
+	"github.com/pantopic/cluster-runtime-wazero"
 	"github.com/pantopic/wazero-lmdb/host"
 
 	"github.com/pantopic/krv"
