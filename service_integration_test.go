@@ -2210,8 +2210,8 @@ func (svc *parityMaintenanceService) Hash(ctx context.Context,
 }
 
 func (svc *parityMaintenanceService) HashKV(ctx context.Context,
-	req *internal.HashKRVequest,
-) (res *internal.HashKRVesponse, err error) {
+	req *internal.HashKVRequest,
+) (res *internal.HashKVResponse, err error) {
 	return svc.client.HashKV(ctx, req)
 }
 

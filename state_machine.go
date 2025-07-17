@@ -7,17 +7,14 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
-	"github.com/benbjohnson/clock"
 	"github.com/logbn/byteinterval"
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/pantopic/krv/internal"
-	"github.com/pantopic/wazero"
 )
 
 const (
@@ -29,7 +26,6 @@ const (
 )
 
 type stateMachine struct {
-	clock     clock.Clock
 	ctx       context.Context
 	env       *lmdb.Env
 	envPath   string
@@ -39,11 +35,6 @@ type stateMachine struct {
 	replicaID uint64
 	shardID   uint64
 	watches   *byteinterval.Tree[chan uint64]
-
-	statUpdates int
-	statEntries int
-	statTime    time.Duration
-	statPatched int
 }
 
 func NewStateMachineFactory(logger *slog.Logger, runtime *wazero.Runtime, dataDir string) zongzi.StateMachinePersistentFactory {
@@ -67,7 +58,6 @@ func NewStateMachineFactory(logger *slog.Logger, runtime *wazero.Runtime, dataDi
 			panic(err)
 		}
 		return &stateMachine{
-			clock:     clock.New(),
 			ctx:       context.WithValue(context.Background(), `wazero_lmdb_env`, env), // TODO: get base context from runtime module manager
 			env:       env,
 			envPath:   fmt.Sprintf("%s/%016x/data.mdb", dataDir, shardID),
@@ -89,22 +79,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 }
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
-	var t = sm.clock.Now()
 	var rev, newRev uint64
-	sm.statUpdates++
-	sm.statEntries += len(entries)
-	if sm.statUpdates > 100 {
-		sm.log.Debug("StateMachine Stats",
-			"entries", sm.statEntries,
-			"average", sm.statEntries/sm.statUpdates,
-			"diffed", sm.statPatched,
-			"uTime", int(sm.statTime.Microseconds())/sm.statUpdates,
-			"eTime", int(sm.statTime.Microseconds())/sm.statEntries)
-		sm.statPatched = 0
-		sm.statEntries = 0
-		sm.statTime = 0
-		sm.statUpdates = 0
-	}
 	// TODO - send updates to guest module
 	var keys [][]byte
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
@@ -668,9 +643,6 @@ func (sm *stateMachine) cmdPut(
 	prev, _, patched, err := sm.dbKv.put(txn, index, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return
-	}
-	if patched {
-		sm.statPatched++
 	}
 	if !req.IgnoreLease && int64(prev.lease) != req.Lease {
 		if req.Lease > 0 {

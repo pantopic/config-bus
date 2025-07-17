@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/pantopic/krv/module/state_machine/internal"
+	internal "github.com/pantopic/krv/module/storage/internal"
 )
 
 func txnIntCompare(cond internal.Compare_CompareResult, a, b int64) bool {

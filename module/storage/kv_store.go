@@ -6,8 +6,6 @@ import (
 	"iter"
 
 	"github.com/pantopic/wazero-lmdb/lmdb-go"
-
-	"github.com/pantopic/krv/module/state_machine/internal"
 )
 
 type kvStoreImpl struct {
@@ -69,7 +67,7 @@ func (db kvStoreImpl) put(
 		return
 	}
 	if krec.rev.upper() == revision && !KRV_TXN_MULTI_WRITE_ENABLED {
-		err = internal.ErrGRPCDuplicateKey
+		err = ErrGRPCDuplicateKey
 		return
 	}
 	if v, err = txn.Get(db.val.i, krec.rev.key()); err != nil {
@@ -253,7 +251,7 @@ func (db kvStoreImpl) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, ke
 		if !prev.rev.isdel() {
 			tombstone = newkeyrev(index, subrev, true)
 			if prev.rev.upper() == index && !KRV_TXN_MULTI_WRITE_ENABLED {
-				err = internal.ErrGRPCDuplicateKey
+				err = ErrGRPCDuplicateKey
 				return
 			}
 			tkrec := keyrecord{rev: tombstone, key: k}

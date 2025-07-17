@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -15,11 +17,16 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pantopic/cluster-runtime-wazero"
+	"github.com/pantopic/wazero-grpc-server/host"
 	"github.com/pantopic/wazero-lmdb/host"
+	"github.com/pantopic/wazero-shard-client/host"
 
 	"github.com/pantopic/krv"
 	"github.com/pantopic/krv/internal"
 )
+
+//go:embed state_machine.wasm
+var wasmStateMachine []byte
 
 func main() {
 	zongzi.SetLogLevel(zongzi.LogLevelWarning)
@@ -31,19 +38,26 @@ func main() {
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithDirRaft(cfg.Dir+"/raft"),
 		zongzi.WithDirWAL(cfg.Dir+"/wal"),
-		zongzi.WithAddrGossip(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
-		zongzi.WithAddrRaft(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
-		zongzi.WithAddrApi(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
+		zongzi.WithAddrGossip(hostport(cfg.HostName, cfg.PortGossip)),
+		zongzi.WithAddrRaft(hostport(cfg.HostName, cfg.PortRaft)),
+		zongzi.WithAddrApi(hostport(cfg.HostName, cfg.PortZongzi)),
 		zongzi.WithHostMemoryLimit(zongzi.HostMemory256),
 		zongzi.WithRaftEventListener(ctrl),
 	)
 	if err != nil {
 		panic(err)
 	}
-	var binary []byte
-	runtime := wazero.NewRuntime(ctx)
-	runtime.ExtensionRegister(wazero_lmdb.New(cfg.Dir + "/data"))
-	sm, err := runtime.StateMachineFactory(binary)
+	runtime := cluster_runtime_wazero.New(ctx, agent)
+	if err = runtime.ExtensionRegister(wazero_grpc_server.New()); err != nil {
+		panic(err)
+	}
+	if err = runtime.ExtensionRegister(wazero_shard_client.New()); err != nil {
+		panic(err)
+	}
+	if err = runtime.ExtensionRegister(wazero_lmdb.New()); err != nil {
+		panic(err)
+	}
+	sm, err := runtime.StateMachineFactory(wasmStateMachine)
 	if err != nil {
 		panic(err)
 	}
@@ -94,4 +108,8 @@ func main() {
 		}
 	}
 	agent.Stop()
+}
+
+func hostport(host string, port uint16) string {
+	return net.JoinHostPort(host, strconv.Itoa(int(port)))
 }

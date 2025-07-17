@@ -3,14 +3,18 @@ module github.com/pantopic/krv
 go 1.24.3
 
 require (
+	github.com/PowerDNS/lmdb-go v1.9.3
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/logbn/byteinterval v0.0.1
 	github.com/logbn/zongzi v0.0.19
-	github.com/pantopic/wazero-lmdb/lmdb-go v0.0.6
+	github.com/pantopic/cluster-runtime-wazero v0.0.0-20250705030608-b914392178d3
+	github.com/pantopic/wazero-grpc-server/host v0.0.7
+	github.com/pantopic/wazero-lmdb/host v0.0.6
+	github.com/pantopic/wazero-shard-client/host v0.0.0-20250705030525-8031f0e5bb4b
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/grpc v1.69.2
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/grpc v1.73.0
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
@@ -29,7 +33,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/btree v1.0.0 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
@@ -48,19 +51,21 @@ require (
 	github.com/lni/goutils v1.4.0 // indirect
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376 // indirect
 	github.com/miekg/dns v1.1.26 // indirect
+	github.com/pantopic/wazero-pool v0.0.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rdleal/intervalst v1.4.1 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
+	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
