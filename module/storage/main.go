@@ -315,11 +315,91 @@ func finish() {
 	}
 }
 
-func read(query []byte) (code uint64, res []byte) {
-	// txn, err := lmdb.BeginTxn(nil, 0)
-	// if err != nil {
-	// 	panic(err)
-	// }
+func read(query []byte) (value uint64, data []byte) {
+	switch query[len(query)-1] {
+	case QUERY_KV_RANGE:
+		var req = &internal.RangeRequest{}
+		if err := req.UnmarshalVT(query[:len(query)-1]); err != nil {
+			data = []byte("Invalid query: " + string(query))
+			return
+		}
+		var resp *internal.RangeResponse
+		err := lmdb.View(func(txn *lmdb.Txn) (err error) {
+			index, err := dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			resp, err = queryRange(txn, index, req)
+			return
+		})
+		if err == ErrGRPCCompacted || err == ErrGRPCFutureRev {
+			data = []byte(err.Error())
+			err = nil
+		} else if err != nil {
+			data = []byte(err.Error())
+			return
+		} else {
+			if data, err = resp.MarshalVT(); err != nil {
+				data = []byte(err.Error())
+				return
+			}
+			value = 1
+		}
+	case QUERY_LEASE_LEASES:
+		var req = &internal.LeaseLeasesRequest{}
+		if err := req.UnmarshalVT(query[:len(query)-1]); err != nil {
+			data = []byte("Invalid query: " + string(query))
+			return
+		}
+		var index uint64
+		var resp *internal.LeaseLeasesResponse
+		err := lmdb.View(func(txn *lmdb.Txn) (err error) {
+			index, err = dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			resp, err = queryLeaseLeases(txn, req)
+			return
+		})
+		if err != nil {
+			data = []byte(err.Error())
+			return
+		}
+		resp.Header = responseHeader(index)
+		data, err = resp.MarshalVT()
+		if err != nil {
+			data = []byte(err.Error())
+			return
+		}
+		value = 1
+	case QUERY_LEASE_TIME_TO_LIVE:
+		var req = &internal.LeaseTimeToLiveRequest{}
+		if err := req.UnmarshalVT(query[:len(query)-1]); err != nil {
+			data = []byte(`Inalid query: ` + string(query))
+			return
+		}
+		var index uint64
+		var resp *internal.LeaseTimeToLiveResponse
+		err := lmdb.View(func(txn *lmdb.Txn) (err error) {
+			index, err = dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			resp, err = queryLeaseTimeToLive(txn, req)
+			return
+		})
+		if err != nil {
+			data = []byte(err.Error())
+			return
+		}
+		resp.Header = responseHeader(index)
+		data, err = resp.MarshalVT()
+		if err != nil {
+			data = []byte(err.Error())
+			return
+		}
+		value = 1
+	}
 	return
 }
 
@@ -597,6 +677,42 @@ func queryRange(
 			res.Kvs = append(res.Kvs, kv.ToProto())
 		}
 		res.More = more
+	}
+	return
+}
+
+func queryLeaseLeases(
+	txn *lmdb.Txn,
+	_ *internal.LeaseLeasesRequest,
+) (res *internal.LeaseLeasesResponse, err error) {
+	res = &internal.LeaseLeasesResponse{}
+	items, err := dbLease.all(txn)
+	if err != nil {
+		return
+	}
+	for _, item := range items {
+		res.Leases = append(res.Leases, &internal.LeaseStatus{ID: int64(item.id)})
+	}
+	return
+}
+
+func queryLeaseTimeToLive(
+	txn *lmdb.Txn,
+	req *internal.LeaseTimeToLiveRequest,
+) (res *internal.LeaseTimeToLiveResponse, err error) {
+	res = &internal.LeaseTimeToLiveResponse{}
+	epoch, err := dbMeta.getEpoch(txn)
+	if err != nil {
+		return
+	}
+	item, err := dbLease.get(txn, uint64(req.ID))
+	if err != nil {
+		return
+	}
+	if item.expires > 0 {
+		res.TTL = int64(item.expires - epoch)
+	} else {
+		res.TTL = -1
 	}
 	return
 }
