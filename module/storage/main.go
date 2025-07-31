@@ -3,8 +3,9 @@ package main
 import (
 	"bytes"
 
-	sm "github.com/pantopic/cluster/guest/state_machine"
 	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero-range-watch/range-watch-go"
+	"github.com/pantopic/wazero-state-machine/state-machine-go"
 
 	internal "github.com/pantopic/krv/module/storage/internal"
 )
@@ -14,23 +15,16 @@ const (
 )
 
 var (
-	txn       *lmdb.Txn
-	epoch     uint64
-	rev       uint64
-	newRev    uint64
-	newIndex  uint64
-	shardID   uint64
-	replicaID uint64
-	keys      [][]byte
+	txn      *lmdb.Txn
+	epoch    uint64
+	rev      uint64
+	newRev   uint64
+	newIndex uint64
+	keys     [][]byte
 )
 
 func main() {
-	sm.RegisterPersistent(
-		open,
-		update,
-		finish,
-		read,
-	)
+	statemachine.RegisterPersistent(open, update, finish, read)
 }
 
 func open() (index uint64) {
@@ -62,8 +56,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		if err != nil {
 			panic(err)
 		}
-		keys = keys[:0]
-		// shardID, replicaID = sm.ShardMeta()
 	}
 	switch cmd[len(cmd)-1] {
 	case CMD_KV_PUT:
@@ -313,6 +305,8 @@ func finish() {
 	if err := txn.Commit(); err != nil {
 		panic(err)
 	}
+	rangewatch.Emit(newRev, keys)
+	keys = keys[:0]
 }
 
 func read(query []byte) (value uint64, data []byte) {
@@ -745,7 +739,7 @@ func cmdLeaseKeepAlive(
 func responseHeader(revision uint64) *internal.ResponseHeader {
 	return &internal.ResponseHeader{
 		Revision:  int64(revision),
-		ClusterId: shardID,
-		MemberId:  replicaID,
+		ClusterId: statemachine.ShardID,
+		MemberId:  statemachine.ReplicaID,
 	}
 }

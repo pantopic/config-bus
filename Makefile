@@ -46,8 +46,14 @@ gen-lite-install:
 cloc:
 	@cloc . --exclude-dir=_example,_dist,proto --exclude-ext=pb.go
 
-wasm:
-	@cd module/storage && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../storage.wasm main.go
-
-wasm-prod:
-	@cd module/storage && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../storage.prod.wasm -no-debug
+wasm-storage:
+	@cd module/storage && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/standalone/storage.wasm
+wasm-storage-prod:
+	@cd module/storage && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/standalone/storage.prod.wasm -no-debug
+wasm-service:
+	@cd module/service && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/standalone/service.wasm
+wasm-service-prod:
+	@cd module/service && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/standalone/service.prod.wasm -no-debug
+wasm: wasm-storage wasm-service
+wasm-prod: wasm-storage-prod wasm-service-prod
+wasm-all: wasm wasm-prod

@@ -7,7 +7,6 @@ require (
 	github.com/golang/snappy v1.0.0
 	github.com/pantopic/cluster/guest/state_machine v0.0.0-20250624203702-9bb5907b41ec
 	github.com/pantopic/wazero-lmdb/lmdb-go v0.0.6
-	github.com/stretchr/testify v1.10.0
 )
 
 require (

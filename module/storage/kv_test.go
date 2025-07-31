@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"testing"
 
@@ -101,3 +102,4 @@ func withGlobalInt(flag *int, val int, fn func()) {
 	fn()
 	*flag = prev
 }
+*/

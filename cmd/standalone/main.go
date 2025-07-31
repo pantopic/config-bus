@@ -25,8 +25,11 @@ import (
 	"github.com/pantopic/krv/internal"
 )
 
-//go:embed state_machine.wasm
-var wasmStateMachine []byte
+//go:embed storage.wasm
+var wasmStorage []byte
+
+//go:embed service.wasm
+var wasmService []byte
 
 func main() {
 	zongzi.SetLogLevel(zongzi.LogLevelWarning)
@@ -57,7 +60,7 @@ func main() {
 	if err = runtime.ExtensionRegister(wazero_lmdb.New()); err != nil {
 		panic(err)
 	}
-	sm, err := runtime.StateMachineFactory(wasmStateMachine)
+	sm, err := runtime.StateMachineFactory(wasmStorage)
 	if err != nil {
 		panic(err)
 	}
@@ -76,6 +79,7 @@ func main() {
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 	var grpcServer = grpc.NewServer()
+	// wazero_grpc_server.RegisterServices(ctx, grpcServer, runtime)
 	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
 	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
 	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))
