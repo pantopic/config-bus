@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/binary"
 
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero-lmdb/sdk-go"
 )
 
 type dbLeaseImpl struct {

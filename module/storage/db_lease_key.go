@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero-lmdb/sdk-go"
 )
 
 type dbLeaseKeyImpl struct {

@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
-	"github.com/pantopic/wazero-range-watch/range-watch-go"
-	"github.com/pantopic/wazero-state-machine/state-machine-go"
+	"github.com/pantopic/wazero-lmdb/sdk-go"
+	"github.com/pantopic/wazero-range-watch/sdk-go"
+	"github.com/pantopic/wazero-state-machine/sdk-go"
 
 	internal "github.com/pantopic/krv/module/storage/internal"
 )

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"strconv"
 
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero-lmdb/sdk-go"
 )
 
 var (

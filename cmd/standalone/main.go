@@ -20,6 +20,7 @@ import (
 	"github.com/pantopic/wazero-grpc-server/host"
 	"github.com/pantopic/wazero-lmdb/host"
 	"github.com/pantopic/wazero-shard-client/host"
+	"github.com/pantopic/wazero-state-machine/host"
 
 	"github.com/pantopic/krv"
 	"github.com/pantopic/krv/internal"
@@ -51,15 +52,22 @@ func main() {
 		panic(err)
 	}
 	runtime := cluster_runtime_wazero.New(ctx, agent)
-	if err = runtime.ExtensionRegister(wazero_grpc_server.New()); err != nil {
+	for _, ext := range []cluster_runtime_wazero.Extension{
+		wazero_grpc_server.New(),
+		wazero_lmdb.New(),
+		wazero_shard_client.New(),
+		wazero_state_machine.New(),
+	} {
+		if err = runtime.ExtensionRegister(ext); err != nil {
+			panic(fmt.Errorf("Unable to register extension %s: %w", ext.Name(), err))
+		}
+	}
+	service, err := cluster.ServiceFactory(wasmService)
+	if err != nil {
 		panic(err)
 	}
-	if err = runtime.ExtensionRegister(wazero_shard_client.New()); err != nil {
-		panic(err)
-	}
-	if err = runtime.ExtensionRegister(wazero_lmdb.New()); err != nil {
-		panic(err)
-	}
+	// pool, err := runtime.ModuleRegister(wasmStorage)
+	// sm, err := wazero_state_machine.NewFactory(ctx, pool)
 	sm, err := runtime.StateMachineFactory(wasmStorage)
 	if err != nil {
 		panic(err)
@@ -79,7 +87,12 @@ func main() {
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 	var grpcServer = grpc.NewServer()
-	// wazero_grpc_server.RegisterServices(ctx, grpcServer, runtime)
+	// Adapter registers runtime services with grpc server
+	if ext, err := wazero_grpc_server.Find(runtime); err != nil {
+		ext.RegisterServices(ctx, grpcServer, ext.InstancePoolFactory())
+	} else {
+		panic(err)
+	}
 	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
 	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
 	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))

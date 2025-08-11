@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/pantopic/wazero-lmdb/lmdb-go"
+	"github.com/pantopic/wazero-lmdb/sdk-go"
 )
 
 var (
