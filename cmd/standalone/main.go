@@ -51,7 +51,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// Create wazero runtime
 	runtime := cluster_runtime_wazero.New(ctx, agent)
+	// Register runtime extensions
 	for _, ext := range []cluster_runtime_wazero.Extension{
 		wazero_grpc_server.New(),
 		wazero_lmdb.New(),
@@ -62,17 +64,18 @@ func main() {
 			panic(fmt.Errorf("Unable to register extension %s: %w", ext.Name(), err))
 		}
 	}
+	// Create service
 	service, err := cluster.ServiceFactory(wasmService)
 	if err != nil {
 		panic(err)
 	}
 	// pool, err := runtime.ModuleRegister(wasmStorage)
 	// sm, err := wazero_state_machine.NewFactory(ctx, pool)
-	sm, err := runtime.StateMachineFactory(wasmStorage)
+	smf, err := runtime.StateMachineFactory(wasmStorage)
 	if err != nil {
 		panic(err)
 	}
-	agent.StateMachineRegister(krv.Uri, sm)
+	agent.StateMachineRegister(krv.Uri, smf)
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
@@ -82,17 +85,18 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err = ctrl.Start(agent.Client(shard.ID), shard); err != nil {
+	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
+	if err = ctrl.Start(client, shard); err != nil {
 		panic(err)
 	}
-	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 	var grpcServer = grpc.NewServer()
 	// Adapter registers runtime services with grpc server
-	if ext, err := wazero_grpc_server.Find(runtime); err != nil {
-		ext.RegisterServices(ctx, grpcServer, ext.InstancePoolFactory())
-	} else {
+	ext := wazero_grpc_server.New()
+	if err := ext.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
+	ext.RegisterServices(ctx, grpcServer, ext.InstancePoolFactory())
+	// old
 	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
 	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
 	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))
