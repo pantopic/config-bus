@@ -546,6 +546,9 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 				var current, prev kv
 				if evt.rev.isdel() {
 					current = kv{key: evt.key, rev: evt.rev}
+					if req.PrevKv {
+						_, prev, err = sm.dbKv.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
+					}
 				} else {
 					current, prev, err = sm.dbKv.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
 					if err != nil {
