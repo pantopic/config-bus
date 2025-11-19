@@ -231,7 +231,7 @@ func (db dbKv) getRange(
 	return
 }
 
-func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end []byte) (items []keyrecord, count int64, err error) {
+func (db dbKv) deleteRange(txn *lmdb.Txn, rev, subrev, epoch uint64, key, end []byte) (items []keyrecord, count int64, err error) {
 	var prev keyrecord
 	var tombstone keyrev
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -256,8 +256,8 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end 
 		}
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
-			tombstone = newkeyrev(index, subrev, true)
-			if prev.rev.upper() == index && !KRV_TXN_MULTI_WRITE_ENABLED {
+			tombstone = newkeyrev(rev, subrev, true)
+			if prev.rev.upper() == rev && !KRV_TXN_MULTI_WRITE_ENABLED {
 				err = internal.ErrGRPCDuplicateKey
 				return
 			}
@@ -284,7 +284,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, index, subrev, epoch uint64, key, end 
 	return
 }
 
-func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]byte) (err error) {
+func (db dbKv) deleteBatch(txn *lmdb.Txn, rev, subrev, epoch uint64, keys [][]byte) (err error) {
 	var prev, tombstone keyrecord
 	var k, v []byte
 	cur, err := txn.OpenCursor(db.rev.i)
@@ -309,7 +309,7 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]
 		}
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
-			tombstone = keyrecord{key: key, rev: newkeyrev(index, subrev, true)}
+			tombstone = keyrecord{key: key, rev: newkeyrev(rev, subrev, true)}
 			if err = txn.Put(db.rev.i, k, tombstone.Bytes(nil), 0); err != nil {
 				return
 			}
@@ -323,7 +323,7 @@ func (db dbKv) deleteBatch(txn *lmdb.Txn, index, subrev, epoch uint64, keys [][]
 	return
 }
 
-func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
+func (db dbKv) compact(txn *lmdb.Txn, max uint64) (last uint64, err error) {
 	curRev, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
@@ -357,7 +357,7 @@ func (db dbKv) compact(txn *lmdb.Txn, max uint64) (index uint64, err error) {
 			if len(keys) >= limitCompactionMaxKeys {
 				break
 			}
-			index = rev.upper()
+			last = rev.upper()
 			v, err = db.rev.trimChecksum(k, v)
 			if err != nil {
 				return

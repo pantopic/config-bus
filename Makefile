@@ -1,6 +1,9 @@
 dev:
 	@go build -ldflags="-s -w" -o _dist/standalone ./cmd/standalone && cd cmd/standalone && docker compose up --build
 
+build:
+	@go build -ldflags="-s -w" -o _dist/krv ./cmd/standalone
+
 test:
 	@go test
 
@@ -15,6 +18,11 @@ bench:
 
 unit:
 	@go test ./... -tags unit -v
+
+scp:
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-0:~/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-1:~/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-2:~/krv
 
 cover:
 	@mkdir -p _dist

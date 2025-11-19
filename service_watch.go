@@ -48,7 +48,9 @@ func (s *serviceWatch) Watch(
 		}
 		switch req.RequestUnion.(type) {
 		case *internal.WatchRequest_CreateRequest:
+			slog.Info(`Watch - Create`)
 			req := req.RequestUnion.(*internal.WatchRequest_CreateRequest).CreateRequest
+			slog.Debug(`Watch Create Req`, `req`, req)
 			if req.WatchId > 0 {
 				mu.RLock()
 				if _, ok := watches[req.WatchId]; ok {
@@ -84,6 +86,7 @@ func (s *serviceWatch) Watch(
 				delete(watches, req.WatchId)
 			})
 		case *internal.WatchRequest_CancelRequest:
+			slog.Info(`Watch - Cancel`)
 			req := req.RequestUnion.(*internal.WatchRequest_CancelRequest).CancelRequest
 			mu.RLock()
 			w, ok := watches[req.WatchId]
@@ -105,6 +108,7 @@ func (s *serviceWatch) Watch(
 				slog.Error("Unable to send watch cancel response", "req", req, "err", err.Error())
 			}
 		case *internal.WatchRequest_ProgressRequest:
+			slog.Info(`Watch - Progress`)
 			req := req.RequestUnion.(*internal.WatchRequest_ProgressRequest).ProgressRequest
 			// TODO - track watch progress and generate response
 			// mu.RLock()

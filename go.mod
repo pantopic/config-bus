@@ -9,6 +9,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/logbn/byteinterval v0.0.1
 	github.com/logbn/zongzi v0.0.19
+	github.com/soheilhy/cmux v0.1.5
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.5

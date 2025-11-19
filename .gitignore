@@ -1,3 +1,4 @@
 /standalone
 _data
 _dist
+*.wasm

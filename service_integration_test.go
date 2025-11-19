@@ -55,6 +55,7 @@ func TestService(t *testing.T) {
 	t.Run("lease-keep-alive", testLeaseKeepAlive)
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
+	t.Run("version", testVersion)
 	// TODO - Progress notify
 	t.Run("watch", testWatch)
 	t.Run("controller", testController)
@@ -229,6 +230,41 @@ func testInsert(t *testing.T) {
 				assert.Nil(t, resp)
 			}
 		})
+	})
+}
+
+func testVersion(t *testing.T) {
+	t.Run("increment", func(t *testing.T) {
+		put := &internal.PutRequest{
+			Key:   []byte(`test-key-incr`),
+			Value: []byte(`test-value`),
+		}
+		{
+			resp, err := svcKv.Put(ctx, put)
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+		}
+		{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: put.Key,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.EqualValues(t, 1, resp.Kvs[0].Version)
+		}
+		{
+			resp, err := svcKv.Put(ctx, put)
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+		}
+		{
+			resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key: put.Key,
+			})
+			require.Nil(t, err, err)
+			assert.NotNil(t, resp)
+			assert.EqualValues(t, 2, resp.Kvs[0].Version)
+		}
 	})
 }
 
@@ -1130,6 +1166,118 @@ func testTransaction(t *testing.T) {
 			assert.Equal(t, 0, len(resp2.Kvs))
 		})
 	})
+	t.Run("non-existent", func(t *testing.T) {
+		t.Run("version-success", func(t *testing.T) {
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-txn-new-00`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_VERSION,
+						TargetUnion: &internal.Compare_Version{
+							Version: 0,
+						},
+					},
+				},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-new-00`),
+						Value: []byte(`-----------`),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+		})
+		t.Run("version-failure", func(t *testing.T) {
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-txn-new-01`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_VERSION,
+						TargetUnion: &internal.Compare_Version{
+							Version: 1,
+						},
+					},
+				},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-new-01`),
+						Value: []byte(`-----------`),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.False(t, resp.Succeeded)
+		})
+		t.Run("mod-success", func(t *testing.T) {
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`/registry/ranges/servicenodeports`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_MOD,
+						TargetUnion: &internal.Compare_ModRevision{
+							ModRevision: 0,
+						},
+					},
+				},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`/registry/ranges/servicenodeports`),
+						Value: []byte("k8s\\x00\\n=\\n\\x1fflowcontrol.apiserver.k8s.io/v1\\x12\\x1aPriorityLevelConfiguration\\x12\\xb2\\x04\\n\\x8b\\x04\\n\\x06system\\x12\\x00\\x1a\\x00\\"),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+		})
+		t.Run("mod-wat", func(t *testing.T) {
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-key-010101`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_MOD,
+						TargetUnion: &internal.Compare_ModRevision{
+							ModRevision: 0,
+						},
+					},
+				},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-key-010101`),
+						Value: []byte("ayyyy"),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.True(t, resp.Succeeded)
+		})
+		t.Run("mod-failure", func(t *testing.T) {
+			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
+				Compare: []*internal.Compare{
+					{
+						Key:    []byte(`test-txn-new-03`),
+						Result: internal.Compare_EQUAL,
+						Target: internal.Compare_MOD,
+						TargetUnion: &internal.Compare_ModRevision{
+							ModRevision: 1,
+						},
+					},
+				},
+				Success: []*internal.RequestOp{
+					putOp(&internal.PutRequest{
+						Key:   []byte(`test-txn-new-03`),
+						Value: []byte(`-----------`),
+					}),
+				},
+			})
+			require.Nil(t, err, err)
+			assert.False(t, resp.Succeeded)
+		})
+	})
 }
 
 func testLeaseGrant(t *testing.T) {
@@ -1797,7 +1945,6 @@ func testWatch(t *testing.T) {
 		require.Greater(t, res.WatchId, int64(0), res)
 		assert.True(t, res.Created)
 		watchID = res.WatchId
-
 		for j := 0; j < 5; {
 			res := <-s.resChan
 			assert.True(t, res.WatchId == watchID, res.WatchId)
@@ -1832,7 +1979,7 @@ func testWatch(t *testing.T) {
 			req := &internal.TxnRequest{Success: []*internal.RequestOp{}}
 			for i := range m {
 				req.Success = append(req.Success, putOp(&internal.PutRequest{
-					Key:   []byte(fmt.Sprintf(`test-watch-fragment-%03d`, i)),
+					Key:   fmt.Appendf(nil, `test-watch-fragment-%03d`, i),
 					Value: randValue(1e5),
 				}))
 			}
@@ -1964,32 +2111,29 @@ func (svc parityLeaseService) LeaseKeepAlive(server internal.Lease_LeaseKeepAliv
 	if err != nil {
 		return
 	}
-	for {
-		req, err := server.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		err = client.Send(req)
-		if err != nil {
-			break
-		}
-		res, err := client.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		err = server.Send(res)
-		if err != nil {
-			break
-		}
+	req, err := server.Recv()
+	if err == io.EOF {
 		return nil
 	}
-	return
+	if err != nil {
+		return
+	}
+	err = client.Send(req)
+	if err != nil {
+		return
+	}
+	res, err := client.Recv()
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return
+	}
+	err = server.Send(res)
+	if err != nil {
+		return
+	}
+	return nil
 }
 
 func (svc parityLeaseService) LeaseTimeToLive(ctx context.Context,

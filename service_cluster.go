@@ -2,6 +2,7 @@ package krv
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/logbn/zongzi"
 
@@ -22,23 +23,27 @@ func NewServiceCluster(client zongzi.ShardClient, apiAddr string) *serviceCluste
 func (s serviceCluster) MemberAdd(ctx context.Context,
 	req *internal.MemberAddRequest,
 ) (res *internal.MemberAddResponse, err error) {
+	slog.Info(`Cluster - MemberAdd`)
 	return
 }
 func (s serviceCluster) MemberRemove(ctx context.Context,
 	req *internal.MemberRemoveRequest,
 ) (res *internal.MemberRemoveResponse, err error) {
+	slog.Info(`Cluster - MemberRemove`)
 	return
 }
 
 func (s serviceCluster) MemberUpdate(ctx context.Context,
 	req *internal.MemberUpdateRequest,
 ) (res *internal.MemberUpdateResponse, err error) {
+	slog.Info(`Cluster - MemberUpdate`)
 	return
 }
 
 func (s serviceCluster) MemberList(ctx context.Context,
 	req *internal.MemberListRequest,
 ) (res *internal.MemberListResponse, err error) {
+	slog.Info(`Cluster - MemberList`)
 	leader, term := s.client.Leader()
 	res = &internal.MemberListResponse{
 		Header: &internal.ResponseHeader{
@@ -68,5 +73,6 @@ func (s serviceCluster) MemberList(ctx context.Context,
 func (s serviceCluster) MemberPromote(ctx context.Context,
 	req *internal.MemberPromoteRequest,
 ) (res *internal.MemberPromoteResponse, err error) {
+	slog.Info(`Cluster - MemberPromote`)
 	return
 }

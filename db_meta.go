@@ -31,9 +31,7 @@ func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 		metaKeyEpoch,
 		metaKeyIndex,
 		metaKeyLeaseID,
-		metaKeyRevision,
 		metaKeyRevisionCompacted,
-		metaKeyRevisionMin,
 		metaKeyTerm,
 	} {
 		if _, err = db.db.getUint64(txn, k); lmdb.IsNotFound(err) {
@@ -43,62 +41,73 @@ func newDbMeta(txn *lmdb.Txn) (db dbMeta, index uint64, err error) {
 			return
 		}
 	}
+	for _, k := range [][]byte{
+		metaKeyRevision,
+		metaKeyRevisionMin,
+	} {
+		if _, err = db.db.getUint64(txn, k); lmdb.IsNotFound(err) {
+			err = db.putUint64(txn, k, 1)
+		}
+		if err != nil {
+			return
+		}
+	}
 	index, err = db.getIndex(txn)
 	return
 }
 
-func (db dbMeta) getEpoch(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getEpoch(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyEpoch)
 }
 
-func (db dbMeta) setEpoch(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyEpoch, index)
+func (db dbMeta) setEpoch(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyEpoch, val)
 }
 
-func (db dbMeta) getIndex(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getIndex(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyIndex)
 }
 
-func (db dbMeta) setIndex(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyIndex, index)
+func (db dbMeta) setIndex(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyIndex, val)
 }
 
-func (db dbMeta) getLeaseID(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getLeaseID(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyLeaseID)
 }
 
-func (db dbMeta) setLeaseID(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyLeaseID, index)
+func (db dbMeta) setLeaseID(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyLeaseID, val)
 }
 
-func (db dbMeta) getRevision(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getRevision(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyRevision)
 }
 
-func (db dbMeta) setRevision(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyRevision, index)
+func (db dbMeta) setRevision(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyRevision, val)
 }
 
-func (db dbMeta) getRevisionCompacted(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getRevisionCompacted(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyRevisionCompacted)
 }
 
-func (db dbMeta) setRevisionCompacted(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyRevisionCompacted, index)
+func (db dbMeta) setRevisionCompacted(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyRevisionCompacted, val)
 }
 
-func (db dbMeta) getRevisionMin(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getRevisionMin(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyRevisionMin)
 }
 
-func (db dbMeta) setRevisionMin(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyRevisionMin, index)
+func (db dbMeta) setRevisionMin(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyRevisionMin, val)
 }
 
-func (db dbMeta) getTerm(txn *lmdb.Txn) (index uint64, err error) {
+func (db dbMeta) getTerm(txn *lmdb.Txn) (val uint64, err error) {
 	return db.getUint64(txn, metaKeyTerm)
 }
 
-func (db dbMeta) setTerm(txn *lmdb.Txn, index uint64) (err error) {
-	return db.putUint64(txn, metaKeyTerm, index)
+func (db dbMeta) setTerm(txn *lmdb.Txn, val uint64) (err error) {
+	return db.putUint64(txn, metaKeyTerm, val)
 }

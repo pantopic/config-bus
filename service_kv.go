@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +36,7 @@ func (s *kvService) Put(
 	if err != nil {
 		return
 	}
+	// slog.Info(`KV Put Req`, `req`, req)
 	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_PUT))
 	if err != nil {
 		return
@@ -106,6 +108,7 @@ func (s *kvService) Compact(
 	ctx context.Context,
 	req *internal.CompactionRequest,
 ) (res *internal.CompactionResponse, err error) {
+	slog.Info(`KV - Compact`)
 	b, err := proto.Marshal(req)
 	if err != nil {
 		return
@@ -133,6 +136,7 @@ func (s *kvService) Txn(
 	if err != nil {
 		return
 	}
+	// slog.Info(`KV Txn Req`, `req`, req)
 	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_TXN))
 	if err != nil {
 		return
@@ -144,5 +148,6 @@ func (s *kvService) Txn(
 	res = &internal.TxnResponse{}
 	err = proto.Unmarshal(data, res)
 	s.addTerm(res.Header)
+	// slog.Info(`KV Txn Res`, `res`, res)
 	return
 }

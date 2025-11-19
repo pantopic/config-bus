@@ -3,7 +3,6 @@ package krv
 import (
 	"bytes"
 	"encoding/binary"
-	// "log"
 	"math"
 
 	"github.com/golang/snappy"
@@ -53,7 +52,7 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 
 func (kv kv) FromBytes(revKey, buf, next []byte, noval bool) (kv, error) {
 	var err error
-	if len(buf) < 12 {
+	if len(buf) < 11 {
 		return kv, ErrChecksumMissing
 	}
 	if binary.BigEndian.Uint32(buf[len(buf)-4:]) != crc(revKey, buf[:len(buf)-4]) {
@@ -156,7 +155,7 @@ func (kr keyrev) appendbytes(buf []byte) []byte {
 }
 
 func (kr keyrev) FromBytes(key, buf []byte) (keyrev, error) {
-	if len(buf) < 12 {
+	if len(buf) < 11 {
 		return kr, ErrChecksumMissing
 	}
 	if binary.BigEndian.Uint32(buf[len(buf)-4:]) != crc(key, buf[:len(buf)-4]) {
@@ -190,7 +189,7 @@ type keyrecord struct {
 }
 
 func (kr keyrecord) FromBytes(key, buf []byte) (keyrecord, error) {
-	if len(buf) < 12 {
+	if len(buf) < 11 {
 		return kr, ErrChecksumMissing
 	}
 	if binary.BigEndian.Uint32(buf[len(buf)-4:]) != crc(key, buf[:len(buf)-4]) {

@@ -86,6 +86,25 @@ func TestKv(t *testing.T) {
 			})
 		})
 	})
+	t.Run(`minimum value size`, func(t *testing.T) {
+		item := kv{
+			rev:     newkeyrev(3, 0, false),
+			version: 2,
+			created: 1,
+			key:     []byte(`a`),
+			val:     []byte(`1`),
+		}
+		buf := item.Bytes(nil, nil)
+		require.Equal(t, 11, len(buf))
+		var item2 kv
+		item2, err := item2.FromBytes(item.rev.key(), buf, nil, false)
+		require.Nil(t, err)
+		assert.Equal(t, item.rev.upper(), item2.rev.upper())
+		assert.Equal(t, item.version, item2.version)
+		assert.Equal(t, item.created, item2.created)
+		assert.Equal(t, item.val, item2.val)
+		assert.Equal(t, item.key, item2.key)
+	})
 }
 
 func withGlobal(flag *bool, val bool, fn func()) {

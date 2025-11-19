@@ -147,7 +147,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 						continue
 					}
 				}
-				res, val, affected, err := sm.cmdPut(txn, ent.Index, 0, epoch, req)
+				res, val, affected, err := sm.cmdPut(txn, newRev+1, 0, epoch, req)
 				if err == internal.ErrGRPCKeyTooLong {
 					entries[i].Result.Data = []byte(err.Error())
 					err = nil
@@ -155,13 +155,15 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else if err != nil {
 					return err
 				}
-				res.Header = sm.responseHeader(ent.Index)
+				if len(affected) > 0 {
+					newRev++
+				}
+				res.Header = sm.responseHeader(newRev)
 				entries[i].Result.Data, err = proto.Marshal(res)
 				if err != nil {
 					return err
 				}
 				entries[i].Result.Value = val
-				newRev = ent.Index
 				keys = append(keys, affected...)
 			case CMD_KV_DELETE_RANGE:
 				var reqDel = &internal.DeleteRangeRequest{}
@@ -169,16 +171,19 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				resDel, affected, err := sm.cmdDeleteRange(txn, ent.Index, 0, epoch, reqDel)
+				resDel, affected, err := sm.cmdDeleteRange(txn, newRev+1, 0, epoch, reqDel)
 				if err != nil {
 					return err
 				}
+				if len(affected) > 0 {
+					newRev++
+				}
+				resDel.Header = sm.responseHeader(newRev)
 				entries[i].Result.Data, err = proto.Marshal(resDel)
 				if err != nil {
 					return err
 				}
 				entries[i].Result.Value = 1
-				newRev = ent.Index
 				keys = append(keys, affected...)
 			case CMD_KV_COMPACT:
 				var req = &internal.CompactionRequest{}
@@ -187,12 +192,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					continue
 				}
 				// TODO - Add support for asynchronous compaction w/ req.Physical
-				index, err := sm.dbKv.compact(txn, uint64(req.Revision))
+				rev, err := sm.dbKv.compact(txn, uint64(req.Revision))
 				if err != nil {
 					return err
 				}
 				entries[i].Result.Data, err = proto.Marshal(&internal.CompactionResponse{
-					Header: sm.responseHeader(ent.Index),
+					Header: sm.responseHeader(newRev),
 				})
 				if err != nil {
 					return err
@@ -200,7 +205,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err := sm.dbMeta.setRevisionMin(txn, uint64(req.Revision)); err != nil {
 					return err
 				}
-				if err := sm.dbMeta.setRevisionCompacted(txn, index); err != nil {
+				if err := sm.dbMeta.setRevisionCompacted(txn, rev); err != nil {
 					return err
 				}
 				entries[i].Result.Value = 1
@@ -220,9 +225,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				}
 				var affected [][]byte
 				if success {
-					res.Responses, affected, err = sm.txnOps(txn, ent.Index, epoch, req.Success)
+					res.Responses, affected, err = sm.txnOps(txn, newRev+1, epoch, req.Success)
 				} else {
-					res.Responses, affected, err = sm.txnOps(txn, ent.Index, epoch, req.Failure)
+					res.Responses, affected, err = sm.txnOps(txn, newRev+1, epoch, req.Failure)
 				}
 				if err == internal.ErrGRPCDuplicateKey ||
 					err == internal.ErrGRPCKeyTooLong {
@@ -231,10 +236,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else if err != nil {
 					return
 				} else {
-					res.Header = sm.responseHeader(ent.Index)
+					if len(affected) > 0 {
+						newRev++
+					}
+					res.Header = sm.responseHeader(newRev)
 					entries[i].Result.Data, err = proto.Marshal(res)
 					entries[i].Result.Value = 1
-					newRev = ent.Index
 					keys = append(keys, affected...)
 				}
 			case CMD_LEASE_GRANT:
@@ -247,7 +254,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
-				res.Header = sm.responseHeader(ent.Index)
+				res.Header = sm.responseHeader(newRev)
 				entries[i].Result.Data, err = proto.Marshal(res)
 				entries[i].Result.Value = val
 				if err != nil {
@@ -259,19 +266,19 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
 					continue
 				}
-				affected, val, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, uint64(req.ID))
-				if err != nil {
-					return err
-				}
-				entries[i].Result.Data, err = proto.Marshal(&internal.LeaseRevokeResponse{
-					Header: sm.responseHeader(ent.Index),
-				})
-				entries[i].Result.Value = val
+				affected, val, err := sm.cmdLeaseRevoke(txn, newRev+1, epoch, uint64(req.ID))
 				if err != nil {
 					return err
 				}
 				if len(affected) > 0 {
-					newRev = ent.Index
+					newRev++
+				}
+				entries[i].Result.Data, err = proto.Marshal(&internal.LeaseRevokeResponse{
+					Header: sm.responseHeader(newRev),
+				})
+				entries[i].Result.Value = val
+				if err != nil {
+					return err
 				}
 				keys = append(keys, affected...)
 			case CMD_LEASE_KEEP_ALIVE:
@@ -284,7 +291,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
-				res.Header = sm.responseHeader(ent.Index)
+				res.Header = sm.responseHeader(newRev)
 				entries[i].Result.Data, err = proto.Marshal(res)
 				entries[i].Result.Value = val
 				if err != nil {
@@ -309,12 +316,12 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					return err
 				}
 				for id := range sm.dbLeaseExp.scan(txn, epoch) {
-					affected, _, err := sm.cmdLeaseRevoke(txn, ent.Index, epoch, id)
+					affected, _, err := sm.cmdLeaseRevoke(txn, newRev+1, epoch, id)
 					if err != nil {
 						return err
 					}
 					if len(affected) > 0 {
-						newRev = ent.Index
+						newRev++
 						keys = append(keys, affected...)
 					}
 					sm.log.Info("Lease Expired", "term", term, "epoch", epoch, "id", id, "keys", len(affected))
@@ -371,6 +378,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 
 func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 	res = zongzi.GetResult()
+	var rev uint64
 	switch query[len(query)-1] {
 	case QUERY_KV_RANGE:
 		var req = &internal.RangeRequest{}
@@ -380,11 +388,11 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 		}
 		var resp *internal.RangeResponse
 		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
-			index, err := sm.dbMeta.getRevision(txn)
+			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
 				return
 			}
-			resp, err = sm.queryRange(txn, index, req)
+			resp, err = sm.queryRange(txn, rev, req)
 			return
 		})
 		if err == internal.ErrGRPCCompacted || err == internal.ErrGRPCFutureRev {
@@ -406,10 +414,9 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			sm.log.Error("Invalid query", "query", query)
 			return
 		}
-		var index uint64
 		var resp *internal.LeaseLeasesResponse
 		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
-			index, err = sm.dbMeta.getRevision(txn)
+			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
 				return
 			}
@@ -421,7 +428,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			res.Data = []byte(err.Error())
 			return
 		}
-		resp.Header = sm.responseHeader(index)
+		resp.Header = sm.responseHeader(rev)
 		res.Data, err = proto.Marshal(resp)
 		if err != nil {
 			sm.log.Error("Invalid response", "resp", resp, "err", err)
@@ -435,10 +442,9 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			sm.log.Error("Invalid query", "query", query)
 			return
 		}
-		var index uint64
 		var resp *internal.LeaseTimeToLiveResponse
 		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
-			index, err = sm.dbMeta.getRevision(txn)
+			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
 				return
 			}
@@ -450,7 +456,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			res.Data = []byte(err.Error())
 			return
 		}
-		resp.Header = sm.responseHeader(index)
+		resp.Header = sm.responseHeader(rev)
 		res.Data, err = proto.Marshal(resp)
 		if err != nil {
 			sm.log.Error("Invalid response", "resp", resp, "err", err)
@@ -468,6 +474,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
+	slog.Debug(`sm Watch`, `req`, req)
 	var err error
 	var since = uint64(req.StartRevision)
 	var min uint64
@@ -475,6 +482,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		if min, err = sm.dbMeta.getRevisionMin(txn); err != nil {
 			return
 		}
+		slog.Debug(`sm Watch`, `since`, since, `min`, min)
 		if since > 0 && min > since {
 			err = internal.ErrGRPCCompacted
 		}
@@ -499,10 +507,10 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 	for _, f := range req.Filters {
 		filtered[uint8(f)] = true
 	}
-	var index uint64
-	scan := func() (index uint64, sent int, err error) {
+	var rev uint64
+	scan := func() (rev uint64, sent int, err error) {
 		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
-			index, err = sm.dbMeta.getRevision(txn)
+			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
 				return
 			}
@@ -550,7 +558,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 			if sent > 0 {
 				res := zongzi.GetResult()
 				res.Data = append(res.Data, WatchMessageType_SYNC)
-				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
+				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(rev))
 				if err != nil {
 					sm.log.Error("Error marshaling header", "err", err)
 					return
@@ -559,7 +567,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 			}
 			return
 		})
-		since = index + 1
+		since = rev + 1
 		return
 	}
 	// Send INIT
@@ -572,42 +580,50 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 	}
 	result <- res
 	// Event scan 1
-	if index, _, err = scan(); err != nil {
+	if rev, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
 	// Watch Start
 	var alert = make(chan uint64, 1e4)
-	defer sm.watches.Insert(req.Key, req.RangeEnd, alert).Remove()
+	var end = req.RangeEnd
+	if len(end) == 0 {
+		end = req.Key
+	}
+	if intv := sm.watches.Insert(req.Key, end, alert); intv != nil {
+		defer intv.Remove()
+	} else {
+		sm.log.Warn(`Invalid watch range: %s - %s`, string(req.Key), string(req.RangeEnd))
+	}
 	// Event scan 2
-	if index, _, err = scan(); err != nil {
+	if rev, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
 	var sent int
-	var rev uint64
+	var alertRev uint64
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			sm.log.Debug("Watcher done", "id", req.WatchId)
 			break loop
-		case rev = <-alert:
+		case alertRev = <-alert:
 		alertLoop:
 			for {
 				select {
-				case rev = <-alert:
+				case alertRev = <-alert:
 					sm.log.Debug("Watch Alert Drain")
 				default:
 					break alertLoop
 				}
 			}
-			if rev <= index {
+			if alertRev <= rev {
 				// Skip scan for alerts received between Watch start and Event scan 2
-				sm.log.Debug("Watch Alert Skip", "index", index, "rev", rev)
+				sm.log.Debug("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
 				continue
 			}
-			index, sent, err = scan()
+			rev, sent, err = scan()
 			if err != nil {
 				sm.log.Error("Error reading events", "err", err)
 				break loop
@@ -615,7 +631,7 @@ loop:
 			if sent == 0 && req.ProgressNotify {
 				res := zongzi.GetResult()
 				res.Data = append(res.Data, WatchMessageType_NOTIFY)
-				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(index))
+				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(rev))
 				if err != nil {
 					sm.log.Error("Error notifying progress", "err", err)
 					break loop
@@ -696,11 +712,11 @@ func (sm *stateMachine) cmdPut(
 }
 
 func (sm *stateMachine) cmdDeleteRange(
-	txn *lmdb.Txn, index, subrev, epoch uint64,
+	txn *lmdb.Txn, rev, subrev, epoch uint64,
 	req *internal.DeleteRangeRequest,
 ) (res *internal.DeleteRangeResponse, keys [][]byte, err error) {
 	res = &internal.DeleteRangeResponse{}
-	prev, n, err := sm.dbKv.deleteRange(txn, index, subrev, epoch, req.Key, req.RangeEnd)
+	prev, n, err := sm.dbKv.deleteRange(txn, rev, subrev, epoch, req.Key, req.RangeEnd)
 	if err != nil {
 		return
 	}
@@ -715,7 +731,7 @@ func (sm *stateMachine) cmdDeleteRange(
 		}
 	}
 	res.Deleted = n
-	res.Header = sm.responseHeader(index)
+	res.Header = sm.responseHeader(rev)
 	if req.PrevKv {
 		for _, prec := range prev {
 			item, _, err = sm.dbKv.getRev(txn, prec.key, prec.rev.upper(), false)
@@ -773,7 +789,7 @@ func (sm *stateMachine) cmdLeaseGrant(
 }
 
 func (sm *stateMachine) cmdLeaseRevoke(
-	txn *lmdb.Txn, index, epoch, id uint64,
+	txn *lmdb.Txn, rev, epoch, id uint64,
 ) (keys [][]byte, val uint64, err error) {
 	var item lease
 	if item, err = sm.dbLease.get(txn, uint64(id)); err != nil {
@@ -791,7 +807,7 @@ func (sm *stateMachine) cmdLeaseRevoke(
 		if len(batch) == 0 {
 			break
 		}
-		if err = sm.dbKv.deleteBatch(txn, index, 0, epoch, batch); err != nil {
+		if err = sm.dbKv.deleteBatch(txn, rev, 0, epoch, batch); err != nil {
 			return
 		}
 		keys = append(keys, batch...)
@@ -831,21 +847,22 @@ func (sm *stateMachine) cmdLeaseKeepAlive(
 }
 
 func (sm *stateMachine) queryRange(
-	txn *lmdb.Txn, index uint64,
+	txn *lmdb.Txn, rev uint64,
 	req *internal.RangeRequest,
 ) (res *internal.RangeResponse, err error) {
 	res = &internal.RangeResponse{
-		Header: sm.responseHeader(index),
+		Header: sm.responseHeader(rev),
 	}
 	if req.Revision > 0 {
 		min, err := sm.dbMeta.getRevisionMin(txn)
 		if err != nil {
+			slog.Error(`Query err: ` + err.Error())
 			return nil, err
 		}
 		if req.Revision < int64(min) {
 			return nil, internal.ErrGRPCCompacted
 		}
-		if req.Revision > int64(index) {
+		if req.Revision > int64(rev) {
 			return nil, internal.ErrGRPCFutureRev
 		}
 	}
@@ -913,7 +930,7 @@ func (sm *stateMachine) queryLeaseTimeToLive(
 }
 
 func (sm *stateMachine) txnOps(
-	txn *lmdb.Txn, index, epoch uint64,
+	txn *lmdb.Txn, rev, epoch uint64,
 	ops []*internal.RequestOp,
 ) (res []*internal.ResponseOp, keys [][]byte, err error) {
 	err = txn.Sub(func(txn *lmdb.Txn) (err error) {
@@ -921,7 +938,7 @@ func (sm *stateMachine) txnOps(
 			switch op.Request.(type) {
 			case *internal.RequestOp_RequestPut:
 				putReq := op.Request.(*internal.RequestOp_RequestPut).RequestPut
-				putRes, _, affected, err := sm.cmdPut(txn, index, uint64(i), epoch, putReq)
+				putRes, _, affected, err := sm.cmdPut(txn, rev, uint64(i), epoch, putReq)
 				if err != nil {
 					return err
 				}
@@ -933,7 +950,7 @@ func (sm *stateMachine) txnOps(
 				keys = append(keys, affected...)
 			case *internal.RequestOp_RequestDeleteRange:
 				delReq := op.Request.(*internal.RequestOp_RequestDeleteRange).RequestDeleteRange
-				delRes, affected, err := sm.cmdDeleteRange(txn, index, uint64(i), epoch, delReq)
+				delRes, affected, err := sm.cmdDeleteRange(txn, rev, uint64(i), epoch, delReq)
 				if err != nil {
 					return err
 				}
@@ -945,7 +962,7 @@ func (sm *stateMachine) txnOps(
 				keys = append(keys, affected...)
 			case *internal.RequestOp_RequestRange:
 				rangeReq := op.Request.(*internal.RequestOp_RequestRange).RequestRange
-				rangeRes, err := sm.queryRange(txn, index, rangeReq)
+				rangeRes, err := sm.queryRange(txn, rev, rangeReq)
 				if err != nil {
 					return err
 				}
@@ -968,7 +985,7 @@ func (sm *stateMachine) txnCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 		if item, err = sm.dbKv.get(txn, cond.Key); err != nil {
 			return
 		}
-		if !bytes.Equal(cond.Key, item.key) {
+		if len(item.key) > 0 && !bytes.Equal(cond.Key, item.key) {
 			success = false
 			break
 		}

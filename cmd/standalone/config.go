@@ -13,6 +13,8 @@ type config struct {
 	PortGossip  uint16 `env:"KRV_PORT_GOSSIP"`
 	PortRaft    uint16 `env:"KRV_PORT_RAFT"`
 	PortZongzi  uint16 `env:"KRV_PORT_ZONGZI"`
+	TlsCrt      string `env:"KRV_TLS_CRT"`
+	TlsKey      string `env:"KRV_TLS_KEY"`
 }
 
 func getConfig() config {

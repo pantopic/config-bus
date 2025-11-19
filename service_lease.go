@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	// "log/slog"
 
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc/codes"
@@ -36,10 +37,12 @@ func (s *serviceLease) LeaseGrant(
 	if err != nil {
 		return
 	}
+	// slog.Info(`Lease Grant Req`, `req`, req)
 	val, data, err := s.client.Apply(ctx, append(b, CMD_LEASE_GRANT))
 	if err != nil {
 		return
 	}
+	// slog.Info(`Lease Grant`, `val`, val, `data`, data, `err`, err)
 	if val != 1 {
 		err = fmt.Errorf("%s", string(data))
 		return

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,14 +13,16 @@ import (
 	"time"
 
 	"github.com/logbn/zongzi"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/pantopic/krv"
 	"github.com/pantopic/krv/internal"
 )
 
 func main() {
-	zongzi.SetLogLevel(zongzi.LogLevelWarning)
+	zongzi.SetLogLevel(zongzi.LogLevelInfo)
 	var cfg = getConfig()
 	var ctx = context.Background()
 	var log = slog.Default()
@@ -37,7 +40,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var grpcServer = grpc.NewServer()
+	var opts []grpc.ServerOption
+	if cfg.TlsCrt != "" && cfg.TlsKey != "" {
+		fc, err := credentials.NewServerTLSFromFile(cfg.TlsCrt, cfg.TlsKey)
+		if err != nil {
+			panic(err)
+		}
+		opts = append(opts, grpc.Creds(fc))
+		log.Info(`GRPC TLS`)
+	}
+	var grpcServer = grpc.NewServer(opts...)
 	agent.StateMachineRegister(krv.Uri, krv.NewStateMachineFactory(log, cfg.Dir+"/data"))
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
@@ -53,14 +65,39 @@ func main() {
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
 	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
+	internal.RegisterWatchServer(grpcServer, krv.NewServiceWatch(client))
 	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
+	internal.RegisterMaintenanceServer(grpcServer, krv.NewServiceMaintenance(client))
 	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
 	if err != nil {
 		panic(err)
 	}
+	m := cmux.New(lis)
+	grpcL := m.Match(cmux.HTTP2())
+	httpL := m.Match(cmux.Any())
 	go func() {
-		if err = grpcServer.Serve(lis); err != nil {
+		if err = grpcServer.Serve(grpcL); err != nil {
+			panic(err)
+		}
+	}()
+	httpS := &http.Server{
+		Handler: krv.NewEndpointHandler(grpcServer),
+	}
+	go func() {
+		if cfg.TlsCrt != "" && cfg.TlsKey != "" {
+			log.Info(`HTTP TLS`)
+			if err = httpS.ServeTLS(httpL, cfg.TlsCrt, cfg.TlsKey); err != nil {
+				panic(err)
+			}
+		} else {
+			if err = httpS.Serve(httpL); err != nil {
+				panic(err)
+			}
+		}
+	}()
+	go func() {
+		if err := m.Serve(); err != nil {
 			panic(err)
 		}
 	}()
