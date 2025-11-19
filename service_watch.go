@@ -46,11 +46,10 @@ func (s *serviceWatch) Watch(
 		if err != nil {
 			break
 		}
-		switch req.RequestUnion.(type) {
+		switch maybe := req.RequestUnion.(type) {
 		case *internal.WatchRequest_CreateRequest:
-			slog.Info(`Watch - Create`)
-			req := req.RequestUnion.(*internal.WatchRequest_CreateRequest).CreateRequest
-			slog.Debug(`Watch Create Req`, `req`, req)
+			slog.Debug(`WatchRequest_CreateRequest`, `req`, req)
+			req := maybe.CreateRequest
 			if req.WatchId > 0 {
 				mu.RLock()
 				if _, ok := watches[req.WatchId]; ok {
@@ -70,24 +69,25 @@ func (s *serviceWatch) Watch(
 				mu.RUnlock()
 			}
 			var w *watch
+			id := req.WatchId
 			w = s.watch(server.Context(), req, server, func() int64 {
-				mu.Lock()
-				defer mu.Unlock()
-				if req.WatchId == 0 {
-					req.WatchId = watchId
+				if id == 0 {
+					id = watchId
 					watchId++
 				}
-				watches[req.WatchId] = w
-				return req.WatchId
+				mu.Lock()
+				watches[id] = w
+				mu.Unlock()
+				return id
 			}, func() {
 				// TODO - retry?
 				mu.Lock()
-				defer mu.Unlock()
-				delete(watches, req.WatchId)
+				delete(watches, id)
+				mu.Unlock()
 			})
 		case *internal.WatchRequest_CancelRequest:
-			slog.Info(`Watch - Cancel`)
-			req := req.RequestUnion.(*internal.WatchRequest_CancelRequest).CancelRequest
+			slog.Debug(`WatchRequest_CancelRequest`, `req`, req)
+			req := maybe.CancelRequest
 			mu.RLock()
 			w, ok := watches[req.WatchId]
 			mu.RUnlock()
@@ -104,21 +104,35 @@ func (s *serviceWatch) Watch(
 			if err = s.watchResp(server, &internal.WatchResponse{
 				WatchId:  req.WatchId,
 				Canceled: true,
+				Events:   []*internal.Event{},
 			}); err != nil {
 				slog.Error("Unable to send watch cancel response", "req", req, "err", err.Error())
 			}
 		case *internal.WatchRequest_ProgressRequest:
-			slog.Info(`Watch - Progress`)
-			req := req.RequestUnion.(*internal.WatchRequest_ProgressRequest).ProgressRequest
-			// TODO - track watch progress and generate response
-			// mu.RLock()
-			// w, ok := watches[req.WatchId]
-			// mu.RUnlock()
-			// if !req.ProgressNotify {
-
-			// }
-			if err = s.watchResp(server, &internal.WatchResponse{}); err != nil {
-				slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
+			slog.Debug(`WatchRequest_ProgressRequest`, `req`, req)
+			_, data, err := s.client.Read(server.Context(), []byte{QUERY_WATCH_PROGRESS}, true)
+			if err != nil {
+				slog.Error("Unable to request progress", "req", req, "err", err.Error())
+				break
+			}
+			var h internal.ResponseHeader
+			if err = proto.Unmarshal(data, &h); err != nil {
+				slog.Error("Error unmarshaling init", "err", err)
+				break
+			}
+			var responses []*internal.WatchResponse
+			mu.Lock()
+			for i := range watches {
+				responses = append(responses, &internal.WatchResponse{
+					Header:  &h,
+					WatchId: i,
+				})
+			}
+			mu.Unlock()
+			for _, r := range responses {
+				if err = s.watchResp(server, r); err != nil {
+					slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
+				}
 			}
 		}
 	}
@@ -147,24 +161,26 @@ func (s *serviceWatch) watch(
 		for {
 			res, ok := <-result
 			if res == nil || !ok {
-				slog.Debug("Closing watch", "id", id)
 				break
 			}
 			switch res.Data[0] {
 			case WatchMessageType_INIT:
+				slog.Debug(`WatchMessageType_INIT`)
 				if err = proto.Unmarshal(res.Data[1:], resp.Header); err != nil {
 					slog.Error("Error unmarshaling init", "err", err)
 					return
 				}
 				id = idFunc()
+				req.WatchId = id
+				resp.WatchId = id
 				if err = s.watchResp(server, &internal.WatchResponse{
+					Header:  resp.Header,
 					WatchId: id,
 					Created: true,
 				}); err != nil {
 					slog.Error("Error sending create response", "err", err)
 					return
 				}
-				resp.WatchId = id
 				clusterID = resp.Header.ClusterId
 				memberID = resp.Header.MemberId
 			case WatchMessageType_EVENT:
@@ -173,6 +189,7 @@ func (s *serviceWatch) watch(
 					slog.Error("Error unmarshaling event", "err", err)
 					return
 				}
+				slog.Debug(`WatchMessageType_EVENT`)
 				var sz = len(evt.Kv.Key) + len(evt.Kv.Value) + sizeMetaKeyValue + sizeMetaEvent
 				if evt.PrevKv != nil {
 					sz += len(evt.PrevKv.Key) + len(evt.PrevKv.Value) + sizeMetaKeyValue
@@ -187,7 +204,7 @@ func (s *serviceWatch) watch(
 					resp.Fragment = true
 				}
 				s.addTerm(resp.Header)
-				if err = server.Send(resp); err != nil {
+				if err = s.watchResp(server, resp); err != nil {
 					slog.Error("Error sending response")
 					return
 				}
@@ -206,9 +223,9 @@ func (s *serviceWatch) watch(
 					slog.Error("Error unmarshaling sync", "err", err)
 					return
 				}
+				slog.Debug(`WatchMessageType_SYNC`)
 				if len(resp.Events) > 0 {
-					s.addTerm(resp.Header)
-					if err = server.Send(resp); err != nil {
+					if err = s.watchResp(server, resp); err != nil {
 						slog.Error("Error sending response")
 						return
 					}
@@ -221,13 +238,14 @@ func (s *serviceWatch) watch(
 					}
 				}
 			case WatchMessageType_NOTIFY:
+				slog.Debug(`WatchMessageType_NOTIFY`, `req`, req)
 				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling notify", "err", err)
 					return
 				}
 				s.addTerm(header)
-				if err = server.Send(&internal.WatchResponse{
+				if err = s.watchResp(server, &internal.WatchResponse{
 					Header:  header,
 					WatchId: id,
 				}); err != nil {
@@ -235,6 +253,7 @@ func (s *serviceWatch) watch(
 					return
 				}
 			case WatchMessageType_ERR_COMPACTED:
+				slog.Debug(`WatchMessageType_ERR_COMPACTED`, `req`, req)
 				var header = &internal.ResponseHeader{}
 				if err = proto.Unmarshal(res.Data[1:], header); err != nil {
 					slog.Error("Error unmarshaling compaction error", "err", err)
@@ -273,6 +292,9 @@ func (s *serviceWatch) watch(
 		defer close(result)
 		defer done()
 		defer close(w.done)
+		if len(req.RangeEnd) == 0 {
+			req.RangeEnd = append(req.Key, 0x00)
+		}
 		query, err := proto.Marshal(req)
 		if err != nil {
 			slog.Error("Error marshaling query", "err", err.Error())
@@ -294,6 +316,7 @@ func (s *serviceWatch) watchResp(
 		resp.Header = &internal.ResponseHeader{}
 	}
 	s.addTerm(resp.Header)
+	slog.Debug(`watchResp`, `resp`, resp)
 	return server.Send(resp)
 }
 

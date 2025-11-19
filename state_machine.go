@@ -464,6 +464,22 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			return
 		}
 		res.Value = 1
+	case QUERY_WATCH_PROGRESS:
+		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+			rev, err = sm.dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			return
+		})
+		resp := sm.responseHeader(rev)
+		res.Data, err = proto.Marshal(resp)
+		if err != nil {
+			sm.log.Error("Invalid response", "resp", resp, "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		res.Value = 1
 	}
 	return
 }
@@ -474,7 +490,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
-	slog.Debug(`sm Watch`, `req`, req)
+	// slog.Info(`sm Watch`, `req`, req)
 	var err error
 	var since = uint64(req.StartRevision)
 	var min uint64
@@ -482,7 +498,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		if min, err = sm.dbMeta.getRevisionMin(txn); err != nil {
 			return
 		}
-		slog.Debug(`sm Watch`, `since`, since, `min`, min)
+		// slog.Info(`sm Watch`, `since`, since, `min`, min)
 		if since > 0 && min > since {
 			err = internal.ErrGRPCCompacted
 		}
@@ -507,8 +523,8 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 	for _, f := range req.Filters {
 		filtered[uint8(f)] = true
 	}
-	var rev uint64
 	scan := func() (rev uint64, sent int, err error) {
+		// slog.Info(`sm Watch`, `req`, req)
 		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
 			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
@@ -579,6 +595,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		return
 	}
 	result <- res
+	var rev uint64
 	// Event scan 1
 	if rev, _, err = scan(); err != nil {
 		sm.log.Error("Error scanning", "err", err)
@@ -606,21 +623,21 @@ loop:
 	for {
 		select {
 		case <-ctx.Done():
-			sm.log.Debug("Watcher done", "id", req.WatchId)
+			sm.log.Info("Watcher done", "id", req.WatchId)
 			break loop
 		case alertRev = <-alert:
 		alertLoop:
 			for {
 				select {
 				case alertRev = <-alert:
-					sm.log.Debug("Watch Alert Drain")
+					sm.log.Info("Watch Alert Drain", `alertRev`, alertRev)
 				default:
 					break alertLoop
 				}
 			}
 			if alertRev <= rev {
 				// Skip scan for alerts received between Watch start and Event scan 2
-				sm.log.Debug("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
+				sm.log.Info("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
 				continue
 			}
 			rev, sent, err = scan()
@@ -676,7 +693,7 @@ func (sm *stateMachine) Close() error {
 }
 
 func (sm *stateMachine) cmdPut(
-	txn *lmdb.Txn, index, subrev, epoch uint64,
+	txn *lmdb.Txn, rev, subrev, epoch uint64,
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
@@ -684,7 +701,7 @@ func (sm *stateMachine) cmdPut(
 		err = internal.ErrGRPCKeyTooLong
 		return
 	}
-	prev, _, patched, err := sm.dbKv.put(txn, index, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
+	prev, _, patched, err := sm.dbKv.put(txn, rev, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return
 	}
@@ -1018,9 +1035,9 @@ func (sm *stateMachine) txnCompare(txn *lmdb.Txn, conds []*internal.Compare) (su
 	return
 }
 
-func (sm *stateMachine) responseHeader(revision uint64) *internal.ResponseHeader {
+func (sm *stateMachine) responseHeader(rev uint64) *internal.ResponseHeader {
 	return &internal.ResponseHeader{
-		Revision:  int64(revision),
+		Revision:  int64(rev),
 		ClusterId: sm.shardID,
 		MemberId:  sm.replicaID,
 	}

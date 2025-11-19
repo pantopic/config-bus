@@ -16,6 +16,7 @@ import (
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/pantopic/krv"
 	"github.com/pantopic/krv/internal"
@@ -40,14 +41,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var opts []grpc.ServerOption
+	var opts = []grpc.ServerOption{
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: false,
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    2 * time.Hour,
+			Timeout: 20 * time.Second,
+		}),
+	}
 	if cfg.TlsCrt != "" && cfg.TlsKey != "" {
 		fc, err := credentials.NewServerTLSFromFile(cfg.TlsCrt, cfg.TlsKey)
 		if err != nil {
 			panic(err)
 		}
 		opts = append(opts, grpc.Creds(fc))
-		log.Info(`GRPC TLS`)
 	}
 	var grpcServer = grpc.NewServer(opts...)
 	agent.StateMachineRegister(krv.Uri, krv.NewStateMachineFactory(log, cfg.Dir+"/data"))
@@ -86,7 +95,6 @@ func main() {
 	}
 	go func() {
 		if cfg.TlsCrt != "" && cfg.TlsKey != "" {
-			log.Info(`HTTP TLS`)
 			if err = httpS.ServeTLS(httpL, cfg.TlsCrt, cfg.TlsKey); err != nil {
 				panic(err)
 			}

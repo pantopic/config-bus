@@ -29,7 +29,7 @@ func newDbKv(txn *lmdb.Txn) (db dbKv, err error) {
 
 func (db dbKv) put(
 	txn *lmdb.Txn,
-	revision, subrev, lease, epoch uint64,
+	rev, subrev, lease, epoch uint64,
 	key, val []byte,
 	ignoreValue, ignoreLease bool,
 ) (prev, next kv, patched bool, err error) {
@@ -50,9 +50,9 @@ func (db dbKv) put(
 	}
 	if krec.rev == 0 || krec.rev.isdel() {
 		next = kv{
-			rev:     newkeyrev(revision, subrev, false),
+			rev:     newkeyrev(rev, subrev, false),
 			version: 1,
-			created: revision,
+			created: rev,
 			lease:   lease,
 			key:     key,
 			val:     val,
@@ -73,7 +73,7 @@ func (db dbKv) put(
 		}
 		return
 	}
-	if krec.rev.upper() == revision && !KRV_TXN_MULTI_WRITE_ENABLED {
+	if krec.rev.upper() == rev && !KRV_TXN_MULTI_WRITE_ENABLED {
 		err = internal.ErrGRPCDuplicateKey
 		return
 	}
@@ -84,7 +84,7 @@ func (db dbKv) put(
 		return
 	}
 	next = kv{
-		rev:     newkeyrev(revision, subrev, false),
+		rev:     newkeyrev(rev, subrev, false),
 		version: prev.version + 1,
 		created: prev.created,
 		lease:   lease,

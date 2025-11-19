@@ -24,6 +24,7 @@ const (
 	QUERY_KV_RANGE byte = iota
 	QUERY_LEASE_LEASES
 	QUERY_LEASE_TIME_TO_LIVE
+	QUERY_WATCH_PROGRESS
 
 	WatchMessageType_UNKNOWN byte = iota
 	WatchMessageType_INIT

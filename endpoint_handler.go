@@ -1,7 +1,7 @@
 package krv
 
 import (
-	"log/slog"
+	// "log/slog"
 	"net/http"
 	"strings"
 
@@ -19,7 +19,7 @@ func NewEndpointHandler(grpcServer *grpc.Server) *endpointHandler {
 }
 
 func (h *endpointHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	slog.Info(`endpoint: ` + r.URL.Path)
+	// slog.Info(`endpoint: ` + r.URL.Path)
 	if r.ProtoMajor == 2 && strings.HasPrefix(
 		r.Header.Get("Content-Type"), "application/grpc") {
 		h.grpcServer.ServeHTTP(w, r)

@@ -36,7 +36,7 @@ func (s *kvService) Put(
 	if err != nil {
 		return
 	}
-	// slog.Info(`KV Put Req`, `req`, req)
+	// slog.Info(`KV Put`, `req`, string(req.Key))
 	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_PUT))
 	if err != nil {
 		return
@@ -136,7 +136,7 @@ func (s *kvService) Txn(
 	if err != nil {
 		return
 	}
-	// slog.Info(`KV Txn Req`, `req`, req)
+	// slog.Info(`KV Txn Req`)
 	val, data, err := s.client.Apply(ctx, append(b, CMD_KV_TXN))
 	if err != nil {
 		return
