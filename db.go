@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync
+	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync | lmdb.NoSubdir
 	lmdbDupFlags = lmdb.DupSort
 )
 
