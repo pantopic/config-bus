@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/caarlos0/env/v11"
 )
 
@@ -9,6 +11,7 @@ type config struct {
 	Dir         string `env:"KRV_DIR"`
 	HostName    string `env:"KRV_HOST_NAME"`
 	HostPeers   string `env:"KRV_HOST_PEERS"`
+	HostTags    string `env:"KRV_HOST_TAGS"`
 	PortApi     uint16 `env:"KRV_PORT_API"`
 	PortGossip  uint16 `env:"KRV_PORT_GOSSIP"`
 	PortRaft    uint16 `env:"KRV_PORT_RAFT"`
@@ -32,4 +35,16 @@ func getConfig() config {
 		panic(err)
 	}
 	return cfg
+}
+
+func (c config) GetHostTags() (tags []string) {
+	tags = []string{}
+	for _, t := range strings.Split(c.HostTags, ",") {
+		t = strings.TrimSpace(t)
+		if len(t) == 0 {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	return
 }

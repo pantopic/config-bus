@@ -32,6 +32,7 @@ func main() {
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithDirRaft(cfg.Dir+"/raft"),
 		zongzi.WithDirWAL(cfg.Dir+"/wal"),
+		zongzi.WithHostTags(cfg.GetHostTags()...),
 		zongzi.WithAddrGossip(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortGossip)),
 		zongzi.WithAddrRaft(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortRaft)),
 		zongzi.WithAddrApi(fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortZongzi)),
@@ -65,8 +66,12 @@ func main() {
 	}
 	shard, _, err := agent.ShardCreate(ctx, krv.Uri,
 		zongzi.WithName("krv"),
-		zongzi.WithPlacementMembers(3))
+		zongzi.WithPlacementMembers(3, `pantopic/krv=member`),
+		zongzi.WithPlacementCover(`pantopic/krv=nonvoting`))
 	if err != nil {
+		panic(err)
+	}
+	if err = agent.ReplicaAwait(ctx, 30*time.Second, shard.ID); err != nil {
 		panic(err)
 	}
 	if err = ctrl.Start(agent.Client(shard.ID), shard); err != nil {
