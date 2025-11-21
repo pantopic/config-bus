@@ -5,7 +5,7 @@ build:
 	@go build -ldflags="-s -w" -o _dist/krv ./cmd/standalone
 
 test:
-	@go test
+	@go test -v
 
 integration:
 	@go test ./...
@@ -20,9 +20,12 @@ unit:
 	@go test ./... -tags unit -v
 
 scp:
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-0:~/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-1:~/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-2:~/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-0:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-1:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-2:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-0:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-1:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-2:/usr/bin/krv
 
 cover:
 	@mkdir -p _dist

@@ -104,11 +104,12 @@ func setupkrv(t *testing.T) {
 		Level: logLevel,
 	}))
 	var (
-		agents = make([]*zongzi.Agent, 3)
-		dir    = "/tmp/krv/test"
-		host   = "127.0.0.1"
-		port   = 19000
-		peers  = []string{
+		agents    = make([]*zongzi.Agent, 3)
+		nonvoting = make([]*zongzi.Agent, 3)
+		dir       = "/tmp/krv/test"
+		host      = "127.0.0.1"
+		port      = 19000
+		peers     = []string{
 			fmt.Sprintf(host+":%d", port+3),
 			fmt.Sprintf(host+":%d", port+13),
 			fmt.Sprintf(host+":%d", port+23),
@@ -126,17 +127,18 @@ func setupkrv(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	var ctrl []*controller
+	var ctrl, ctrl2 []*controller
 	var shard zongzi.Shard
 	for i := range len(agents) {
 		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
-		dir := fmt.Sprintf("%s/%d", dir, i)
+		dir := fmt.Sprintf("%s/%03d", dir, i)
 		if agents[i], err = zongzi.NewAgent("krv000", peers,
 			zongzi.WithDirRaft(dir+"/raft"),
 			zongzi.WithDirWAL(dir+"/wal"),
 			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+(i*10)+1)),
 			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+(i*10)+2)),
 			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+(i*10)+3)),
+			zongzi.WithHostTags(`pantopic/krv=member`),
 			zongzi.WithRaftEventListener(ctrl[i]),
 		); err != nil {
 			panic(err)
@@ -157,10 +159,41 @@ func setupkrv(t *testing.T) {
 		}
 		return true
 	}), `%#v`, agents)
+	for i := range len(nonvoting) {
+		ctrl2 = append(ctrl2, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
+		dir := fmt.Sprintf("%s/%03d", dir, i+100)
+		if nonvoting[i], err = zongzi.NewAgent("krv000", peers,
+			zongzi.WithDirRaft(dir+"/raft"),
+			zongzi.WithDirWAL(dir+"/wal"),
+			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+100+(i*10)+1)),
+			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+100+(i*10)+2)),
+			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+100+(i*10)+3)),
+			zongzi.WithHostTags(`pantopic/krv=nonvoting`),
+			zongzi.WithRaftEventListener(ctrl2[i]),
+		); err != nil {
+			panic(err)
+		}
+		nonvoting[i].StateMachineRegister(Uri, NewStateMachineFactory(log, dir+"/data"))
+		go func() {
+			if err = nonvoting[i].Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
+	}
+	// 10 seconds to start the replicas.
+	require.True(t, await(10, 100, func() bool {
+		for _, agent := range nonvoting {
+			if agent.Status() != zongzi.AgentStatus_Ready {
+				return false
+			}
+		}
+		return true
+	}), `%#v`, nonvoting)
 	// Start shard
 	shard, _, err = agents[0].ShardCreate(ctx, Uri,
 		zongzi.WithName("standalone-001"),
-		zongzi.WithPlacementMembers(3))
+		zongzi.WithPlacementMembers(3, `pantopic/krv=member`),
+		zongzi.WithPlacementCover(`pantopic/krv=nonvoting`))
 	if err != nil {
 		panic(err)
 	}
@@ -173,8 +206,26 @@ func setupkrv(t *testing.T) {
 		})
 		return shard.Leader > 0
 	}))
+	// 5 seconds for shard to have 6 active replicas
+	require.True(t, await(10, 100, func() bool {
+		n := 0
+		agents[0].State(ctx, func(s *zongzi.State) {
+			s.ReplicaIterateByShardID(shard.ID, func(r zongzi.Replica) bool {
+				if r.Status == zongzi.ReplicaStatus_Active {
+					n++
+				}
+				return true
+			})
+		})
+		return n == 6
+	}))
 	for i := range agents {
 		if err = ctrl[i].Start(agents[i].Client(shard.ID), shard); err != nil {
+			panic(err)
+		}
+	}
+	for i := range nonvoting {
+		if err = ctrl2[i].Start(nonvoting[i].Client(shard.ID), shard); err != nil {
 			panic(err)
 		}
 	}
@@ -1628,9 +1679,9 @@ func testWatch(t *testing.T) {
 	t.Run("create", func(t *testing.T) {
 		t.Run("new", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
-				Key:            []byte(`test-watch-000`),
-				RangeEnd:       []byte(`test-watch-100`),
-				ProgressNotify: true,
+				Key:      []byte(`test-watch-000`),
+				RangeEnd: []byte(`test-watch-100`),
+				// ProgressNotify: true,
 			})
 			res := <-s.resChan
 			if KRV_WATCH_ID_ZERO_INDEX {
@@ -1640,9 +1691,9 @@ func testWatch(t *testing.T) {
 				require.Equal(t, int64(0), res.WatchId, res)
 				assert.True(t, res.Canceled)
 				sendWatchCreate(&internal.WatchCreateRequest{
-					Key:            []byte(`test-watch-000`),
-					RangeEnd:       []byte(`test-watch-100`),
-					ProgressNotify: true,
+					Key:      []byte(`test-watch-000`),
+					RangeEnd: []byte(`test-watch-100`),
+					// ProgressNotify: true,
 				})
 				res = <-s.resChan
 			} else {
@@ -1853,7 +1904,10 @@ func testWatch(t *testing.T) {
 					internal.WatchCreateRequest_NODELETE,
 				},
 			})
-			res := <-s.resChan // WatchCreated
+			var res *internal.WatchResponse
+			timeout(t, time.Second, func() {
+				res = <-s.resChan // WatchCreated
+			})
 			require.Greater(t, res.WatchId, int64(0), res)
 			assert.True(t, res.Created)
 			watchID = res.WatchId
@@ -1911,7 +1965,9 @@ func testWatch(t *testing.T) {
 			_, err = svcKv.Put(ctx, req)
 		})
 		require.Nil(t, err, err)
-		res = <-s.resChan
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
 		assert.Equal(t, watchID, res.WatchId, res)
 		assert.False(t, res.Created)
 		assert.False(t, res.Canceled)
@@ -1922,7 +1978,50 @@ func testWatch(t *testing.T) {
 		assert.Equal(t, req.Key, res.Events[0].Kv.Key)
 		assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
 		sendWatchCancel(watchID)
-		res = <-s.resChan
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
+		require.Equal(t, watchID, res.WatchId)
+		require.False(t, res.Created)
+		require.True(t, res.Canceled)
+	})
+	t.Run("single-key-2", func(t *testing.T) {
+		sendWatchCreate(&internal.WatchCreateRequest{
+			Key:      []byte(`test-watch-000`),
+			RangeEnd: []byte(`test-watch-000`),
+		})
+		var res *internal.WatchResponse
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
+		assert.Greater(t, res.WatchId, int64(0), res)
+		assert.True(t, res.Created)
+		assert.False(t, res.Canceled)
+		watchID = res.WatchId
+		req := &internal.PutRequest{
+			Key:   []byte(`test-watch-000`),
+			Value: []byte(`test-watch-value-000`),
+		}
+		timeout(t, time.Second, func() {
+			_, err = svcKv.Put(ctx, req)
+		})
+		require.Nil(t, err, err)
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
+		assert.Equal(t, watchID, res.WatchId, res)
+		assert.False(t, res.Created)
+		assert.False(t, res.Canceled)
+		require.Len(t, res.Events, 1)
+		assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
+		assert.Nil(t, res.Events[0].PrevKv)
+		require.NotNil(t, req.Key, res.Events[0].Kv)
+		assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+		assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
+		sendWatchCancel(watchID)
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
@@ -1975,6 +2074,7 @@ func testWatch(t *testing.T) {
 		assert.Greater(t, res.WatchId, int64(0), res)
 		assert.True(t, res.Created)
 		assert.False(t, res.Canceled)
+		watchID := res.WatchId
 		rev1 := res.Header.Revision
 		req := &internal.PutRequest{
 			Key:   []byte(`test-watch-001`),
@@ -1985,21 +2085,34 @@ func testWatch(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		time.Sleep(100 * time.Millisecond)
-		sendWatchProgress()
+		timeout(t, time.Second, func() {
+			sendWatchProgress()
+		})
 		timeout(t, time.Second, func() {
 			res = <-s.resChan
 		})
 		assert.False(t, res.Created)
 		assert.False(t, res.Canceled)
 		assert.Greater(t, res.Header.Revision, rev1, res)
+		timeout(t, time.Second, func() {
+			sendWatchCancel(watchID)
+		})
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
+		require.Equal(t, watchID, res.WatchId)
+		require.False(t, res.Created)
+		require.True(t, res.Canceled)
 	})
 	t.Run("alert", func(t *testing.T) {
-		sendWatchCreate(&internal.WatchCreateRequest{
-			Key:      []byte(`test-watch-alert-000`),
-			RangeEnd: []byte(`test-watch-alert-999`),
-			Filters: []internal.WatchCreateRequest_FilterType{
-				internal.WatchCreateRequest_NODELETE,
-			},
+		timeout(t, time.Second, func() {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key:      []byte(`test-watch-alert-000`),
+				RangeEnd: []byte(`test-watch-alert-999`),
+				Filters: []internal.WatchCreateRequest_FilterType{
+					internal.WatchCreateRequest_NODELETE,
+				},
+			})
 		})
 		var res *internal.WatchResponse
 		timeout(t, time.Second, func() {
@@ -2010,14 +2123,18 @@ func testWatch(t *testing.T) {
 		watchID = res.WatchId
 		for i := range 10 {
 			req := &internal.PutRequest{
-				Key:   []byte(fmt.Sprintf(`test-watch-alert-%03d`, i)),
-				Value: []byte(fmt.Sprintf(`test-watch-alert-value-%03d`, i)),
+				Key:   fmt.Appendf(nil, `test-watch-alert-%03d`, i),
+				Value: fmt.Appendf(nil, `test-watch-alert-value-%03d`, i),
 			}
-			_, err = svcKv.Put(ctx, req)
+			timeout(t, time.Second, func() {
+				_, err = svcKv.Put(ctx, req)
+			})
 			require.Nil(t, err, err)
 		}
 		for j := 0; j < 10; {
-			res = <-s.resChan
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
 			assert.True(t, res.WatchId == watchID, res.WatchId)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)
@@ -2030,7 +2147,9 @@ func testWatch(t *testing.T) {
 			}
 		}
 		sendWatchCancel(watchID)
-		res = <-s.resChan
+		timeout(t, time.Second, func() {
+			res = <-s.resChan
+		})
 		require.Equal(t, watchID, res.WatchId)
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
@@ -2187,7 +2306,7 @@ func timeout(t *testing.T, d time.Duration, fn func()) {
 	select {
 	case <-done:
 	case <-timer.C:
-		t.Fatal(`Timeout`)
+		panic(`Timeout`)
 	}
 }
 

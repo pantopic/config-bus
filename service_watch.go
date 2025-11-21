@@ -285,6 +285,7 @@ func (s *serviceWatch) watch(
 						return
 					}
 				}
+				done()
 			}
 		}
 	}()
@@ -292,9 +293,6 @@ func (s *serviceWatch) watch(
 		defer close(result)
 		defer done()
 		defer close(w.done)
-		if len(req.RangeEnd) == 0 {
-			req.RangeEnd = append(req.Key, 0x00)
-		}
 		query, err := proto.Marshal(req)
 		if err != nil {
 			slog.Error("Error marshaling query", "err", err.Error())

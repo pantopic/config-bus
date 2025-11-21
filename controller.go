@@ -96,7 +96,6 @@ func (c *controller) tick() {
 		c.log.Debug("Controller finished processing", "shard", c.shard.Name, "index", index)
 		c.index = index
 	}
-	return
 }
 
 func (c *controller) LeaderUpdated(info zongzi.LeaderInfo) {

@@ -534,11 +534,16 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 				return
 			}
 			for evt := range sm.dbKv.scan(txn, since) {
-				if bytes.Compare(evt.key, req.Key) < 0 {
-					continue
-				}
-				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
-					continue
+				if !bytes.Equal(evt.key, req.Key) {
+					if len(req.RangeEnd) == 0 || bytes.Equal(req.Key, req.RangeEnd) {
+						continue
+					}
+					if bytes.Compare(evt.key, req.Key) < 0 {
+						continue
+					}
+					if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+						continue
+					}
 				}
 				if _, ok := filtered[evt.etype()]; ok {
 					continue
@@ -605,15 +610,11 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		return
 	}
 	// Watch Start
-	var alert = make(chan uint64, 1e4)
-	var end = req.RangeEnd
-	if len(end) == 0 {
-		end = req.Key
-	}
-	if intv := sm.watches.Insert(req.Key, end, alert); intv != nil {
+	var alert = make(chan uint64, 1e3)
+	if intv := sm.watches.Insert(req.Key, req.RangeEnd, alert); intv != nil {
 		defer intv.Remove()
 	} else {
-		sm.log.Warn(`Invalid watch range: %s - %s`, string(req.Key), string(req.RangeEnd))
+		sm.log.Warn(`Invalid watch range`, `Key`, string(req.Key), `RangeEnd`, string(req.RangeEnd))
 	}
 	// Event scan 2
 	if rev, _, err = scan(); err != nil {
@@ -626,21 +627,21 @@ loop:
 	for {
 		select {
 		case <-ctx.Done():
-			sm.log.Info("Watcher done", "id", req.WatchId)
+			sm.log.Debug("Watcher done", "id", req.WatchId)
 			break loop
 		case alertRev = <-alert:
 		alertLoop:
 			for {
 				select {
 				case alertRev = <-alert:
-					sm.log.Info("Watch Alert Drain", `alertRev`, alertRev)
+					sm.log.Debug("Watch Alert Drain", `alertRev`, alertRev)
 				default:
 					break alertLoop
 				}
 			}
 			if alertRev <= rev {
 				// Skip scan for alerts received between Watch start and Event scan 2
-				sm.log.Info("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
+				sm.log.Debug("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
 				continue
 			}
 			rev, sent, err = scan()
@@ -663,10 +664,14 @@ loop:
 }
 
 func (sm *stateMachine) PrepareSnapshot() (cursor any, err error) {
-	return sm.env.BeginTxn(nil, lmdb.Readonly)
+	slog.Info(`PrepareSnapshot`)
+	cursor, err = sm.env.BeginTxn(nil, lmdb.Readonly)
+	slog.Info(`PrepareSnapshot done`, `err`, err)
+	return
 }
 
 func (sm *stateMachine) SaveSnapshot(cursor any, w io.Writer, close <-chan struct{}) (err error) {
+	slog.Info(`SaveSnapshot`)
 	defer cursor.(*lmdb.Txn).Abort()
 	f, err := os.OpenFile(sm.envPath, os.O_RDONLY, 0700)
 	if err != nil {
@@ -674,16 +679,19 @@ func (sm *stateMachine) SaveSnapshot(cursor any, w io.Writer, close <-chan struc
 	}
 	_, err = io.Copy(w, f)
 	f.Close()
+	slog.Info(`SaveSnapshot done`, `err`, err)
 	return
 }
 
 func (sm *stateMachine) RecoverFromSnapshot(r io.Reader, close <-chan struct{}) (err error) {
+	slog.Info(`RecoverFromSnapshot`)
 	f, err := os.OpenFile(sm.envPath, os.O_WRONLY|os.O_CREATE, 0700)
 	if err != nil {
 		return
 	}
 	_, err = io.Copy(f, r)
 	f.Close()
+	slog.Info(`RecoverFromSnapshot done`, `err`, err)
 	return
 }
 
