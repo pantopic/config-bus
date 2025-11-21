@@ -19,7 +19,7 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-0
-      KRV_HOST_TAGS: pantopic/turbokube=member
+      KRV_HOST_TAGS: pantopic/krv=member
     ports:
       - 19000:19000
       - 6060:6060
@@ -28,7 +28,7 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-1
-      KRV_HOST_TAGS: pantopic/turbokube=member
+      KRV_HOST_TAGS: pantopic/krv=member
     ports:
       - 19001:19000
       - 6061:6060
@@ -37,7 +37,7 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-2
-      KRV_HOST_TAGS: pantopic/turbokube=member
+      KRV_HOST_TAGS: pantopic/krv=member
     ports:
       - 19002:19000
       - 6062:6060
@@ -46,7 +46,7 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-3
-      KRV_HOST_TAGS: pantopic/turbokube=nonvoting
+      KRV_HOST_TAGS: pantopic/krv=nonvoting
     ports:
       - 19003:19000
       - 6063:6060
@@ -55,7 +55,7 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-4
-      KRV_HOST_TAGS: pantopic/turbokube=nonvoting
+      KRV_HOST_TAGS: pantopic/krv=nonvoting
     ports:
       - 19004:19000
       - 6064:6060
@@ -64,10 +64,10 @@ services:
     <<: *common
     environment:
       KRV_HOST_NAME: krv-5
-      KRV_HOST_TAGS: pantopic/turbokube=nonvoting
+      KRV_HOST_TAGS: pantopic/krv=nonvoting
     ports:
       - 19005:19000
       - 6065:6060
 
 networks:
-  krv:
+  krv: {}

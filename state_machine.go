@@ -48,7 +48,7 @@ func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMac
 		return &stateMachine{
 			shardID:   shardID,
 			replicaID: replicaID,
-			envPath:   fmt.Sprintf("%s/%08x/env", dataDir, replicaID),
+			envPath:   fmt.Sprintf("%s/%08x/%08x", dataDir, shardID, replicaID),
 			log:       logger,
 			clock:     clock.New(),
 			watches:   byteinterval.New[chan uint64](),
@@ -65,8 +65,10 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 	}
 	sm.env, err = lmdb.NewEnv()
 	sm.env.SetMaxDBs(255)
-	sm.env.SetMapSize(int64(8 << 30)) // 8 GiB
-	sm.env.Open(sm.envPath, uint(lmdbEnvFlags), 0700)
+	sm.env.SetMapSize(int64(64 << 30)) // 64 GiB
+	if err = sm.env.Open(sm.envPath+`/data.mdb`, uint(lmdbEnvFlags), 0700); err != nil {
+		panic(err)
+	}
 	err = sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		if sm.dbMeta, index, err = newDbMeta(txn); err != nil {
 			return
@@ -148,7 +150,8 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					}
 				}
 				res, val, affected, err := sm.cmdPut(txn, newRev+1, 0, epoch, req)
-				if err == internal.ErrGRPCKeyTooLong {
+				if err == internal.ErrGRPCKeyTooLong ||
+					err == internal.ErrGRPCEmptyKey {
 					entries[i].Result.Data = []byte(err.Error())
 					err = nil
 					continue
@@ -230,7 +233,8 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 					res.Responses, affected, err = sm.txnOps(txn, newRev+1, epoch, req.Failure)
 				}
 				if err == internal.ErrGRPCDuplicateKey ||
-					err == internal.ErrGRPCKeyTooLong {
+					err == internal.ErrGRPCKeyTooLong ||
+					err == internal.ErrGRPCEmptyKey {
 					entries[i].Result.Data = []byte(err.Error())
 					err = nil
 				} else if err != nil {
@@ -673,7 +677,7 @@ func (sm *stateMachine) PrepareSnapshot() (cursor any, err error) {
 func (sm *stateMachine) SaveSnapshot(cursor any, w io.Writer, close <-chan struct{}) (err error) {
 	slog.Info(`SaveSnapshot`)
 	defer cursor.(*lmdb.Txn).Abort()
-	f, err := os.OpenFile(sm.envPath, os.O_RDONLY, 0700)
+	f, err := os.OpenFile(sm.envPath+`/data.mdb`, os.O_RDONLY, 0700)
 	if err != nil {
 		return
 	}
@@ -685,7 +689,7 @@ func (sm *stateMachine) SaveSnapshot(cursor any, w io.Writer, close <-chan struc
 
 func (sm *stateMachine) RecoverFromSnapshot(r io.Reader, close <-chan struct{}) (err error) {
 	slog.Info(`RecoverFromSnapshot`)
-	f, err := os.OpenFile(sm.envPath, os.O_WRONLY|os.O_CREATE, 0700)
+	f, err := os.OpenFile(sm.envPath+`/data.mdb`, os.O_WRONLY|os.O_CREATE, 0700)
 	if err != nil {
 		return
 	}
@@ -708,10 +712,6 @@ func (sm *stateMachine) cmdPut(
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
-	if len(req.Key) > KRV_LIMIT_KEY_LENGTH {
-		err = internal.ErrGRPCKeyTooLong
-		return
-	}
 	prev, _, patched, err := sm.dbKv.put(txn, rev, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return

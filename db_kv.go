@@ -33,6 +33,14 @@ func (db dbKv) put(
 	key, val []byte,
 	ignoreValue, ignoreLease bool,
 ) (prev, next kv, patched bool, err error) {
+	if len(key) == 0 {
+		err = internal.ErrGRPCEmptyKey
+		return
+	}
+	if len(key) > KRV_LIMIT_KEY_LENGTH {
+		err = internal.ErrGRPCKeyTooLong
+		return
+	}
 	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return

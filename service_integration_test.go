@@ -282,6 +282,16 @@ func testInsert(t *testing.T) {
 			}
 		})
 	})
+	t.Run("empty-key", func(t *testing.T) {
+		t.Run("failure", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte(``),
+				Value: []byte(`test-value`),
+			})
+			require.NotNil(t, err)
+			assert.Nil(t, resp)
+		})
+	})
 }
 
 func testVersion(t *testing.T) {
