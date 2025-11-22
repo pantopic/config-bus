@@ -108,6 +108,13 @@ var (
 	// KRV_WATCH_PROGRESS_NOTIFY_INTERVAL sets the duration of periodic watch progress notification.
 	// Matches etcd by default.
 	KRV_WATCH_PROGRESS_NOTIFY_INTERVAL = 10 * time.Minute
+
+	// KRV_WATCH_SAME_KEY_AS_RANGE_END determines whether to allow watches where the key and range end are the same.
+	// The behavior is exactly the same as when providing an empty range end which watches a single key.
+	// This is not allowed by etcd which complains "mvcc: watcher range is empty" which is inaccurate since the range
+	// is exactly 1, not 0 because rangeend is exclusive.
+	// Enabled by default. !!! VIOLATES PARITY !!!
+	KRV_WATCH_SAME_KEY_AS_RANGE_END = true
 )
 
 var (

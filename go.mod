@@ -11,6 +11,7 @@ require (
 	github.com/logbn/zongzi v0.0.19
 	github.com/soheilhy/cmux v0.1.5
 	github.com/stretchr/testify v1.10.0
+	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.5
 )

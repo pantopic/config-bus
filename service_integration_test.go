@@ -56,13 +56,11 @@ func TestService(t *testing.T) {
 	t.Run("lease-ttl", testLeaseTimeToLive)
 	t.Run("lease-leases", testLeaseLeases)
 	t.Run("version", testVersion)
-	// TODO - Progress notify
 	t.Run("watch", testWatch)
 	t.Run("controller", testController)
 
 	// TODO - Prometheus metrics
-
-	// TODO - Status
+	// TODO - Correct Status
 	// TODO - Defragment
 	// TODO - Hash
 	// TODO - HashKV
@@ -407,6 +405,7 @@ func testRange(t *testing.T) {
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
 		if parity {
+			// INVEST: Why does range all return more results for parity?
 			require.Equal(t, 5, len(resp.Kvs))
 		} else {
 			require.Equal(t, 4, len(resp.Kvs))
@@ -1682,7 +1681,9 @@ func testWatch(t *testing.T) {
 	}
 	sendWatchProgress := func() {
 		s.reqChan <- &internal.WatchRequest{
-			RequestUnion: &internal.WatchRequest_ProgressRequest{},
+			RequestUnion: &internal.WatchRequest_ProgressRequest{
+				ProgressRequest: &internal.WatchProgressRequest{},
+			},
 		}
 	}
 	var watchID int64
@@ -1996,45 +1997,63 @@ func testWatch(t *testing.T) {
 		require.True(t, res.Canceled)
 	})
 	t.Run("single-key-2", func(t *testing.T) {
-		sendWatchCreate(&internal.WatchCreateRequest{
-			Key:      []byte(`test-watch-000`),
-			RangeEnd: []byte(`test-watch-000`),
-		})
-		var res *internal.WatchResponse
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		assert.Greater(t, res.WatchId, int64(0), res)
-		assert.True(t, res.Created)
-		assert.False(t, res.Canceled)
-		watchID = res.WatchId
-		req := &internal.PutRequest{
-			Key:   []byte(`test-watch-000`),
-			Value: []byte(`test-watch-value-000`),
+		if parity {
+			withGlobal(&KRV_WATCH_SAME_KEY_AS_RANGE_END, false, func() {
+				sendWatchCreate(&internal.WatchCreateRequest{
+					Key:      []byte(`test-watch-000`),
+					RangeEnd: []byte(`test-watch-000`),
+				})
+				var res *internal.WatchResponse
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
+				assert.Equal(t, res.WatchId, int64(-1), res)
+				assert.True(t, res.Created)
+				assert.True(t, res.Canceled)
+			})
+		} else {
+			withGlobal(&KRV_WATCH_SAME_KEY_AS_RANGE_END, true, func() {
+				sendWatchCreate(&internal.WatchCreateRequest{
+					Key:      []byte(`test-watch-000`),
+					RangeEnd: []byte(`test-watch-000`),
+				})
+				var res *internal.WatchResponse
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
+				assert.Greater(t, res.WatchId, int64(0), res)
+				assert.True(t, res.Created)
+				assert.False(t, res.Canceled)
+				watchID = res.WatchId
+				req := &internal.PutRequest{
+					Key:   []byte(`test-watch-000`),
+					Value: []byte(`test-watch-value-000`),
+				}
+				timeout(t, time.Second, func() {
+					_, err = svcKv.Put(ctx, req)
+				})
+				require.Nil(t, err, err)
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
+				assert.Equal(t, watchID, res.WatchId, res)
+				assert.False(t, res.Created)
+				assert.False(t, res.Canceled)
+				require.Len(t, res.Events, 1)
+				assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
+				assert.Nil(t, res.Events[0].PrevKv)
+				require.NotNil(t, req.Key, res.Events[0].Kv)
+				assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+				assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
+				sendWatchCancel(watchID)
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
+				require.Equal(t, watchID, res.WatchId)
+				require.False(t, res.Created)
+				require.True(t, res.Canceled)
+			})
 		}
-		timeout(t, time.Second, func() {
-			_, err = svcKv.Put(ctx, req)
-		})
-		require.Nil(t, err, err)
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		assert.Equal(t, watchID, res.WatchId, res)
-		assert.False(t, res.Created)
-		assert.False(t, res.Canceled)
-		require.Len(t, res.Events, 1)
-		assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
-		assert.Nil(t, res.Events[0].PrevKv)
-		require.NotNil(t, req.Key, res.Events[0].Kv)
-		assert.Equal(t, req.Key, res.Events[0].Kv.Key)
-		assert.Equal(t, res.Header.Revision, res.Events[0].Kv.ModRevision)
-		sendWatchCancel(watchID)
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		require.Equal(t, watchID, res.WatchId)
-		require.False(t, res.Created)
-		require.True(t, res.Canceled)
 	})
 	t.Run("prev-kv", func(t *testing.T) {
 		sendWatchCreate(&internal.WatchCreateRequest{
@@ -2073,47 +2092,49 @@ func testWatch(t *testing.T) {
 		require.False(t, res.Created)
 		require.True(t, res.Canceled)
 	})
-	t.Run("progress", func(t *testing.T) {
-		sendWatchCreate(&internal.WatchCreateRequest{
-			Key: []byte(`test-watch-002`),
+	// INVEST: Why does etcd ignore progress requests?
+	if !parity {
+		t.Run("progress", func(t *testing.T) {
+			sendWatchCreate(&internal.WatchCreateRequest{
+				Key: []byte(`test-watch-002`),
+			})
+			var res *internal.WatchResponse
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
+			assert.Greater(t, res.WatchId, int64(0), res)
+			assert.True(t, res.Created)
+			assert.False(t, res.Canceled)
+			watchID := res.WatchId
+			rev1 := res.Header.Revision
+			req := &internal.PutRequest{
+				Key:   []byte(`test-watch-001`),
+				Value: []byte(`test-watch-value-001`),
+			}
+			timeout(t, time.Second, func() {
+				_, err = svcKv.Put(ctx, req)
+			})
+			require.Nil(t, err, err)
+			timeout(t, time.Second, func() {
+				sendWatchProgress()
+			})
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
+			assert.False(t, res.Created)
+			assert.False(t, res.Canceled)
+			assert.Greater(t, res.Header.Revision, rev1, res)
+			timeout(t, time.Second, func() {
+				sendWatchCancel(watchID)
+			})
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
+			require.Equal(t, watchID, res.WatchId)
+			require.False(t, res.Created)
+			require.True(t, res.Canceled)
 		})
-		var res *internal.WatchResponse
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		assert.Greater(t, res.WatchId, int64(0), res)
-		assert.True(t, res.Created)
-		assert.False(t, res.Canceled)
-		watchID := res.WatchId
-		rev1 := res.Header.Revision
-		req := &internal.PutRequest{
-			Key:   []byte(`test-watch-001`),
-			Value: []byte(`test-watch-value-001`),
-		}
-		timeout(t, time.Second, func() {
-			_, err = svcKv.Put(ctx, req)
-		})
-		require.Nil(t, err, err)
-		time.Sleep(100 * time.Millisecond)
-		timeout(t, time.Second, func() {
-			sendWatchProgress()
-		})
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		assert.False(t, res.Created)
-		assert.False(t, res.Canceled)
-		assert.Greater(t, res.Header.Revision, rev1, res)
-		timeout(t, time.Second, func() {
-			sendWatchCancel(watchID)
-		})
-		timeout(t, time.Second, func() {
-			res = <-s.resChan
-		})
-		require.Equal(t, watchID, res.WatchId)
-		require.False(t, res.Created)
-		require.True(t, res.Canceled)
-	})
+	}
 	t.Run("alert", func(t *testing.T) {
 		timeout(t, time.Second, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
@@ -2232,24 +2253,29 @@ func testWatch(t *testing.T) {
 			assert.True(t, resp.Succeeded)
 			rev = append(rev, resp.Header.Revision)
 		}
-		withGlobalInt(&KRV_RESPONSE_SIZE_MAX, 1<<20*2, func() {
+		withGlobalInt(&KRV_RESPONSE_SIZE_MAX, 1<<20, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:           []byte(`test-watch-fragment-000`),
 				RangeEnd:      []byte(`test-watch-fragment-999`),
 				StartRevision: rev[0],
-				// Fragment:      true,
+				Fragment:      true,
 			})
-			res := <-s.resChan // WatchCreated
+			var res *internal.WatchResponse
+			timeout(t, time.Second, func() {
+				res = <-s.resChan // WatchCreated
+			})
 			require.Greater(t, res.WatchId, int64(0), res)
 			assert.True(t, res.Created)
 			watchID = res.WatchId
 			var total int
 			var num int
 			for {
-				res = <-s.resChan // Update
+				timeout(t, time.Second, func() {
+					res = <-s.resChan // Update
+				})
 				assert.True(t, res.WatchId == watchID, res.WatchId)
 				require.Greater(t, len(res.Events), 0, res)
-				require.Greater(t, res.Header.Revision, rev[0])
+				require.Equal(t, rev[len(rev)-1], res.Header.Revision)
 				total += len(res.Events)
 				num++
 				for _, e := range res.Events {

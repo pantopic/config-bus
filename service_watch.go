@@ -2,11 +2,13 @@ package krv
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
 	"log/slog"
 	"sync"
 
 	"github.com/logbn/zongzi"
+	"github.com/tidwall/btree"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/pantopic/krv/internal"
@@ -37,7 +39,7 @@ func (s *serviceWatch) Watch(
 		watchId++
 	}
 	var mu sync.RWMutex
-	watches := make(map[int64]*watch)
+	var watches btree.Map[int64, *watch]
 	for {
 		req, err := server.Recv()
 		if err == io.EOF {
@@ -52,7 +54,7 @@ func (s *serviceWatch) Watch(
 			req := maybe.CreateRequest
 			if req.WatchId > 0 {
 				mu.RLock()
-				if _, ok := watches[req.WatchId]; ok {
+				if _, ok := watches.Get(req.WatchId); ok {
 					slog.Info("Ignoring request to create existing watch", "id", req.WatchId)
 					if err = s.watchResp(server, &internal.WatchResponse{
 						WatchId:      -1,
@@ -76,20 +78,20 @@ func (s *serviceWatch) Watch(
 					watchId++
 				}
 				mu.Lock()
-				watches[id] = w
+				watches.Set(id, w)
 				mu.Unlock()
 				return id
 			}, func() {
 				// TODO - retry?
 				mu.Lock()
-				delete(watches, id)
+				watches.Delete(id)
 				mu.Unlock()
 			})
 		case *internal.WatchRequest_CancelRequest:
 			slog.Debug(`WatchRequest_CancelRequest`, `req`, req)
 			req := maybe.CancelRequest
 			mu.RLock()
-			w, ok := watches[req.WatchId]
+			w, ok := watches.Get(req.WatchId)
 			mu.RUnlock()
 			if !ok {
 				slog.Info("Ignoring request to cancel non-existent watch", "id", req.WatchId)
@@ -120,19 +122,14 @@ func (s *serviceWatch) Watch(
 				slog.Error("Error unmarshaling init", "err", err)
 				break
 			}
-			var responses []*internal.WatchResponse
-			mu.Lock()
-			for i := range watches {
-				responses = append(responses, &internal.WatchResponse{
-					Header:  &h,
-					WatchId: i,
-				})
-			}
-			mu.Unlock()
-			for _, r := range responses {
-				if err = s.watchResp(server, r); err != nil {
-					slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
-				}
+			mu.RLock()
+			watchId, _, _ := watches.Min()
+			mu.RUnlock()
+			if err = s.watchResp(server, &internal.WatchResponse{
+				Header:  &h,
+				WatchId: watchId,
+			}); err != nil {
+				slog.Error("Unable to send watch progress response", "req", req, "err", err.Error())
 			}
 		}
 	}
@@ -185,7 +182,7 @@ func (s *serviceWatch) watch(
 				memberID = resp.Header.MemberId
 			case WatchMessageType_EVENT:
 				evt := &internal.Event{}
-				if err = proto.Unmarshal(res.Data[1:], evt); err != nil {
+				if err = proto.Unmarshal(res.Data[9:], evt); err != nil {
 					slog.Error("Error unmarshaling event", "err", err)
 					return
 				}
@@ -204,6 +201,7 @@ func (s *serviceWatch) watch(
 					resp.Fragment = true
 				}
 				s.addTerm(resp.Header)
+				resp.Header.Revision = int64(binary.LittleEndian.Uint64(res.Data[1:9]))
 				if err = s.watchResp(server, resp); err != nil {
 					slog.Error("Error sending response")
 					return

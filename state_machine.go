@@ -3,6 +3,7 @@ package krv
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -232,6 +233,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else {
 					res.Responses, affected, err = sm.txnOps(txn, newRev+1, epoch, req.Failure)
 				}
+				if len(affected) > 0 {
+					newRev++
+				}
 				if err == internal.ErrGRPCDuplicateKey ||
 					err == internal.ErrGRPCKeyTooLong ||
 					err == internal.ErrGRPCEmptyKey {
@@ -240,9 +244,6 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				} else if err != nil {
 					return
 				} else {
-					if len(affected) > 0 {
-						newRev++
-					}
 					res.Header = sm.responseHeader(newRev)
 					entries[i].Result.Data, err = proto.Marshal(res)
 					entries[i].Result.Value = 1
@@ -576,6 +577,7 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 				}
 				res := zongzi.GetResult()
 				res.Data = append(res.Data, WatchMessageType_EVENT)
+				res.Data = binary.LittleEndian.AppendUint64(res.Data, rev)
 				if res.Data, err = sm.proto.MarshalAppend(res.Data, resp); err != nil {
 					sm.log.Error("Error serializing event kv", "err", err)
 					return
