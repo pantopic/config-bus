@@ -375,6 +375,9 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		panic("Storage error: " + err.Error())
 	}
 	sm.statTime += sm.clock.Since(t)
+	if rev != newRev {
+		localRevision.Store(newRev)
+	}
 	for _, w := range sm.watches.FindAny(keys...) {
 		w <- newRev
 	}

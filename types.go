@@ -115,6 +115,13 @@ var (
 	// is exactly 1, not 0 because rangeend is exclusive.
 	// Enabled by default. !!! VIOLATES PARITY !!!
 	KRV_WATCH_SAME_KEY_AS_RANGE_END = true
+
+	// KRV_READ_LOCAL forces Linearizable range requests to be served as Serializable (stale) if:
+	// 1. The client requests a specific revision
+	// 2. That revision is available locally
+	// This works because revisions are immutable.
+	// Enabled by default.
+	KRV_READ_LOCAL = true
 )
 
 var (

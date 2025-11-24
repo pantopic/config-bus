@@ -2,6 +2,7 @@ package krv
 
 import (
 	"encoding/binary"
+	"sync/atomic"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 )
@@ -9,6 +10,8 @@ import (
 var (
 	lmdbEnvFlags = lmdb.NoMemInit | lmdb.NoSync | lmdb.NoMetaSync | lmdb.NoSubdir
 	lmdbDupFlags = lmdb.DupSort
+
+	localRevision = &atomic.Uint64{}
 )
 
 type db struct {
