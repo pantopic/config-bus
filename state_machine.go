@@ -329,7 +329,7 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 						newRev++
 						keys = append(keys, affected...)
 					}
-					sm.log.Info("Lease Expired", "term", term, "epoch", epoch, "id", id, "keys", len(affected))
+					sm.log.Debug("Lease Expired", "term", term, "epoch", epoch, "id", id, "keys", len(affected))
 				}
 				entries[i].Result.Data, err = proto.Marshal(&internal.TickResponse{
 					Epoch: epoch,

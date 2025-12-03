@@ -433,6 +433,11 @@ func (db dbKv) get(txn *lmdb.Txn, key []byte) (item kv, err error) {
 }
 
 func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool) (item, prev kv, err error) {
+	defer func() {
+		if lmdb.IsNotFound(err) {
+			err = nil
+		}
+	}()
 	cur, err := txn.OpenCursor(db.rev.i)
 	if err != nil {
 		return
@@ -441,10 +446,6 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 	var krec keyrecord
 	var next []keyrev
 	k, v, err := cur.Get(key, nil, lmdb.SetRange)
-	if lmdb.IsNotFound(err) {
-		err = nil
-		return
-	}
 	if err != nil {
 		return
 	}
@@ -467,31 +468,12 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 			return
 		}
 	}
-	if lmdb.IsNotFound(err) {
-		err = nil
-		return
-	}
 	if err != nil {
 		return
 	}
 	if krec.rev.isdel() {
 		if withPrev {
-			var prec keyrecord
-			k, v, err = cur.Get(nil, nil, lmdb.NextDup)
-			if lmdb.IsNotFound(err) {
-				err = nil
-				return
-			}
-			if err != nil {
-				return
-			}
-			if prec, err = prec.FromBytes(k, v); err != nil {
-				return
-			}
-			if v, err = txn.Get(db.val.i, prec.rev.key()); err != nil {
-				return
-			}
-			prev, err = prev.FromBytes(prec.rev.key(), v, item.val, false)
+			prev, err = db.prev(txn, cur, item)
 		}
 		return
 	}
@@ -506,23 +488,24 @@ func (db dbKv) getRev(txn *lmdb.Txn, key []byte, revision uint64, withPrev bool)
 		}
 	}
 	if withPrev {
-		var prec keyrecord
-		k, v, err = cur.Get(nil, nil, lmdb.NextDup)
-		if lmdb.IsNotFound(err) {
-			err = nil
-			return
-		}
-		if err != nil {
-			return
-		}
-		if prec, err = prec.FromBytes(k, v); err != nil {
-			return
-		}
-		if v, err = txn.Get(db.val.i, prec.rev.key()); err != nil {
-			return
-		}
-		prev, err = prev.FromBytes(prec.rev.key(), v, item.val, false)
+		prev, err = db.prev(txn, cur, item)
 	}
+	return
+}
+
+func (db dbKv) prev(txn *lmdb.Txn, cur *lmdb.Cursor, item kv) (prev kv, err error) {
+	k, v, err := cur.Get(nil, nil, lmdb.NextDup)
+	if err != nil {
+		return
+	}
+	var prec keyrecord
+	if prec, err = prec.FromBytes(k, v); err != nil {
+		return
+	}
+	if v, err = txn.Get(db.val.i, prec.rev.key()); err != nil {
+		return
+	}
+	prev, err = prev.FromBytes(prec.rev.key(), v, item.val, false)
 	return
 }
 
