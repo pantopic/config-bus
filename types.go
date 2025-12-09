@@ -11,15 +11,16 @@ const (
 	KV_FLAG_PATCH uint8 = 1 << iota
 	KV_FLAG_COMPRESSED
 
-	CMD_KV_PUT byte = iota
+	CMD_INTERNAL_TERM byte = iota
+	CMD_INTERNAL_TICK
+	CMD_KV_PUT
 	CMD_KV_DELETE_RANGE
 	CMD_KV_COMPACT
 	CMD_KV_TXN
 	CMD_LEASE_GRANT
 	CMD_LEASE_REVOKE
 	CMD_LEASE_KEEP_ALIVE
-	CMD_INTERNAL_TICK
-	CMD_INTERNAL_TERM
+	CMD_LEASE_KEEP_ALIVE_BATCH
 
 	QUERY_KV_RANGE byte = iota
 	QUERY_LEASE_LEASES
@@ -98,7 +99,7 @@ var (
 	KRV_WATCH_CREATE_COMPACTED = true
 
 	// KRV_TXN_OPS_MAX sets the maximum number of operations allowed per transaction.
-	// Matches etcd by default. Limited by KRV_TXN_OPS_LIMIT
+	// Matches etcd by default. Limited by [KRV_TXN_OPS_LIMIT]
 	KRV_TXN_OPS_MAX = 128
 
 	// KRV_RESPONSE_SIZE_MAX sets the maximum request and response size.
@@ -122,6 +123,13 @@ var (
 	// This works because revisions are immutable.
 	// Enabled by default.
 	KRV_READ_LOCAL = true
+
+	// KRV_BATCH_LEASE_RENEWAL specifies whether to introduce artificial latency when batching lease renewals.
+	// Reduces total number of raft proposals to improve efficiency at the cost of increased latency for lease renewals.
+	// Enabled by default.
+	KRV_BATCH_LEASE_RENEWAL          = true
+	KRV_BATCH_LEASE_RENEWAL_LIMIT    = 1000
+	KRV_BATCH_LEASE_RENEWAL_INTERVAL = 500 * time.Millisecond
 )
 
 var (

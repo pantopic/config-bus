@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1593,6 +1594,70 @@ func testLeaseKeepAlive(t *testing.T) {
 		require.Nil(t, err, err)
 		require.EqualValues(t, 1e10, s.res.ID)
 		require.EqualValues(t, 0, s.res.TTL)
+	})
+	t.Run("batch", func(t *testing.T) {
+		withGlobal(&KRV_BATCH_LEASE_RENEWAL, true, func() {
+			var n = 10
+			var leaseIDs []int64
+			for range n {
+				resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					TTL: 600,
+				})
+				require.Nil(t, err, err)
+				assert.NotNil(t, resp)
+				assert.Empty(t, resp.Error)
+				assert.EqualValues(t, 600, resp.TTL)
+				assert.Greater(t, resp.ID, int64(0))
+				leaseIDs = append(leaseIDs, resp.ID)
+			}
+			var wg sync.WaitGroup
+			for _, id := range leaseIDs {
+				wg.Go(func() {
+					s := &mockLeaseKeepAliveServer{
+						req: &internal.LeaseKeepAliveRequest{ID: id},
+					}
+					err = svcLease.LeaseKeepAlive(s)
+					require.Nil(t, err, err)
+					require.NotNil(t, s.res)
+					require.EqualValues(t, 600, s.res.TTL)
+				})
+			}
+			timeout(t, time.Second, func() {
+				wg.Wait()
+			})
+		})
+	})
+	t.Run("no batch", func(t *testing.T) {
+		withGlobal(&KRV_BATCH_LEASE_RENEWAL, false, func() {
+			var n = 10
+			var leaseIDs []int64
+			for range n {
+				resp, err := svcLease.LeaseGrant(ctx, &internal.LeaseGrantRequest{
+					TTL: 600,
+				})
+				require.Nil(t, err, err)
+				assert.NotNil(t, resp)
+				assert.Empty(t, resp.Error)
+				assert.EqualValues(t, 600, resp.TTL)
+				assert.Greater(t, resp.ID, int64(0))
+				leaseIDs = append(leaseIDs, resp.ID)
+			}
+			var wg sync.WaitGroup
+			for _, id := range leaseIDs {
+				wg.Go(func() {
+					s := &mockLeaseKeepAliveServer{
+						req: &internal.LeaseKeepAliveRequest{ID: id},
+					}
+					err = svcLease.LeaseKeepAlive(s)
+					require.Nil(t, err, err)
+					require.NotNil(t, s.res)
+					require.EqualValues(t, 600, s.res.TTL)
+				})
+			}
+			timeout(t, time.Second, func() {
+				wg.Wait()
+			})
+		})
 	})
 }
 

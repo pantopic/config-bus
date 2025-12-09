@@ -302,6 +302,22 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 				if err != nil {
 					return err
 				}
+			case CMD_LEASE_KEEP_ALIVE_BATCH:
+				var req = &internal.LeaseKeepAliveBatchRequest{}
+				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
+					sm.log.Error("Invalid command", "cmd", fmt.Sprintf("%x", ent.Cmd))
+					continue
+				}
+				res, val, err := sm.cmdLeaseKeepAliveBatch(txn, epoch, req)
+				if err != nil {
+					return err
+				}
+				res.Header = sm.responseHeader(newRev)
+				entries[i].Result.Data, err = proto.Marshal(res)
+				entries[i].Result.Value = val
+				if err != nil {
+					return err
+				}
 			case CMD_INTERNAL_TICK:
 				var req = &internal.TickRequest{}
 				if err = proto.Unmarshal(ent.Cmd[:len(ent.Cmd)-1], req); err != nil {
@@ -875,6 +891,35 @@ func (sm *stateMachine) cmdLeaseKeepAlive(
 	}
 	if err = sm.dbLeaseExp.put(txn, item); err != nil {
 		return
+	}
+	return
+}
+
+func (sm *stateMachine) cmdLeaseKeepAliveBatch(
+	txn *lmdb.Txn, epoch uint64,
+	req *internal.LeaseKeepAliveBatchRequest,
+) (res *internal.LeaseKeepAliveBatchResponse, val uint64, err error) {
+	res = &internal.LeaseKeepAliveBatchResponse{}
+	val = 1
+	for _, id := range req.IDs {
+		var item lease
+		if item, err = sm.dbLease.get(txn, uint64(id)); err != nil {
+			return
+		}
+		if item.id == 0 {
+			res.TTLs = append(res.TTLs, 0)
+			continue
+		}
+		ttl := int64(item.expires - item.renewed)
+		res.TTLs = append(res.TTLs, ttl)
+		item.expires = epoch + uint64(ttl)
+		item.renewed = epoch
+		if err = sm.dbLease.put(txn, item); err != nil {
+			return
+		}
+		if err = sm.dbLeaseExp.put(txn, item); err != nil {
+			return
+		}
 	}
 	return
 }

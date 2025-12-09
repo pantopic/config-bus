@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	// "log/slog"
 
+	"github.com/kevburnsjr/batchy"
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
@@ -85,6 +87,47 @@ func (s *serviceLease) LeaseRevoke(
 func (s *serviceLease) LeaseKeepAlive(
 	server internal.Lease_LeaseKeepAliveServer,
 ) (err error) {
+	var batcher batchy.Batcher
+	if KRV_BATCH_LEASE_RENEWAL {
+		batcher = batchy.New(
+			KRV_BATCH_LEASE_RENEWAL_LIMIT,
+			KRV_BATCH_LEASE_RENEWAL_INTERVAL,
+			func(items []any) (errs []error) {
+				errs = slices.Repeat([]error{nil}, len(items))
+				req := &internal.LeaseKeepAliveBatchRequest{}
+				for _, i := range items {
+					req.IDs = append(req.IDs, i.(int64))
+				}
+				b, err := proto.Marshal(req)
+				if err != nil {
+					panic(err)
+				}
+				val, data, err := s.client.Apply(server.Context(), append(b, CMD_LEASE_KEEP_ALIVE_BATCH))
+				if err != nil {
+					return errRepeat(len(items), err)
+				}
+				if val != 1 {
+					err = fmt.Errorf("%s", string(data))
+					return errRepeat(len(items), err)
+				}
+				res := &internal.LeaseKeepAliveBatchResponse{}
+				if err = proto.Unmarshal(data, res); err != nil {
+					return errRepeat(len(items), err)
+				}
+				s.addTerm(res.Header)
+				for i, id := range req.IDs {
+					res := &internal.LeaseKeepAliveResponse{
+						ID:  id,
+						TTL: res.TTLs[i],
+					}
+					if err = server.Send(res); err != nil {
+						errs[i] = err
+					}
+				}
+				return
+			})
+		defer batcher.Stop()
+	}
 	for {
 		req, err := server.Recv()
 		if err == io.EOF {
@@ -93,22 +136,32 @@ func (s *serviceLease) LeaseKeepAlive(
 		if err != nil {
 			break
 		}
-		b, err := proto.Marshal(req)
-		if err != nil {
-			return err
+		if batcher != nil {
+			if err := batcher.Add(req.ID); err != nil {
+				panic(err)
+			}
+		} else {
+			b, err := proto.Marshal(req)
+			if err != nil {
+				return err
+			}
+			val, data, err := s.client.Apply(server.Context(), append(b, CMD_LEASE_KEEP_ALIVE))
+			if err != nil {
+				return err
+			}
+			if val != 1 {
+				err = fmt.Errorf("%s", string(data))
+				return err
+			}
+			res := &internal.LeaseKeepAliveResponse{}
+			if err = proto.Unmarshal(data, res); err != nil {
+				return err
+			}
+			s.addTerm(res.Header)
+			if err = server.Send(res); err != nil {
+				return err
+			}
 		}
-		val, data, err := s.client.Apply(server.Context(), append(b, CMD_LEASE_KEEP_ALIVE))
-		if err != nil {
-			return err
-		}
-		if val != 1 {
-			err = fmt.Errorf("%s", string(data))
-			return err
-		}
-		res := &internal.LeaseKeepAliveResponse{}
-		err = proto.Unmarshal(data, res)
-		s.addTerm(res.Header)
-		server.Send(res)
 	}
 	return
 }

@@ -294,6 +294,14 @@ message LeaseKeepAliveResponse {
   int64 TTL = 3;
 }
 
+message LeaseKeepAliveBatchRequest {
+  repeated int64 IDs = 1;
+}
+message LeaseKeepAliveBatchResponse {
+  ResponseHeader header = 1;
+  repeated int64 TTLs = 2;
+}
+
 message LeaseTimeToLiveRequest {
   int64 ID = 1;
   bool keys = 2;
