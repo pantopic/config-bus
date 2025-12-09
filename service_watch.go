@@ -48,10 +48,10 @@ func (s *serviceWatch) Watch(
 		if err != nil {
 			break
 		}
-		switch maybe := req.RequestUnion.(type) {
+		switch ut := req.RequestUnion.(type) {
 		case *internal.WatchRequest_CreateRequest:
 			slog.Debug(`WatchRequest_CreateRequest`, `req`, req)
-			req := maybe.CreateRequest
+			req := ut.CreateRequest
 			if req.WatchId > 0 {
 				mu.RLock()
 				if _, ok := watches.Get(req.WatchId); ok {
@@ -89,7 +89,7 @@ func (s *serviceWatch) Watch(
 			})
 		case *internal.WatchRequest_CancelRequest:
 			slog.Debug(`WatchRequest_CancelRequest`, `req`, req)
-			req := maybe.CancelRequest
+			req := ut.CancelRequest
 			mu.RLock()
 			w, ok := watches.Get(req.WatchId)
 			mu.RUnlock()
