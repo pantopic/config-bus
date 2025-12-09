@@ -90,8 +90,8 @@ func (s *serviceLease) LeaseKeepAlive(
 	var batcher batchy.Batcher
 	if KRV_BATCH_LEASE_RENEWAL {
 		batcher = batchy.New(
-			LEASE_KEEPALIVE_BATCH_LIMIT,
-			LEASE_KEEPALIVE_BATCH_INTERVAL,
+			KRV_BATCH_LEASE_RENEWAL_LIMIT,
+			KRV_BATCH_LEASE_RENEWAL_INTERVAL,
 			func(items []any) (errs []error) {
 				errs = slices.Repeat([]error{nil}, len(items))
 				req := &internal.LeaseKeepAliveBatchRequest{}

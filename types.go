@@ -34,9 +34,7 @@ const (
 	WatchMessageType_NOTIFY
 	WatchMessageType_ERR_COMPACTED
 
-	WATCH_DEBOUNCE                 = 50 * time.Millisecond
-	LEASE_KEEPALIVE_BATCH_INTERVAL = 500 * time.Millisecond
-	LEASE_KEEPALIVE_BATCH_LIMIT    = 1000
+	WATCH_DEBOUNCE = 50 * time.Millisecond
 
 	// grpc overhead costs for calculating KRV_RESPONSE_SIZE_MAX
 	sizeMetaKeyValue      = 256
@@ -129,7 +127,9 @@ var (
 	// KRV_BATCH_LEASE_RENEWAL specifies whether to introduce artificial latency when batching lease renewals.
 	// Reduces total number of raft proposals to improve efficiency at the cost of increased latency for lease renewals.
 	// Enabled by default.
-	KRV_BATCH_LEASE_RENEWAL = true
+	KRV_BATCH_LEASE_RENEWAL          = true
+	KRV_BATCH_LEASE_RENEWAL_LIMIT    = 1000
+	KRV_BATCH_LEASE_RENEWAL_INTERVAL = 500 * time.Millisecond
 )
 
 var (
