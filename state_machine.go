@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 	"github.com/benbjohnson/clock"
@@ -37,11 +36,6 @@ type stateMachine struct {
 	replicaID  uint64
 	shardID    uint64
 	watches    *byteinterval.Tree[chan uint64]
-
-	statUpdates int
-	statEntries int
-	statTime    time.Duration
-	statPatched int
 }
 
 func NewStateMachineFactory(logger *slog.Logger, dataDir string) zongzi.StateMachinePersistentFactory {
@@ -95,22 +89,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 }
 
 func (sm *stateMachine) Update(entries []Entry) []Entry {
-	var t = sm.clock.Now()
 	var rev, newRev uint64
-	sm.statUpdates++
-	sm.statEntries += len(entries)
-	if sm.statUpdates > 100 {
-		sm.log.Debug("StateMachine Stats",
-			"entries", sm.statEntries,
-			"average", sm.statEntries/sm.statUpdates,
-			"diffed", sm.statPatched,
-			"uTime", int(sm.statTime.Microseconds())/sm.statUpdates,
-			"eTime", int(sm.statTime.Microseconds())/sm.statEntries)
-		sm.statPatched = 0
-		sm.statEntries = 0
-		sm.statTime = 0
-		sm.statUpdates = 0
-	}
 	var keys [][]byte
 	if err := sm.env.Update(func(txn *lmdb.Txn) (err error) {
 		epoch, err := sm.dbMeta.getEpoch(txn)
@@ -390,7 +369,6 @@ func (sm *stateMachine) Update(entries []Entry) []Entry {
 		sm.log.Error(err.Error(), "index", entries[0].Index)
 		panic("Storage error: " + err.Error())
 	}
-	sm.statTime += sm.clock.Since(t)
 	if rev != newRev {
 		localRevision.Store(newRev)
 	}
@@ -733,12 +711,9 @@ func (sm *stateMachine) cmdPut(
 	req *internal.PutRequest,
 ) (res *internal.PutResponse, val uint64, affected [][]byte, err error) {
 	res = &internal.PutResponse{}
-	prev, _, patched, err := sm.dbKv.put(txn, rev, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
+	prev, _, _, err := sm.dbKv.put(txn, rev, subrev, uint64(req.Lease), epoch, req.Key, req.Value, req.IgnoreValue, req.IgnoreLease)
 	if err != nil {
 		return
-	}
-	if patched {
-		sm.statPatched++
 	}
 	if !req.IgnoreLease && int64(prev.lease) != req.Lease {
 		if req.Lease > 0 {
