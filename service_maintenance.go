@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/grpc"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type serviceMaintenance struct {
@@ -67,8 +67,8 @@ func (svc *serviceMaintenance) Hash(ctx context.Context,
 }
 
 func (svc *serviceMaintenance) HashKV(ctx context.Context,
-	req *internal.HashKRVequest,
-) (res *internal.HashKRVesponse, err error) {
+	req *internal.HashPCBequest,
+) (res *internal.HashPCBesponse, err error) {
 	slog.Info(`Maintenance - HashKV`)
 	return
 }

@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type kvService struct {
@@ -67,7 +67,7 @@ func (s *kvService) Range(
 		return
 	}
 	// If requesting a revision available locally, perform stale read
-	if !req.Serializable && KRV_READ_LOCAL && req.Revision > 0 && req.Revision <= int64(localRevision.Load()) {
+	if !req.Serializable && PCB_READ_LOCAL && req.Revision > 0 && req.Revision <= int64(localRevision.Load()) {
 		req.Serializable = true
 	}
 	val, data, err := s.client.Read(ctx, append(b, QUERY_KV_RANGE), req.Serializable)

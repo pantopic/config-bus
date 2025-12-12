@@ -18,8 +18,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/pantopic/krv"
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus"
+	"github.com/pantopic/config-bus/internal"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	var ctx = context.Background()
 	var log = slog.Default()
 	var apiAddr = fmt.Sprintf("%s:%d", cfg.HostName, cfg.PortApi)
-	var ctrl = krv.NewController(ctx, log)
+	var ctrl = pcb.NewController(ctx, log)
 	agent, err := zongzi.NewAgent(cfg.ClusterName, strings.Split(cfg.HostPeers, ","),
 		zongzi.WithDirRaft(cfg.Dir+"/raft"),
 		zongzi.WithDirWAL(cfg.Dir+"/wal"),
@@ -60,14 +60,14 @@ func main() {
 		opts = append(opts, grpc.Creds(fc))
 	}
 	var grpcServer = grpc.NewServer(opts...)
-	agent.StateMachineRegister(krv.Uri, krv.NewStateMachineFactory(log, cfg.Dir+"/data"))
+	agent.StateMachineRegister(pcb.Uri, pcb.NewStateMachineFactory(log, cfg.Dir+"/data"))
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
-	shard, _, err := agent.ShardCreate(ctx, krv.Uri,
-		zongzi.WithName("krv"),
-		zongzi.WithPlacementMembers(3, `pantopic/krv=member`),
-		zongzi.WithPlacementCover(`pantopic/krv=nonvoting`))
+	shard, _, err := agent.ShardCreate(ctx, pcb.Uri,
+		zongzi.WithName("pcb"),
+		zongzi.WithPlacementMembers(3, `pantopic/config-bus=member`),
+		zongzi.WithPlacementCover(`pantopic/config-bus=nonvoting`))
 	if err != nil {
 		panic(err)
 	}
@@ -78,11 +78,11 @@ func main() {
 		panic(err)
 	}
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
-	internal.RegisterKVServer(grpcServer, krv.NewServiceKv(client))
-	internal.RegisterWatchServer(grpcServer, krv.NewServiceWatch(client))
-	internal.RegisterLeaseServer(grpcServer, krv.NewServiceLease(client))
-	internal.RegisterMaintenanceServer(grpcServer, krv.NewServiceMaintenance(client))
-	internal.RegisterClusterServer(grpcServer, krv.NewServiceCluster(client, apiAddr))
+	internal.RegisterKVServer(grpcServer, pcb.NewServiceKv(client))
+	internal.RegisterWatchServer(grpcServer, pcb.NewServiceWatch(client))
+	internal.RegisterLeaseServer(grpcServer, pcb.NewServiceLease(client))
+	internal.RegisterMaintenanceServer(grpcServer, pcb.NewServiceMaintenance(client))
+	internal.RegisterClusterServer(grpcServer, pcb.NewServiceCluster(client, apiAddr))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
 	if err != nil {
 		panic(err)
@@ -96,7 +96,7 @@ func main() {
 		}
 	}()
 	httpS := &http.Server{
-		Handler: krv.NewEndpointHandler(grpcServer),
+		Handler: pcb.NewEndpointHandler(grpcServer),
 	}
 	go func() {
 		if cfg.TlsCrt != "" && cfg.TlsKey != "" {

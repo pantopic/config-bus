@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/tidwall/btree"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type serviceWatch struct {
@@ -35,7 +35,7 @@ func (s *serviceWatch) Watch(
 	server internal.Watch_WatchServer,
 ) (err error) {
 	var watchId int64
-	if !KRV_WATCH_ID_ZERO_INDEX {
+	if !PCB_WATCH_ID_ZERO_INDEX {
 		watchId++
 	}
 	var mu sync.RWMutex
@@ -191,7 +191,7 @@ func (s *serviceWatch) watch(
 				if evt.PrevKv != nil {
 					sz += len(evt.PrevKv.Key) + len(evt.PrevKv.Value) + sizeMetaKeyValue
 				}
-				if size+sz < KRV_RESPONSE_SIZE_MAX {
+				if size+sz < PCB_RESPONSE_SIZE_MAX {
 					resp.Header.Revision = evt.Kv.ModRevision
 					resp.Events = append(resp.Events, evt)
 					size += sz
@@ -257,7 +257,7 @@ func (s *serviceWatch) watch(
 					slog.Error("Error unmarshaling compaction error", "err", err)
 					return
 				}
-				if KRV_WATCH_CREATE_COMPACTED {
+				if PCB_WATCH_CREATE_COMPACTED {
 					id = idFunc()
 					if err = s.watchResp(server, &internal.WatchResponse{
 						WatchId: id,

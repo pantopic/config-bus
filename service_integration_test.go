@@ -1,6 +1,6 @@
 //go:build !unit
 
-package krv
+package pcb
 
 import (
 	"context"
@@ -21,13 +21,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 var (
 	ctx    = context.Background()
-	parity = os.Getenv("KRV_PARITY_CHECK") == "true"
-	debug  = os.Getenv("KRV_LOG_LEVEL") == "debug"
+	parity = os.Getenv("PCB_PARITY_CHECK") == "true"
+	debug  = os.Getenv("PCB_LOG_LEVEL") == "debug"
 	wait   func(time.Duration)
 
 	err            error
@@ -42,7 +42,7 @@ func TestService(t *testing.T) {
 	if parity {
 		t.Run("setup-parity", setupParity)
 	} else {
-		t.Run("setup-krv", setupkrv)
+		t.Run("setup-pcb", setuppcb)
 	}
 	t.Run("insert", testInsert)
 	t.Run("update", testUpdate)
@@ -86,13 +86,13 @@ func setupParity(t *testing.T) {
 	svcMaintenance = newParityMaintenanceService(conn)
 
 	// Etcd bugs
-	KRV_RANGE_COUNT_FILTER_CORRECT = false
-	KRV_WATCH_ID_ZERO_INDEX = true
-	KRV_WATCH_CREATE_COMPACTED = true
+	PCB_RANGE_COUNT_FILTER_CORRECT = false
+	PCB_WATCH_ID_ZERO_INDEX = true
+	PCB_WATCH_CREATE_COMPACTED = true
 }
 
-// Run integration tests against bootstrapped krv instance
-func setupkrv(t *testing.T) {
+// Run integration tests against bootstrapped pcb instance
+func setuppcb(t *testing.T) {
 	logLevel := new(slog.LevelVar)
 	if debug {
 		logLevel.Set(slog.LevelDebug)
@@ -105,7 +105,7 @@ func setupkrv(t *testing.T) {
 	var (
 		agents    = make([]*zongzi.Agent, 3)
 		nonvoting = make([]*zongzi.Agent, 3)
-		dir       = "/tmp/krv/test"
+		dir       = "/tmp/pcb/test"
 		host      = "127.0.0.1"
 		port      = 19000
 		peers     = []string{
@@ -131,13 +131,13 @@ func setupkrv(t *testing.T) {
 	for i := range len(agents) {
 		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%03d", dir, i)
-		if agents[i], err = zongzi.NewAgent("krv000", peers,
+		if agents[i], err = zongzi.NewAgent("pcb000", peers,
 			zongzi.WithDirRaft(dir+"/raft"),
 			zongzi.WithDirWAL(dir+"/wal"),
 			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+(i*10)+1)),
 			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+(i*10)+2)),
 			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+(i*10)+3)),
-			zongzi.WithHostTags(`pantopic/krv=member`),
+			zongzi.WithHostTags(`pantopic/config-bus=member`),
 			zongzi.WithRaftEventListener(ctrl[i]),
 		); err != nil {
 			panic(err)
@@ -161,13 +161,13 @@ func setupkrv(t *testing.T) {
 	for i := range len(nonvoting) {
 		ctrl2 = append(ctrl2, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
 		dir := fmt.Sprintf("%s/%03d", dir, i+100)
-		if nonvoting[i], err = zongzi.NewAgent("krv000", peers,
+		if nonvoting[i], err = zongzi.NewAgent("pcb000", peers,
 			zongzi.WithDirRaft(dir+"/raft"),
 			zongzi.WithDirWAL(dir+"/wal"),
 			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+100+(i*10)+1)),
 			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+100+(i*10)+2)),
 			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+100+(i*10)+3)),
-			zongzi.WithHostTags(`pantopic/krv=nonvoting`),
+			zongzi.WithHostTags(`pantopic/config-bus=nonvoting`),
 			zongzi.WithRaftEventListener(ctrl2[i]),
 		); err != nil {
 			panic(err)
@@ -191,8 +191,8 @@ func setupkrv(t *testing.T) {
 	// Start shard
 	shard, _, err = agents[0].ShardCreate(ctx, Uri,
 		zongzi.WithName("standalone-001"),
-		zongzi.WithPlacementMembers(3, `pantopic/krv=member`),
-		zongzi.WithPlacementCover(`pantopic/krv=nonvoting`))
+		zongzi.WithPlacementMembers(3, `pantopic/config-bus=member`),
+		zongzi.WithPlacementCover(`pantopic/config-bus=nonvoting`))
 	if err != nil {
 		panic(err)
 	}
@@ -487,7 +487,7 @@ func testRange(t *testing.T) {
 			require.Equal(t, int64(50), resp.Count)
 		})
 		t.Run("partial", func(t *testing.T) {
-			withGlobal(&KRV_RANGE_COUNT_FULL, false, func() {
+			withGlobal(&PCB_RANGE_COUNT_FULL, false, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -505,7 +505,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("full", func(t *testing.T) {
-			withGlobal(&KRV_RANGE_COUNT_FULL, true, func() {
+			withGlobal(&PCB_RANGE_COUNT_FULL, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -528,7 +528,7 @@ func testRange(t *testing.T) {
 			})
 		})
 		t.Run("fake", func(t *testing.T) {
-			withGlobal(&KRV_RANGE_COUNT_FAKE, true, func() {
+			withGlobal(&PCB_RANGE_COUNT_FAKE, true, func() {
 				resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 					Key:      []byte(`test-range-000`),
 					RangeEnd: []byte(`test-range-100`),
@@ -582,7 +582,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -595,7 +595,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -609,7 +609,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -624,7 +624,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -637,7 +637,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -651,7 +651,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -669,7 +669,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -685,7 +685,7 @@ func testRange(t *testing.T) {
 			require.Nil(t, err, err)
 			require.NotNil(t, resp)
 			assert.Len(t, resp.Kvs, 50)
-			if KRV_RANGE_COUNT_FILTER_CORRECT {
+			if PCB_RANGE_COUNT_FILTER_CORRECT {
 				assert.Equal(t, int64(50), resp.Count)
 			} else {
 				assert.Equal(t, int64(100), resp.Count)
@@ -1149,7 +1149,7 @@ func testTransaction(t *testing.T) {
 		assert.True(t, resp.Succeeded)
 	})
 	t.Run("multi-write", func(t *testing.T) {
-		withGlobal(&KRV_TXN_MULTI_WRITE_ENABLED, false, func() {
+		withGlobal(&PCB_TXN_MULTI_WRITE_ENABLED, false, func() {
 			resp, err := svcKv.Txn(ctx, &internal.TxnRequest{
 				Success: []*internal.RequestOp{
 					putOp(&internal.PutRequest{
@@ -1178,7 +1178,7 @@ func testTransaction(t *testing.T) {
 			require.NotNil(t, err, err)
 			assert.Nil(t, resp)
 		})
-		withGlobal(&KRV_TXN_MULTI_WRITE_ENABLED, true, func() {
+		withGlobal(&PCB_TXN_MULTI_WRITE_ENABLED, true, func() {
 			if parity {
 				return
 			}
@@ -1596,7 +1596,7 @@ func testLeaseKeepAlive(t *testing.T) {
 		require.EqualValues(t, 0, s.res.TTL)
 	})
 	t.Run("batch", func(t *testing.T) {
-		withGlobal(&KRV_BATCH_LEASE_RENEWAL, true, func() {
+		withGlobal(&PCB_BATCH_LEASE_RENEWAL, true, func() {
 			var n = 10
 			var leaseIDs []int64
 			for range n {
@@ -1628,7 +1628,7 @@ func testLeaseKeepAlive(t *testing.T) {
 		})
 	})
 	t.Run("no batch", func(t *testing.T) {
-		withGlobal(&KRV_BATCH_LEASE_RENEWAL, false, func() {
+		withGlobal(&PCB_BATCH_LEASE_RENEWAL, false, func() {
 			var n = 10
 			var leaseIDs []int64
 			for range n {
@@ -1760,7 +1760,7 @@ func testWatch(t *testing.T) {
 				// ProgressNotify: true,
 			})
 			res := <-s.resChan
-			if KRV_WATCH_ID_ZERO_INDEX {
+			if PCB_WATCH_ID_ZERO_INDEX {
 				require.Equal(t, int64(0), res.WatchId, res)
 				sendWatchCancel(int64(0))
 				res = <-s.resChan
@@ -1794,7 +1794,7 @@ func testWatch(t *testing.T) {
 			assert.Equal(t, internal.ErrWatcherDuplicateID.Error(), res.CancelReason, res)
 		})
 		t.Run("compacted", func(t *testing.T) {
-			withGlobal(&KRV_WATCH_CREATE_COMPACTED, true, func() {
+			withGlobal(&PCB_WATCH_CREATE_COMPACTED, true, func() {
 				sendWatchCreate(&internal.WatchCreateRequest{
 					Key:           []byte(`test-watch-000`),
 					RangeEnd:      []byte(`test-watch-100`),
@@ -1813,7 +1813,7 @@ func testWatch(t *testing.T) {
 				assert.Greater(t, res.CompactRevision, int64(1))
 			})
 			if !parity {
-				withGlobal(&KRV_WATCH_CREATE_COMPACTED, false, func() {
+				withGlobal(&PCB_WATCH_CREATE_COMPACTED, false, func() {
 					t.Run("no-create", func(t *testing.T) {
 						sendWatchCreate(&internal.WatchCreateRequest{
 							Key:           []byte(`test-watch-000`),
@@ -2063,7 +2063,7 @@ func testWatch(t *testing.T) {
 	})
 	t.Run("single-key-2", func(t *testing.T) {
 		if parity {
-			withGlobal(&KRV_WATCH_SAME_KEY_AS_RANGE_END, false, func() {
+			withGlobal(&PCB_WATCH_SAME_KEY_AS_RANGE_END, false, func() {
 				sendWatchCreate(&internal.WatchCreateRequest{
 					Key:      []byte(`test-watch-000`),
 					RangeEnd: []byte(`test-watch-000`),
@@ -2077,7 +2077,7 @@ func testWatch(t *testing.T) {
 				assert.True(t, res.Canceled)
 			})
 		} else {
-			withGlobal(&KRV_WATCH_SAME_KEY_AS_RANGE_END, true, func() {
+			withGlobal(&PCB_WATCH_SAME_KEY_AS_RANGE_END, true, func() {
 				sendWatchCreate(&internal.WatchCreateRequest{
 					Key:      []byte(`test-watch-000`),
 					RangeEnd: []byte(`test-watch-000`),
@@ -2318,7 +2318,7 @@ func testWatch(t *testing.T) {
 			assert.True(t, resp.Succeeded)
 			rev = append(rev, resp.Header.Revision)
 		}
-		withGlobalInt(&KRV_RESPONSE_SIZE_MAX, 1<<20, func() {
+		withGlobalInt(&PCB_RESPONSE_SIZE_MAX, 1<<20, func() {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:           []byte(`test-watch-fragment-000`),
 				RangeEnd:      []byte(`test-watch-fragment-999`),
@@ -2704,8 +2704,8 @@ func (svc *parityMaintenanceService) Hash(ctx context.Context,
 }
 
 func (svc *parityMaintenanceService) HashKV(ctx context.Context,
-	req *internal.HashKRVequest,
-) (res *internal.HashKRVesponse, err error) {
+	req *internal.HashPCBequest,
+) (res *internal.HashPCBesponse, err error) {
 	return svc.client.HashKV(ctx, req)
 }
 

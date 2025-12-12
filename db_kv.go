@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type dbKv struct {
@@ -37,7 +37,7 @@ func (db dbKv) put(
 		err = internal.ErrGRPCEmptyKey
 		return
 	}
-	if len(key) > KRV_LIMIT_KEY_LENGTH {
+	if len(key) > PCB_LIMIT_KEY_LENGTH {
 		err = internal.ErrGRPCKeyTooLong
 		return
 	}
@@ -81,7 +81,7 @@ func (db dbKv) put(
 		}
 		return
 	}
-	if krec.rev.upper() == rev && !KRV_TXN_MULTI_WRITE_ENABLED {
+	if krec.rev.upper() == rev && !PCB_TXN_MULTI_WRITE_ENABLED {
 		err = internal.ErrGRPCDuplicateKey
 		return
 	}
@@ -105,7 +105,7 @@ func (db dbKv) put(
 	if ignoreLease {
 		next.lease = prev.lease
 	}
-	if KRV_PATCH_ENABLED && !krec.rev.isdel() {
+	if PCB_PATCH_ENABLED && !krec.rev.isdel() {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
 		if patched {
@@ -165,7 +165,7 @@ func (db dbKv) getRange(
 		rev = krec.rev
 		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
-			if !KRV_RANGE_COUNT_FULL && !KRV_RANGE_COUNT_FAKE {
+			if !PCB_RANGE_COUNT_FULL && !PCB_RANGE_COUNT_FAKE {
 				return
 			}
 			countOnly = true
@@ -223,7 +223,7 @@ func (db dbKv) getRange(
 					goto next
 				}
 				items = append(items, item)
-			} else if KRV_RANGE_COUNT_FAKE {
+			} else if PCB_RANGE_COUNT_FAKE {
 				break
 			}
 		}
@@ -265,7 +265,7 @@ func (db dbKv) deleteRange(txn *lmdb.Txn, rev, subrev, epoch uint64, key, end []
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
 			tombstone = newkeyrev(rev, subrev, true)
-			if prev.rev.upper() == rev && !KRV_TXN_MULTI_WRITE_ENABLED {
+			if prev.rev.upper() == rev && !PCB_TXN_MULTI_WRITE_ENABLED {
 				err = internal.ErrGRPCDuplicateKey
 				return
 			}

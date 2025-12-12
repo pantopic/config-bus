@@ -7,67 +7,67 @@ x-variables:
       dockerfile: cmd/standalone/Dockerfile
       target: standalone
     networks:
-      - krv
+      - pcb
     volumes:
       - type: tmpfs
-        target: /var/lib/krv
+        target: /var/lib/pcb
         tmpfs:
           mode: 01777
 
 services:
-  krv-0:
+  pcb-0:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-0
-      KRV_HOST_TAGS: pantopic/krv=member
+      PCB_HOST_NAME: pcb-0
+      PCB_HOST_TAGS: pantopic/config-bus=member
     ports:
       - 19000:19000
       - 6060:6060
 
-  krv-1:
+  pcb-1:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-1
-      KRV_HOST_TAGS: pantopic/krv=member
+      PCB_HOST_NAME: pcb-1
+      PCB_HOST_TAGS: pantopic/config-bus=member
     ports:
       - 19001:19000
       - 6061:6060
 
-  krv-2:
+  pcb-2:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-2
-      KRV_HOST_TAGS: pantopic/krv=member
+      PCB_HOST_NAME: pcb-2
+      PCB_HOST_TAGS: pantopic/config-bus=member
     ports:
       - 19002:19000
       - 6062:6060
 
-  krv-3:
+  pcb-3:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-3
-      KRV_HOST_TAGS: pantopic/krv=nonvoting
+      PCB_HOST_NAME: pcb-3
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
     ports:
       - 19003:19000
       - 6063:6060
 
-  krv-4:
+  pcb-4:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-4
-      KRV_HOST_TAGS: pantopic/krv=nonvoting
+      PCB_HOST_NAME: pcb-4
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
     ports:
       - 19004:19000
       - 6064:6060
 
-  krv-5:
+  pcb-5:
     <<: *common
     environment:
-      KRV_HOST_NAME: krv-5
-      KRV_HOST_TAGS: pantopic/krv=nonvoting
+      PCB_HOST_NAME: pcb-5
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
     ports:
       - 19005:19000
       - 6065:6060
 
 networks:
-  krv: {}
+  pcb: {}

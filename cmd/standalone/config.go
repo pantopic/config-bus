@@ -7,25 +7,25 @@ import (
 )
 
 type config struct {
-	ClusterName string `env:"KRV_CLUSTER_NAME"`
-	Dir         string `env:"KRV_DIR"`
-	HostName    string `env:"KRV_HOST_NAME"`
-	HostPeers   string `env:"KRV_HOST_PEERS"`
-	HostTags    string `env:"KRV_HOST_TAGS"`
-	PortApi     uint16 `env:"KRV_PORT_API"`
-	PortGossip  uint16 `env:"KRV_PORT_GOSSIP"`
-	PortRaft    uint16 `env:"KRV_PORT_RAFT"`
-	PortZongzi  uint16 `env:"KRV_PORT_ZONGZI"`
-	TlsCrt      string `env:"KRV_TLS_CRT"`
-	TlsKey      string `env:"KRV_TLS_KEY"`
+	ClusterName string `env:"PCB_CLUSTER_NAME"`
+	Dir         string `env:"PCB_DIR"`
+	HostName    string `env:"PCB_HOST_NAME"`
+	HostPeers   string `env:"PCB_HOST_PEERS"`
+	HostTags    string `env:"PCB_HOST_TAGS"`
+	PortApi     uint16 `env:"PCB_PORT_API"`
+	PortGossip  uint16 `env:"PCB_PORT_GOSSIP"`
+	PortRaft    uint16 `env:"PCB_PORT_RAFT"`
+	PortZongzi  uint16 `env:"PCB_PORT_ZONGZI"`
+	TlsCrt      string `env:"PCB_TLS_CRT"`
+	TlsKey      string `env:"PCB_TLS_KEY"`
 }
 
 func getConfig() config {
 	cfg := config{
-		ClusterName: "krv",
-		Dir:         "/var/lib/krv",
-		HostName:    "krv-0",
-		HostPeers:   "krv-0:17003,krv-1:17003,krv-2:17003",
+		ClusterName: "pcb",
+		Dir:         "/var/lib/pcb",
+		HostName:    "pcb-0",
+		HostPeers:   "pcb-0:17003,pcb-1:17003,pcb-2:17003",
 		PortApi:     19000,
 		PortGossip:  17001,
 		PortRaft:    17002,

@@ -1,4 +1,4 @@
-module github.com/pantopic/krv
+module github.com/pantopic/config-bus
 
 go 1.24.0
 

@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 
 	"github.com/golang/snappy"
 
-	"github.com/pantopic/krv/internal"
-	"github.com/pantopic/krv/internal/patch"
+	"github.com/pantopic/config-bus/internal"
+	"github.com/pantopic/config-bus/internal/patch"
 )
 
 type kv struct {
@@ -29,14 +29,14 @@ func (kv kv) Bytes(next, buf []byte) []byte {
 		buf = binary.AppendUvarint(buf, kv.created)
 		buf = binary.AppendUvarint(buf, kv.version)
 		buf = binary.AppendUvarint(buf, kv.lease)
-		if next != nil && KRV_PATCH_ENABLED {
+		if next != nil && PCB_PATCH_ENABLED {
 			p := patch.Generate(next, kv.val, nil)
 			if len(p) < len(kv.val) {
 				kv.val = p
 				kv.flags |= KV_FLAG_PATCH
 			}
 		}
-		if KRV_COMPRESSION_ENABLED && len(kv.val) > 16 {
+		if PCB_COMPRESSION_ENABLED && len(kv.val) > 16 {
 			p := snappy.Encode(nil, kv.val)
 			if len(p) < len(kv.val) {
 				kv.val = p

@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"bytes"
@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
-const Uri = "zongzi://github.com/pantopic/krv"
+const Uri = "zongzi://github.com/pantopic/config-bus"
 
 type stateMachine struct {
 	clock      clock.Clock
@@ -67,6 +67,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (index uint64, err error) {
 	sm.env, err = lmdb.NewEnv()
 	sm.env.SetMaxDBs(255)
 	sm.env.SetMapSize(int64(64 << 30)) // 64 GiB
+	sm.env.SetMaxReaders(1 << 16)      // 64k readers
 	if err = sm.env.Open(sm.envPath+`/data.mdb`, uint(lmdbEnvFlags), 0700); err != nil {
 		panic(err)
 	}
@@ -959,7 +960,7 @@ func (sm *stateMachine) queryRange(
 	if err != nil {
 		return nil, err
 	}
-	if req.CountOnly || KRV_RANGE_COUNT_FULL || KRV_RANGE_COUNT_FAKE {
+	if req.CountOnly || PCB_RANGE_COUNT_FULL || PCB_RANGE_COUNT_FAKE {
 		res.Count = int64(count)
 	}
 	if !req.CountOnly {

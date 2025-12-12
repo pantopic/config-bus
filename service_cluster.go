@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/logbn/zongzi"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type serviceCluster struct {

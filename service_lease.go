@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 type serviceLease struct {
@@ -88,10 +88,10 @@ func (s *serviceLease) LeaseKeepAlive(
 	server internal.Lease_LeaseKeepAliveServer,
 ) (err error) {
 	var batcher batchy.Batcher
-	if KRV_BATCH_LEASE_RENEWAL {
+	if PCB_BATCH_LEASE_RENEWAL {
 		batcher = batchy.New(
-			KRV_BATCH_LEASE_RENEWAL_LIMIT,
-			KRV_BATCH_LEASE_RENEWAL_INTERVAL,
+			PCB_BATCH_LEASE_RENEWAL_LIMIT,
+			PCB_BATCH_LEASE_RENEWAL_INTERVAL,
 			func(items []any) (errs []error) {
 				errs = slices.Repeat([]error{nil}, len(items))
 				req := &internal.LeaseKeepAliveBatchRequest{}

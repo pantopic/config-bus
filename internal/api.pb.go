@@ -1742,7 +1742,7 @@ func (x *CompactionResponse) GetHeader() *ResponseHeader {
 	return nil
 }
 
-type HashKRVequest struct {
+type HashPCBequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -1750,20 +1750,20 @@ type HashKRVequest struct {
 	Revision int64 `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
 }
 
-func (x *HashKRVequest) Reset() {
-	*x = HashKRVequest{}
+func (x *HashPCBequest) Reset() {
+	*x = HashPCBequest{}
 	mi := &file_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *HashKRVequest) String() string {
+func (x *HashPCBequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*HashKRVequest) ProtoMessage() {}
+func (*HashPCBequest) ProtoMessage() {}
 
-func (x *HashKRVequest) ProtoReflect() protoreflect.Message {
+func (x *HashPCBequest) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1775,19 +1775,19 @@ func (x *HashKRVequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use HashKRVequest.ProtoReflect.Descriptor instead.
-func (*HashKRVequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use HashPCBequest.ProtoReflect.Descriptor instead.
+func (*HashPCBequest) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *HashKRVequest) GetRevision() int64 {
+func (x *HashPCBequest) GetRevision() int64 {
 	if x != nil {
 		return x.Revision
 	}
 	return 0
 }
 
-type HashKRVesponse struct {
+type HashPCBesponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -1798,20 +1798,20 @@ type HashKRVesponse struct {
 	HashRevision    int64           `protobuf:"varint,4,opt,name=hash_revision,json=hashRevision,proto3" json:"hash_revision,omitempty"`
 }
 
-func (x *HashKRVesponse) Reset() {
-	*x = HashKRVesponse{}
+func (x *HashPCBesponse) Reset() {
+	*x = HashPCBesponse{}
 	mi := &file_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *HashKRVesponse) String() string {
+func (x *HashPCBesponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*HashKRVesponse) ProtoMessage() {}
+func (*HashPCBesponse) ProtoMessage() {}
 
-func (x *HashKRVesponse) ProtoReflect() protoreflect.Message {
+func (x *HashPCBesponse) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1823,33 +1823,33 @@ func (x *HashKRVesponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use HashKRVesponse.ProtoReflect.Descriptor instead.
-func (*HashKRVesponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use HashPCBesponse.ProtoReflect.Descriptor instead.
+func (*HashPCBesponse) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *HashKRVesponse) GetHeader() *ResponseHeader {
+func (x *HashPCBesponse) GetHeader() *ResponseHeader {
 	if x != nil {
 		return x.Header
 	}
 	return nil
 }
 
-func (x *HashKRVesponse) GetHash() uint32 {
+func (x *HashPCBesponse) GetHash() uint32 {
 	if x != nil {
 		return x.Hash
 	}
 	return 0
 }
 
-func (x *HashKRVesponse) GetCompactRevision() int64 {
+func (x *HashPCBesponse) GetCompactRevision() int64 {
 	if x != nil {
 		return x.CompactRevision
 	}
 	return 0
 }
 
-func (x *HashKRVesponse) GetHashRevision() int64 {
+func (x *HashPCBesponse) GetHashRevision() int64 {
 	if x != nil {
 		return x.HashRevision
 	}
@@ -5167,8 +5167,8 @@ var file_api_proto_goTypes = []any{
 	(*TxnResponse)(nil),                   // 22: etcdserverpb.TxnResponse
 	(*CompactionRequest)(nil),             // 23: etcdserverpb.CompactionRequest
 	(*CompactionResponse)(nil),            // 24: etcdserverpb.CompactionResponse
-	(*HashKRVequest)(nil),                 // 25: etcdserverpb.HashKRVequest
-	(*HashKRVesponse)(nil),                // 26: etcdserverpb.HashKRVesponse
+	(*HashPCBequest)(nil),                 // 25: etcdserverpb.HashPCBequest
+	(*HashPCBesponse)(nil),                // 26: etcdserverpb.HashPCBesponse
 	(*HashRequest)(nil),                   // 27: etcdserverpb.HashRequest
 	(*HashResponse)(nil),                  // 28: etcdserverpb.HashResponse
 	(*SnapshotRequest)(nil),               // 29: etcdserverpb.SnapshotRequest
@@ -5245,7 +5245,7 @@ var file_api_proto_depIdxs = []int32{
 	11, // 24: etcdserverpb.TxnResponse.header:type_name -> etcdserverpb.ResponseHeader
 	19, // 25: etcdserverpb.TxnResponse.responses:type_name -> etcdserverpb.ResponseOp
 	11, // 26: etcdserverpb.CompactionResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 27: etcdserverpb.HashKRVesponse.header:type_name -> etcdserverpb.ResponseHeader
+	11, // 27: etcdserverpb.HashPCBesponse.header:type_name -> etcdserverpb.ResponseHeader
 	11, // 28: etcdserverpb.HashResponse.header:type_name -> etcdserverpb.ResponseHeader
 	11, // 29: etcdserverpb.SnapshotResponse.header:type_name -> etcdserverpb.ResponseHeader
 	32, // 30: etcdserverpb.WatchRequest.create_request:type_name -> etcdserverpb.WatchCreateRequest
@@ -5304,7 +5304,7 @@ var file_api_proto_depIdxs = []int32{
 	72, // 83: etcdserverpb.Maintenance.Status:input_type -> etcdserverpb.StatusRequest
 	63, // 84: etcdserverpb.Maintenance.Defragment:input_type -> etcdserverpb.DefragmentRequest
 	27, // 85: etcdserverpb.Maintenance.Hash:input_type -> etcdserverpb.HashRequest
-	25, // 86: etcdserverpb.Maintenance.HashKV:input_type -> etcdserverpb.HashKRVequest
+	25, // 86: etcdserverpb.Maintenance.HashKV:input_type -> etcdserverpb.HashPCBequest
 	29, // 87: etcdserverpb.Maintenance.Snapshot:input_type -> etcdserverpb.SnapshotRequest
 	65, // 88: etcdserverpb.Maintenance.MoveLeader:input_type -> etcdserverpb.MoveLeaderRequest
 	70, // 89: etcdserverpb.Maintenance.Downgrade:input_type -> etcdserverpb.DowngradeRequest
@@ -5328,7 +5328,7 @@ var file_api_proto_depIdxs = []int32{
 	73, // 107: etcdserverpb.Maintenance.Status:output_type -> etcdserverpb.StatusResponse
 	64, // 108: etcdserverpb.Maintenance.Defragment:output_type -> etcdserverpb.DefragmentResponse
 	28, // 109: etcdserverpb.Maintenance.Hash:output_type -> etcdserverpb.HashResponse
-	26, // 110: etcdserverpb.Maintenance.HashKV:output_type -> etcdserverpb.HashKRVesponse
+	26, // 110: etcdserverpb.Maintenance.HashKV:output_type -> etcdserverpb.HashPCBesponse
 	30, // 111: etcdserverpb.Maintenance.Snapshot:output_type -> etcdserverpb.SnapshotResponse
 	66, // 112: etcdserverpb.Maintenance.MoveLeader:output_type -> etcdserverpb.MoveLeaderResponse
 	71, // 113: etcdserverpb.Maintenance.Downgrade:output_type -> etcdserverpb.DowngradeResponse

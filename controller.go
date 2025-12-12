@@ -1,4 +1,4 @@
-package krv
+package pcb
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/logbn/zongzi"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/pantopic/krv/internal"
+	"github.com/pantopic/config-bus/internal"
 )
 
 // Controller operates background processes like epoch advancement and election notices
@@ -120,7 +120,7 @@ func (c *controller) LeaderUpdated(info zongzi.LeaderInfo) {
 }
 
 func (c *controller) Stop() {
-	defer c.log.Info("Stopped krv controller", "name", c.shard.Name)
+	defer c.log.Info("Stopped pcb controller", "name", c.shard.Name)
 	if c.ctxCancel != nil {
 		c.ctxCancel()
 	}

@@ -2,7 +2,7 @@ dev:
 	@go build -ldflags="-s -w" -o _dist/standalone ./cmd/standalone && cd cmd/standalone && docker compose up --build
 
 build:
-	@go build -ldflags="-s -w" -o _dist/krv ./cmd/standalone
+	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/standalone
 
 test:
 	@go test -v
@@ -11,7 +11,7 @@ integration:
 	@go test ./...
 
 parity:
-	@KRV_PARITY_CHECK=true go test -v
+	@PCB_PARITY_CHECK=true go test -v
 
 bench:
 	@go test -bench=. -run=_ -v
@@ -20,12 +20,12 @@ unit:
 	@go test ./... -tags unit -v
 
 scp:
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-0:/usr/bin/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-1:/usr/bin/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@etcd-2:/usr/bin/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-0:/usr/bin/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-1:/usr/bin/krv
-	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/krv root@apiserver-2:/usr/bin/krv
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@etcd-0:/usr/bin/pcb
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@etcd-1:/usr/bin/pcb
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@etcd-2:/usr/bin/pcb
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@apiserver-0:/usr/bin/pcb
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@apiserver-1:/usr/bin/pcb
+	@scp -o "StrictHostKeyChecking=accept-new" ./_dist/pcb root@apiserver-2:/usr/bin/pcb
 
 cover:
 	@mkdir -p _dist
