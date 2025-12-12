@@ -67,8 +67,8 @@ func (svc *serviceMaintenance) Hash(ctx context.Context,
 }
 
 func (svc *serviceMaintenance) HashKV(ctx context.Context,
-	req *internal.HashPCBequest,
-) (res *internal.HashPCBesponse, err error) {
+	req *internal.HashKVRequest,
+) (res *internal.HashKVResponse, err error) {
 	slog.Info(`Maintenance - HashKV`)
 	return
 }
