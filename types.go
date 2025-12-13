@@ -87,7 +87,7 @@ var (
 	// Disabled by default for parity.
 	PCB_TXN_MULTI_WRITE_ENABLED = false
 
-	// PCB_WATCH_ID_ZERO_INDEX determines whether to start watch IDs at 0 rather than 1. This is bad API design
+	// PCB_WATCH_ID_ZERO_INDEX determines whether to start watch IDs at 0 rather than 1. Starting at 0 is bad API design
 	// because it confuses the zero value with the empty state. Sending an explicit watchID in a create request will
 	// fail if a watch with that ID already exists for all values of watchID except 0 which will generate a new ID.
 	// Disabled by default. !!! VIOLATES PARITY !!!
@@ -109,13 +109,6 @@ var (
 	// PCB_WATCH_PROGRESS_NOTIFY_INTERVAL sets the duration of periodic watch progress notification.
 	// Matches etcd by default.
 	PCB_WATCH_PROGRESS_NOTIFY_INTERVAL = 10 * time.Minute
-
-	// PCB_WATCH_SAME_KEY_AS_RANGE_END determines whether to allow watches where the key and range end are the same.
-	// The behavior is exactly the same as when providing an empty range end which watches a single key.
-	// This is not allowed by etcd which complains "mvcc: watcher range is empty" which is inaccurate since the range
-	// is exactly 1, not 0 because rangeend is exclusive.
-	// Enabled by default. !!! VIOLATES PARITY !!!
-	PCB_WATCH_SAME_KEY_AS_RANGE_END = true
 
 	// PCB_READ_LOCAL forces Linearizable range requests to be served as Serializable (stale) if:
 	// 1. The client requests a specific revision
