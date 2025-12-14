@@ -21,6 +21,110 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CMD int32
+
+const (
+	CMD_CMD_NONE        CMD = 0
+	CMD_KV_PUT          CMD = 1
+	CMD_KV_DELETE_RANGE CMD = 2
+	CMD_KV_TXN          CMD = 3
+	CMD_KV_COMPACT      CMD = 4
+)
+
+// Enum value maps for CMD.
+var (
+	CMD_name = map[int32]string{
+		0: "CMD_NONE",
+		1: "KV_PUT",
+		2: "KV_DELETE_RANGE",
+		3: "KV_TXN",
+		4: "KV_COMPACT",
+	}
+	CMD_value = map[string]int32{
+		"CMD_NONE":        0,
+		"KV_PUT":          1,
+		"KV_DELETE_RANGE": 2,
+		"KV_TXN":          3,
+		"KV_COMPACT":      4,
+	}
+)
+
+func (x CMD) Enum() *CMD {
+	p := new(CMD)
+	*p = x
+	return p
+}
+
+func (x CMD) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CMD) Descriptor() protoreflect.EnumDescriptor {
+	return file_internal_proto_enumTypes[0].Descriptor()
+}
+
+func (CMD) Type() protoreflect.EnumType {
+	return &file_internal_proto_enumTypes[0]
+}
+
+func (x CMD) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CMD.Descriptor instead.
+func (CMD) EnumDescriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{0}
+}
+
+type QUERY int32
+
+const (
+	QUERY_QUERY_NONE  QUERY = 0
+	QUERY_KV_RANGE    QUERY = 1
+	QUERY_WATCH_WATCH QUERY = 5
+)
+
+// Enum value maps for QUERY.
+var (
+	QUERY_name = map[int32]string{
+		0: "QUERY_NONE",
+		1: "KV_RANGE",
+		5: "WATCH_WATCH",
+	}
+	QUERY_value = map[string]int32{
+		"QUERY_NONE":  0,
+		"KV_RANGE":    1,
+		"WATCH_WATCH": 5,
+	}
+)
+
+func (x QUERY) Enum() *QUERY {
+	p := new(QUERY)
+	*p = x
+	return p
+}
+
+func (x QUERY) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (QUERY) Descriptor() protoreflect.EnumDescriptor {
+	return file_internal_proto_enumTypes[1].Descriptor()
+}
+
+func (QUERY) Type() protoreflect.EnumType {
+	return &file_internal_proto_enumTypes[1]
+}
+
+func (x QUERY) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use QUERY.Descriptor instead.
+func (QUERY) EnumDescriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{1}
+}
+
 type TickRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          uint64                 `protobuf:"varint,1,opt,name=term,proto3" json:"term,omitempty"`
@@ -200,7 +304,21 @@ const file_internal_proto_rawDesc = "" +
 	"\x05epoch\x18\x01 \x01(\x04R\x05epoch\"!\n" +
 	"\vTermRequest\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\"\x0e\n" +
-	"\fTermResponseB)Z'github.com/pantopic/config-bus/internalb\x06proto3"
+	"\fTermResponse*P\n" +
+	"\x03CMD\x12\f\n" +
+	"\bCMD_NONE\x10\x00\x12\n" +
+	"\n" +
+	"\x06KV_PUT\x10\x01\x12\x13\n" +
+	"\x0fKV_DELETE_RANGE\x10\x02\x12\n" +
+	"\n" +
+	"\x06KV_TXN\x10\x03\x12\x0e\n" +
+	"\n" +
+	"KV_COMPACT\x10\x04*6\n" +
+	"\x05QUERY\x12\x0e\n" +
+	"\n" +
+	"QUERY_NONE\x10\x00\x12\f\n" +
+	"\bKV_RANGE\x10\x01\x12\x0f\n" +
+	"\vWATCH_WATCH\x10\x05B)Z'github.com/pantopic/config-bus/internalb\x06proto3"
 
 var (
 	file_internal_proto_rawDescOnce sync.Once
@@ -214,12 +332,15 @@ func file_internal_proto_rawDescGZIP() []byte {
 	return file_internal_proto_rawDescData
 }
 
+var file_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_internal_proto_goTypes = []any{
-	(*TickRequest)(nil),  // 0: etcdserverpb.TickRequest
-	(*TickResponse)(nil), // 1: etcdserverpb.TickResponse
-	(*TermRequest)(nil),  // 2: etcdserverpb.TermRequest
-	(*TermResponse)(nil), // 3: etcdserverpb.TermResponse
+	(CMD)(0),             // 0: etcdserverpb.CMD
+	(QUERY)(0),           // 1: etcdserverpb.QUERY
+	(*TickRequest)(nil),  // 2: etcdserverpb.TickRequest
+	(*TickResponse)(nil), // 3: etcdserverpb.TickResponse
+	(*TermRequest)(nil),  // 4: etcdserverpb.TermRequest
+	(*TermResponse)(nil), // 5: etcdserverpb.TermResponse
 }
 var file_internal_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -239,13 +360,14 @@ func file_internal_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_proto_rawDesc), len(file_internal_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      2,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_internal_proto_goTypes,
 		DependencyIndexes: file_internal_proto_depIdxs,
+		EnumInfos:         file_internal_proto_enumTypes,
 		MessageInfos:      file_internal_proto_msgTypes,
 	}.Build()
 	File_internal_proto = out.File

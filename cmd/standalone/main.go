@@ -88,23 +88,23 @@ func main() {
 		panic(err)
 	}
 	m := cmux.New(lis)
-	grpcL := m.Match(cmux.HTTP2())
-	httpL := m.Match(cmux.Any())
+	grpcListener := m.Match(cmux.HTTP2())
+	httpListener := m.Match(cmux.Any())
 	go func() {
-		if err = grpcServer.Serve(grpcL); err != nil {
+		if err = grpcServer.Serve(grpcListener); err != nil {
 			panic(err)
 		}
 	}()
-	httpS := &http.Server{
+	httpServer := &http.Server{
 		Handler: pcb.NewEndpointHandler(grpcServer),
 	}
 	go func() {
 		if cfg.TlsCrt != "" && cfg.TlsKey != "" {
-			if err = httpS.ServeTLS(httpL, cfg.TlsCrt, cfg.TlsKey); err != nil {
+			if err = httpServer.ServeTLS(httpListener, cfg.TlsCrt, cfg.TlsKey); err != nil {
 				panic(err)
 			}
 		} else {
-			if err = httpS.Serve(httpL); err != nil {
+			if err = httpServer.Serve(httpListener); err != nil {
 				panic(err)
 			}
 		}

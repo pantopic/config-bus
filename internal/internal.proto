@@ -16,3 +16,17 @@ message TermRequest {
 }
 message TermResponse {
 }
+
+enum CMD {
+  CMD_NONE = 0;
+  KV_PUT = 1;
+  KV_DELETE_RANGE = 2;
+  KV_TXN = 3;
+  KV_COMPACT = 4;
+}
+
+enum QUERY {
+  QUERY_NONE = 0;
+  KV_RANGE = 1;
+  WATCH_WATCH = 5;
+}
