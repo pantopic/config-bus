@@ -10,7 +10,9 @@ import (
 const (
 	KV_FLAG_PATCH uint8 = 1 << iota
 	KV_FLAG_COMPRESSED
+)
 
+const (
 	CMD_INTERNAL_TERM byte = iota
 	CMD_INTERNAL_TICK
 	CMD_KV_PUT
@@ -21,19 +23,25 @@ const (
 	CMD_LEASE_REVOKE
 	CMD_LEASE_KEEP_ALIVE
 	CMD_LEASE_KEEP_ALIVE_BATCH
+)
 
+const (
 	QUERY_KV_RANGE byte = iota
 	QUERY_LEASE_LEASES
 	QUERY_LEASE_TIME_TO_LIVE
 	QUERY_WATCH_PROGRESS
+)
 
+const (
 	WatchMessageType_UNKNOWN byte = iota
 	WatchMessageType_INIT
 	WatchMessageType_EVENT
 	WatchMessageType_SYNC
 	WatchMessageType_NOTIFY
 	WatchMessageType_ERR_COMPACTED
+)
 
+const (
 	WATCH_DEBOUNCE = 50 * time.Millisecond
 
 	// grpc overhead costs for calculating PCB_RESPONSE_SIZE_MAX

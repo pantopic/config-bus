@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/pantopic/wazero-cluster/sdk-go"
 	"github.com/pantopic/wazero-grpc-server/sdk-go"
+	"github.com/pantopic/wazero-shard-client/sdk-go"
 
 	internal "github.com/pantopic/config-bus/module/service-grpc/internal"
 )
@@ -23,8 +23,8 @@ func main() {
 	s.Unary(`Compact`, grpcKvCompact)
 }
 
-func kvShard() cluster.Shard {
-	return cluster.ShardFind(`kv`)
+func kvShard() shard_client.Client {
+	return shard_client.New(`kv`)
 }
 
 func grpcKvRange(in []byte) (out []byte, err error) {
@@ -32,12 +32,13 @@ func grpcKvRange(in []byte) (out []byte, err error) {
 	if err != nil {
 		return []byte(err.Error()), grpc_server.ErrMalformed
 	}
-	_, out, err = kvShard().Read(append(in, byte(internal.QUERY_KV_RANGE)), !rangeRequest.Serializable)
+	_, out, err = kvShard().Read(append(in, QUERY_KV_RANGE), !rangeRequest.Serializable)
 	return
 }
 
 func grpcKvPut(in []byte) (out []byte, err error) {
-	val, out, err := kvShard().Apply(append(in, byte(internal.CMD_KV_PUT)))
+	var val uint64
+	val, out, err = kvShard().Apply(append(in, CMD_KV_PUT))
 	if val != 1 {
 		if bytes.Equal(out, []byte(ErrGRPCLeaseProvided.Error())) {
 			err = ErrGRPCLeaseProvided
@@ -46,22 +47,22 @@ func grpcKvPut(in []byte) (out []byte, err error) {
 		} else {
 			err = errors.New(string(out))
 		}
-		return
+		out = out[:0]
 	}
 	return
 }
 
 func grpcKvDeleteRange(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, byte(internal.CMD_KV_DELETE_RANGE)))
+	_, out, err = kvShard().Apply(append(in, CMD_KV_DELETE_RANGE))
 	return
 }
 
 func grpcKvTxn(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, byte(internal.CMD_KV_TXN)))
+	_, out, err = kvShard().Apply(append(in, CMD_KV_TXN))
 	return
 }
 
 func grpcKvCompact(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, byte(internal.CMD_KV_COMPACT)))
+	_, out, err = kvShard().Apply(append(in, CMD_KV_COMPACT))
 	return
 }

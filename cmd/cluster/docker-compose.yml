@@ -1,0 +1,73 @@
+version: '3.8'
+
+x-variables:
+  common: &common
+    build:
+      context: ../..
+      dockerfile: cmd/cluster/Dockerfile
+      target: cluster
+    networks:
+      - pcb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/pcb
+        tmpfs:
+          mode: 01777
+
+services:
+  pcb-0:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-0
+      PCB_HOST_TAGS: pantopic/config-bus=member
+    ports:
+      - 19000:19000
+      - 6060:6060
+
+  pcb-1:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-1
+      PCB_HOST_TAGS: pantopic/config-bus=member
+    ports:
+      - 19001:19000
+      - 6061:6060
+
+  pcb-2:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-2
+      PCB_HOST_TAGS: pantopic/config-bus=member
+    ports:
+      - 19002:19000
+      - 6062:6060
+
+  pcb-3:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-3
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
+    ports:
+      - 19003:19000
+      - 6063:6060
+
+  pcb-4:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-4
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
+    ports:
+      - 19004:19000
+      - 6064:6060
+
+  pcb-5:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-5
+      PCB_HOST_TAGS: pantopic/config-bus=nonvoting
+    ports:
+      - 19005:19000
+      - 6065:6060
+
+networks:
+  pcb: {}

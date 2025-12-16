@@ -1,8 +1,14 @@
 dev:
 	@go build -ldflags="-s -w" -o _dist/standalone ./cmd/standalone && cd cmd/standalone && docker compose up --build
 
+cluster:
+	@go build -ldflags="-s -w" -o _dist/cluster ./cmd/cluster && cd cmd/cluster && docker compose up --build
+
 build:
 	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/standalone
+
+build-cluster:
+	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster
 
 test:
 	@go test -v
@@ -12,6 +18,9 @@ integration:
 
 parity:
 	@PCB_PARITY_CHECK=true go test -v
+
+test-cluster:
+	@PCB_CLUSTER_CHECK=true go test -v
 
 bench:
 	@go test -bench=. -run=_ -v
@@ -57,13 +66,13 @@ gen-lite-install:
 	go install github.com/aperturerobotics/protobuf-go-lite/cmd/protoc-gen-go-lite@latest
 
 wasm-storage-kv:
-	@cd module/storage-kv && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/standalone/storage-kv.wasm -no-debug
+	@cd module/storage-kv && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/cluster/storage-kv.wasm -no-debug
 wasm-storage-kv-dev:
-	@cd module/storage-kv && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/standalone/storage-kv.dev.wasm
+	@cd module/storage-kv && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/cluster/storage-kv.dev.wasm
 wasm-service-grpc:
-	@cd module/service-grpc && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/standalone/service-grpc.wasm -no-debug
+	@cd module/service-grpc && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=conservative -scheduler=none -o ../../cmd/cluster/service-grpc.wasm -no-debug
 wasm-service-grpc-dev:
-	@cd module/service-grpc && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/standalone/service-grpc.dev.wasm
+	@cd module/service-grpc && tinygo build -buildmode=wasi-legacy -target=wasi -opt=2 -gc=conservative -scheduler=none -o ../../cmd/cluster/service-grpc.dev.wasm
 wasm: wasm-storage-kv wasm-service-grpc
 wasm-dev: wasm-storage-kv-dev wasm-service-grpc-dev
 wasm-all: wasm wasm-dev
