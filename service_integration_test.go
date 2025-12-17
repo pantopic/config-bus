@@ -423,7 +423,8 @@ func setupCluster(t *testing.T) {
 	if err = hostModGrpcServer.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
-	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc)
+	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc, wazeropool.WithModuleConfig(wazero.NewModuleConfig().
+		WithStdout(os.Stdout)))
 	if err != nil {
 		panic(err)
 	}
@@ -508,6 +509,7 @@ func testInsert(t *testing.T) {
 			} else {
 				require.NotNil(t, err)
 				assert.Nil(t, resp)
+				assert.Equal(t, internal.ErrGRPCKeyTooLong, err)
 			}
 		})
 	})
@@ -519,6 +521,7 @@ func testInsert(t *testing.T) {
 			})
 			require.NotNil(t, err)
 			assert.Nil(t, resp)
+			assert.Equal(t, internal.ErrGRPCEmptyKey, err)
 		})
 	})
 }
