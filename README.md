@@ -1,6 +1,6 @@
 # Pantopic Config Bus
 
-An [etcd](https://pkg.go.dev/github.com/tetratelabs/wazero) compatible Pantopic distributed database model powered by WebAssembly.
+An [etcd](https://pkg.go.dev/github.com/tetratelabs/wazero) compatible distributed database model powered by WebAssembly.
 
 ## Status
 
