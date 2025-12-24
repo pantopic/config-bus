@@ -1,6 +1,6 @@
 module github.com/pantopic/config-bus
 
-go 1.24.0
+go 1.25.1
 
 require (
 	github.com/PowerDNS/lmdb-go v1.9.3
@@ -10,8 +10,12 @@ require (
 	github.com/kevburnsjr/batchy v0.0.0-20221021015910-67d040864806
 	github.com/logbn/byteinterval v0.0.2-0.20251121135322-7e5198c457d9
 	github.com/logbn/zongzi v0.0.20-0.20251121140144-1331e1333793
+	github.com/pantopic/wazero-grpc-server/host v0.0.9
+	github.com/pantopic/wazero-pool v0.0.6
+	github.com/pantopic/wazero-shard-client/host v0.0.0-20250811184815-79ac9960e070
 	github.com/soheilhy/cmux v0.1.5
 	github.com/stretchr/testify v1.10.0
+	github.com/tetratelabs/wazero v1.10.1
 	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6

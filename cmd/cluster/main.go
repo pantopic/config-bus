@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"net"
@@ -14,13 +15,23 @@ import (
 
 	"github.com/logbn/zongzi"
 	"github.com/soheilhy/cmux"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/pantopic/wazero-grpc-server/host"
+	"github.com/pantopic/wazero-pool"
+	"github.com/pantopic/wazero-shard-client/host"
+
 	"github.com/pantopic/config-bus"
 	"github.com/pantopic/config-bus/internal"
 )
+
+//go:embed service\-grpc\.wasm
+var wasmServiceGrpc []byte
 
 func main() {
 	zongzi.SetLogLevel(zongzi.LogLevelInfo)
@@ -42,6 +53,27 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// TODO - Replace native state machine with WASM statemachine
+	agent.StateMachineRegister(pcb.Uri, pcb.NewStateMachineFactory(log, cfg.Dir+"/data"))
+	if err = agent.Start(ctx); err != nil {
+		panic(err)
+	}
+	// TODO - Replace shard create with resource create
+	shard, _, err := agent.ShardCreate(ctx, pcb.Uri,
+		zongzi.WithName("default.pcb.kv"),
+		zongzi.WithPlacementMembers(3, `pantopic/config-bus=member`),
+		zongzi.WithPlacementCover(`pantopic/config-bus=nonvoting`))
+	if err != nil {
+		panic(err)
+	}
+	if err = agent.ReplicaAwait(ctx, 30*time.Second, shard.ID); err != nil {
+		panic(err)
+	}
+	if err = ctrl.Start(agent.Client(shard.ID), shard); err != nil {
+		panic(err)
+	}
+
+	// gRPC server
 	var opts = []grpc.ServerOption{
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             5 * time.Second,
@@ -60,29 +92,48 @@ func main() {
 		opts = append(opts, grpc.Creds(fc))
 	}
 	var grpcServer = grpc.NewServer(opts...)
-	agent.StateMachineRegister(pcb.Uri, pcb.NewStateMachineFactory(log, cfg.Dir+"/data"))
-	if err = agent.Start(ctx); err != nil {
-		panic(err)
-	}
-	shard, _, err := agent.ShardCreate(ctx, pcb.Uri,
-		zongzi.WithName("pcb"),
-		zongzi.WithPlacementMembers(3, `pantopic/config-bus=member`),
-		zongzi.WithPlacementCover(`pantopic/config-bus=nonvoting`))
+
+	// WASM gRPC services
+	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	wasi_snapshot_preview1.MustInstantiate(ctx, runtime)
+	var (
+		hostModGrpc        = wazero_grpc_server.New()
+		hostModShardClient = wazero_shard_client.New(
+			wazero_shard_client.WithNamespace(`default`),
+			wazero_shard_client.WithResource(`pcb`),
+		)
+	)
+	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc)
 	if err != nil {
 		panic(err)
 	}
-	if err = agent.ReplicaAwait(ctx, 30*time.Second, shard.ID); err != nil {
+	pool.Run(func(mod api.Module) {
+		if ctx, err = hostModGrpc.InitContext(ctx, mod); err != nil {
+			panic(err)
+		}
+		if ctx, err = hostModShardClient.InitContext(ctx, mod, agent); err != nil {
+			panic(err)
+		}
+	})
+	if err = hostModShardClient.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
-	if err = ctrl.Start(agent.Client(shard.ID), shard); err != nil {
+	if err = hostModGrpc.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
+	if err = hostModGrpc.RegisterServices(ctx, grpcServer, pool, hostModShardClient.ContextCopy); err != nil {
+		panic(err)
+	}
+
+	// Native gRPC services
 	client := agent.Client(shard.ID, zongzi.WithWriteToLeader())
-	internal.RegisterKVServer(grpcServer, pcb.NewServiceKv(client))
+	// internal.RegisterKVServer(grpcServer, pcb.NewServiceKv(client))
 	internal.RegisterWatchServer(grpcServer, pcb.NewServiceWatch(client))
 	internal.RegisterLeaseServer(grpcServer, pcb.NewServiceLease(client))
 	internal.RegisterMaintenanceServer(grpcServer, pcb.NewServiceMaintenance(client))
 	internal.RegisterClusterServer(grpcServer, pcb.NewServiceCluster(client, apiAddr))
+
+	// Run gRPC and HTTP servers
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
 	if err != nil {
 		panic(err)

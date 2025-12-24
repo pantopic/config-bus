@@ -4,10 +4,12 @@ package pcb
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"log/slog"
 	"math/rand"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -20,15 +22,24 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
+
+	"github.com/pantopic/wazero-grpc-server/host"
+	"github.com/pantopic/wazero-pool"
+	"github.com/pantopic/wazero-shard-client/host"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 
 	"github.com/pantopic/config-bus/internal"
 )
 
 var (
-	ctx    = context.Background()
-	parity = os.Getenv("PCB_PARITY_CHECK") == "true"
-	debug  = os.Getenv("PCB_LOG_LEVEL") == "debug"
-	wait   func(time.Duration)
+	ctx     = context.Background()
+	cluster = os.Getenv("PCB_CLUSTER_CHECK") == "true"
+	parity  = os.Getenv("PCB_PARITY_CHECK") == "true"
+	debug   = os.Getenv("PCB_LOG_LEVEL") == "debug"
+	wait    func(time.Duration)
 
 	err            error
 	svcKv          internal.KVServer
@@ -38,11 +49,16 @@ var (
 	svcMaintenance internal.MaintenanceServer
 )
 
+//go:embed cmd/cluster/service\-grpc\.wasm
+var wasmServiceGrpc []byte
+
 func TestService(t *testing.T) {
 	if parity {
 		t.Run("setup-parity", setupParity)
+	} else if cluster {
+		t.Run("setup-cluster", setupCluster)
 	} else {
-		t.Run("setup-pcb", setuppcb)
+		t.Run("setup-pcb", setupPcb)
 	}
 	t.Run("insert", testInsert)
 	t.Run("update", testUpdate)
@@ -92,7 +108,7 @@ func setupParity(t *testing.T) {
 }
 
 // Run integration tests against bootstrapped pcb instance
-func setuppcb(t *testing.T) {
+func setupPcb(t *testing.T) {
 	logLevel := new(slog.LevelVar)
 	if debug {
 		logLevel.Set(slog.LevelDebug)
@@ -236,6 +252,221 @@ func setuppcb(t *testing.T) {
 	svcMaintenance = NewServiceMaintenance(client)
 }
 
+// Run integration tests against bootstrapped pcb cluster instance
+func setupCluster(t *testing.T) {
+	logLevel := new(slog.LevelVar)
+	if debug {
+		logLevel.Set(slog.LevelDebug)
+	} else {
+		logLevel.Set(slog.LevelInfo)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
+	// TODO - Replace zongzi agents w/ cluster agents
+	var (
+		agents    = make([]*zongzi.Agent, 3)
+		nonvoting = make([]*zongzi.Agent, 3)
+		dir       = "/tmp/pcb/test"
+		host      = "127.0.0.1"
+		port      = 19000
+		peers     = []string{
+			fmt.Sprintf(host+":%d", port+3),
+			fmt.Sprintf(host+":%d", port+13),
+			fmt.Sprintf(host+":%d", port+23),
+		}
+	)
+	zongzi.SetLogLevel(zongzi.LogLevelWarning)
+	if err = os.RemoveAll(dir); err != nil {
+		panic(err)
+	}
+	clk := clock.NewMock()
+	wait = func(t time.Duration) {
+		for t > 0 {
+			clk.Add(time.Second)
+			t -= time.Second
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	var ctrl, ctrl2 []*controller
+	var shard zongzi.Shard
+	for i := range len(agents) {
+		ctrl = append(ctrl, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
+		dir := fmt.Sprintf("%s/%03d", dir, i)
+		if agents[i], err = zongzi.NewAgent("pcb000", peers,
+			zongzi.WithDirRaft(dir+"/raft"),
+			zongzi.WithDirWAL(dir+"/wal"),
+			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+(i*10)+1)),
+			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+(i*10)+2)),
+			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+(i*10)+3)),
+			zongzi.WithHostTags(`pantopic/config-bus=member`),
+			zongzi.WithRaftEventListener(ctrl[i]),
+		); err != nil {
+			panic(err)
+		}
+		// TODO - Replace statemachine w/ wasm statemachine
+		agents[i].StateMachineRegister(Uri, NewStateMachineFactory(log, dir+"/data"))
+		go func() {
+			if err = agents[i].Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
+	}
+	// 10 seconds to start the cluster.
+	require.True(t, await(10, 100, func() bool {
+		for _, agent := range agents {
+			if agent.Status() != zongzi.AgentStatus_Ready {
+				return false
+			}
+		}
+		return true
+	}), `%#v`, agents)
+	for i := range len(nonvoting) {
+		ctrl2 = append(ctrl2, &controller{ctx: ctx, log: log, clock: clk, isLeader: map[uint64]bool{}})
+		dir := fmt.Sprintf("%s/%03d", dir, i+100)
+		if nonvoting[i], err = zongzi.NewAgent("pcb000", peers,
+			zongzi.WithDirRaft(dir+"/raft"),
+			zongzi.WithDirWAL(dir+"/wal"),
+			zongzi.WithAddrGossip(fmt.Sprintf(host+":%d", port+100+(i*10)+1)),
+			zongzi.WithAddrRaft(fmt.Sprintf(host+":%d", port+100+(i*10)+2)),
+			zongzi.WithAddrApi(fmt.Sprintf(host+":%d", port+100+(i*10)+3)),
+			zongzi.WithHostTags(`pantopic/config-bus=nonvoting`),
+			zongzi.WithRaftEventListener(ctrl2[i]),
+		); err != nil {
+			panic(err)
+		}
+		// TODO - Replace statemachine w/ wasm statemachine
+		nonvoting[i].StateMachineRegister(Uri, NewStateMachineFactory(log, dir+"/data"))
+		go func() {
+			if err = nonvoting[i].Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
+	}
+	// 10 seconds to start the replicas.
+	require.True(t, await(10, 100, func() bool {
+		for _, agent := range nonvoting {
+			if agent.Status() != zongzi.AgentStatus_Ready {
+				return false
+			}
+		}
+		return true
+	}), `%#v`, nonvoting)
+	// Start shard
+	// TODO - Replace shard creation with resource creation
+	shard, _, err = agents[0].ShardCreate(ctx, Uri,
+		zongzi.WithName("default.pcb.kv"),
+		zongzi.WithPlacementMembers(3, `pantopic/config-bus=member`),
+		zongzi.WithPlacementCover(`pantopic/config-bus=nonvoting`))
+	if err != nil {
+		panic(err)
+	}
+	// 5 seconds for shard to have active leader
+	require.True(t, await(10, 100, func() bool {
+		agents[0].State(ctx, func(s *zongzi.State) {
+			if found, ok := s.Shard(shard.ID); ok {
+				shard = found
+			}
+		})
+		return shard.Leader > 0
+	}))
+	// 5 seconds for shard to have 6 active replicas
+	require.True(t, await(10, 100, func() bool {
+		n := 0
+		agents[0].State(ctx, func(s *zongzi.State) {
+			s.ReplicaIterateByShardID(shard.ID, func(r zongzi.Replica) bool {
+				if r.Status == zongzi.ReplicaStatus_Active {
+					n++
+				}
+				return true
+			})
+		})
+		return n == 6
+	}))
+	for i := range agents {
+		if err = ctrl[i].Start(agents[i].Client(shard.ID), shard); err != nil {
+			panic(err)
+		}
+	}
+	for i := range nonvoting {
+		if err = ctrl2[i].Start(nonvoting[i].Client(shard.ID), shard); err != nil {
+			panic(err)
+		}
+	}
+
+	// gRPC server
+	var opts = []grpc.ServerOption{
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: false,
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    2 * time.Hour,
+			Timeout: 20 * time.Second,
+		}),
+	}
+	var grpcServer = grpc.NewServer(opts...)
+
+	// WASM gRPC services
+	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	wasi_snapshot_preview1.MustInstantiate(ctx, runtime)
+	var (
+		hostModGrpcServer  = wazero_grpc_server.New()
+		hostModShardClient = wazero_shard_client.New(
+			wazero_shard_client.WithNamespace(`default`),
+			wazero_shard_client.WithResource(`pcb`),
+		)
+	)
+	if err = hostModShardClient.Register(ctx, runtime); err != nil {
+		panic(err)
+	}
+	if err = hostModGrpcServer.Register(ctx, runtime); err != nil {
+		panic(err)
+	}
+	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc, wazeropool.WithModuleConfig(wazero.NewModuleConfig().
+		WithStdout(os.Stdout)))
+	if err != nil {
+		panic(err)
+	}
+	pool.Run(func(mod api.Module) {
+		if ctx, err = hostModGrpcServer.InitContext(ctx, mod); err != nil {
+			panic(err)
+		}
+		if ctx, err = hostModShardClient.InitContext(ctx, mod, agents[0]); err != nil {
+			panic(err)
+		}
+	})
+	if err = hostModGrpcServer.RegisterServices(ctx, grpcServer, pool, hostModShardClient.ContextCopy); err != nil {
+		panic(err)
+	}
+
+	grpcListener, err := net.Listen("tcp", ":2379")
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		if err = grpcServer.Serve(grpcListener); err != nil {
+			panic(err)
+		}
+	}()
+	conn, err := grpc.NewClient("127.0.0.1:2379", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	// wait = func(t time.Duration) {
+	// 	time.Sleep(t)
+	// }
+	svcKv = newParityKvService(conn)
+
+	// TODO - Replace services with wasm services
+	client := agents[0].Client(shard.ID)
+	// svcKv = NewServiceKv(client)
+	svcLease = NewServiceLease(client)
+	svcWatch = NewServiceWatch(client)
+	svcCluster = NewServiceCluster(client, "")
+	svcMaintenance = NewServiceMaintenance(client)
+}
+
 func testInsert(t *testing.T) {
 	put := &internal.PutRequest{
 		Key:   []byte(`test-key`),
@@ -278,6 +509,7 @@ func testInsert(t *testing.T) {
 			} else {
 				require.NotNil(t, err)
 				assert.Nil(t, resp)
+				assert.Equal(t, internal.ErrGRPCKeyTooLong.Error(), err.Error())
 			}
 		})
 	})
@@ -289,6 +521,7 @@ func testInsert(t *testing.T) {
 			})
 			require.NotNil(t, err)
 			assert.Nil(t, resp)
+			assert.Equal(t, internal.ErrGRPCEmptyKey.Error(), err.Error())
 		})
 	})
 }
