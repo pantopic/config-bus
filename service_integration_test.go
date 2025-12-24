@@ -509,7 +509,7 @@ func testInsert(t *testing.T) {
 			} else {
 				require.NotNil(t, err)
 				assert.Nil(t, resp)
-				assert.Equal(t, internal.ErrGRPCKeyTooLong, err)
+				assert.Equal(t, internal.ErrGRPCKeyTooLong.Error(), err.Error())
 			}
 		})
 	})
@@ -521,7 +521,7 @@ func testInsert(t *testing.T) {
 			})
 			require.NotNil(t, err)
 			assert.Nil(t, resp)
-			assert.Equal(t, internal.ErrGRPCEmptyKey, err)
+			assert.Equal(t, internal.ErrGRPCEmptyKey.Error(), err.Error())
 		})
 	})
 }
