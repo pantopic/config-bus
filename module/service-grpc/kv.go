@@ -21,34 +21,26 @@ func kvRange(in []byte) (out []byte, err error) {
 	if err != nil {
 		return []byte(err.Error()), status.New(codes.InvalidArgument, err.Error()).Err()
 	}
-	_, out, err = kvShard().Read(append(in, QUERY_KV_RANGE), !rangeRequest.Serializable)
-	return
+	return grpcError(kvShard().
+		Read(append(in, QUERY_KV_RANGE), rangeRequest.Serializable))
 }
 
 func kvPut(in []byte) (out []byte, err error) {
-	var val uint64
-	val, out, err = kvShard().Apply(append(in, CMD_KV_PUT))
-	if val != 1 {
-		if grpcErr, ok := errStringToError[string(out)]; ok {
-			err = grpcErr
-		} else {
-			err = status.New(codes.Unknown, string(out)).Err()
-		}
-	}
-	return
+	return grpcError(kvShard().
+		Apply(append(in, CMD_KV_PUT)))
 }
 
 func kvDeleteRange(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, CMD_KV_DELETE_RANGE))
-	return
+	return grpcError(kvShard().
+		Apply(append(in, CMD_KV_DELETE_RANGE)))
 }
 
 func kvTxn(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, CMD_KV_TXN))
-	return
+	return grpcError(kvShard().
+		Apply(append(in, CMD_KV_TXN)))
 }
 
 func kvCompact(in []byte) (out []byte, err error) {
-	_, out, err = kvShard().Apply(append(in, CMD_KV_COMPACT))
-	return
+	return grpcError(kvShard().
+		Apply(append(in, CMD_KV_COMPACT)))
 }
