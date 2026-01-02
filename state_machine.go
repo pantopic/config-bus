@@ -821,7 +821,8 @@ func (sm *stateMachine) cmdLeaseGrant(
 		item.id = uint64(req.ID)
 	}
 	if item.expires > 0 {
-		res.Error = internal.ErrGRPCDuplicateKey.Error()
+		res.Error = internal.ErrGRPCLeaseExist.Error()
+		return
 	} else {
 		item.renewed = epoch
 		item.expires = epoch + uint64(req.TTL)
@@ -868,6 +869,7 @@ func (sm *stateMachine) cmdLeaseRevoke(
 	if err = sm.dbLease.del(txn, item.id); err != nil {
 		return
 	}
+	val = 1
 	return
 }
 

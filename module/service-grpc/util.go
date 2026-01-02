@@ -6,7 +6,7 @@ import (
 )
 
 func grpcError(val uint64, out []byte, err error) ([]byte, error) {
-	if val != 1 {
+	if err == nil && val != 1 {
 		if grpcErr, ok := errStringToError[string(out)]; ok {
 			err = grpcErr
 		} else {

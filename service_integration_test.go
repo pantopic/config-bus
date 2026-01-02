@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/pantopic/wazero-grpc-server/host"
+	"github.com/pantopic/wazero-pipe/host"
 	"github.com/pantopic/wazero-pool"
 	"github.com/pantopic/wazero-shard-client/host"
 	"github.com/tetratelabs/wazero"
@@ -411,12 +412,16 @@ func setupCluster(t *testing.T) {
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	wasi_snapshot_preview1.MustInstantiate(ctx, runtime)
 	var (
+		hostModPipe        = wazero_pipe.New()
 		hostModGrpcServer  = wazero_grpc_server.New()
 		hostModShardClient = wazero_shard_client.New(
 			wazero_shard_client.WithNamespace(`default`),
 			wazero_shard_client.WithResource(`pcb`),
 		)
 	)
+	if err = hostModPipe.Register(ctx, runtime); err != nil {
+		panic(err)
+	}
 	if err = hostModShardClient.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
@@ -429,6 +434,9 @@ func setupCluster(t *testing.T) {
 		panic(err)
 	}
 	pool.Run(func(mod api.Module) {
+		if ctx, err = hostModPipe.InitContext(ctx, mod); err != nil {
+			panic(err)
+		}
 		if ctx, err = hostModGrpcServer.InitContext(ctx, mod); err != nil {
 			panic(err)
 		}
@@ -436,7 +444,9 @@ func setupCluster(t *testing.T) {
 			panic(err)
 		}
 	})
-	if err = hostModGrpcServer.RegisterServices(ctx, grpcServer, pool, hostModShardClient.ContextCopy); err != nil {
+	if err = hostModGrpcServer.RegisterServices(ctx, grpcServer, pool,
+		hostModShardClient.ContextCopy,
+		hostModPipe.ContextCopy); err != nil {
 		panic(err)
 	}
 
@@ -457,11 +467,12 @@ func setupCluster(t *testing.T) {
 	// 	time.Sleep(t)
 	// }
 	svcKv = newParityKvService(conn)
+	svcLease = newParityLeaseService(conn)
 
 	// TODO - Replace services with wasm services
 	client := agents[0].Client(shard.ID)
 	// svcKv = NewServiceKv(client)
-	svcLease = NewServiceLease(client)
+	// svcLease = NewServiceLease(client)
 	svcWatch = NewServiceWatch(client)
 	svcCluster = NewServiceCluster(client, "")
 	svcMaintenance = NewServiceMaintenance(client)

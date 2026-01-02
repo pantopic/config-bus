@@ -1,6 +1,8 @@
 github.com/aperturerobotics/protobuf-go-lite v0.11.0 h1:IAaZISqrEpodqECYxk0yKWgROEbZtMhs7bErP+Zma9o=
 github.com/aperturerobotics/protobuf-go-lite v0.11.0/go.mod h1:c4kGy7Dkfz6B1m0t4QBIMQoNeQ7m+nYj3Qxxnlwhygo=
-github.com/pantopic/wazero-grpc-server/sdk-go v0.0.9 h1:tlwMKzGkM8NfxZ95QY9JIF/yvk00YWTEwS50otH27KE=
-github.com/pantopic/wazero-grpc-server/sdk-go v0.0.9/go.mod h1:hGD7Xh7atAX5dKKcJ0YX97RapK8WlXzw8ViLiIMtNtI=
+github.com/pantopic/wazero-grpc-server/sdk-go v0.0.10 h1:9N91bcRr4VkX/+EbCUOd6NcVOLk9zjbfFVhgA7EBHDY=
+github.com/pantopic/wazero-grpc-server/sdk-go v0.0.10/go.mod h1:hGD7Xh7atAX5dKKcJ0YX97RapK8WlXzw8ViLiIMtNtI=
+github.com/pantopic/wazero-pipe/sdk-go v0.0.2 h1:8BNv+MvjqO0w/K3Ydmu96aI4iLBXIht4ZMwkb5fANQI=
+github.com/pantopic/wazero-pipe/sdk-go v0.0.2/go.mod h1:MZ7tJJL942OkPNGtDRwnQk1hP60ZSEmV4+s7fac93sM=
 github.com/pantopic/wazero-shard-client/sdk-go v0.0.0-20250811184815-79ac9960e070 h1:be6wTiKP7rtLzVTLASjKDF7x7+Uqaqwh343KNhyf/yY=
 github.com/pantopic/wazero-shard-client/sdk-go v0.0.0-20250811184815-79ac9960e070/go.mod h1:bAwjgvpHsSnfjRNbxgI/dg3aAhUzQ0Que8B71UCLQfc=
