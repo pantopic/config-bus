@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/pantopic/wazero-grpc-server/sdk-go"
 	"github.com/pantopic/wazero-grpc-server/sdk-go/codes"
 	"github.com/pantopic/wazero-grpc-server/sdk-go/status"
 	"github.com/pantopic/wazero-shard-client/sdk-go"
@@ -9,8 +10,17 @@ import (
 )
 
 var (
-	rangeRequest = new(internal.RangeRequest)
+	rangeRequest = &internal.RangeRequest{}
 )
+
+func kvInit() {
+	grpc_server.NewService(`etcdserverpb.KV`).
+		Unary(`Range`, kvRange).
+		Unary(`Put`, kvPut).
+		Unary(`DeleteRange`, kvDeleteRange).
+		Unary(`Txn`, kvTxn).
+		Unary(`Compact`, kvCompact)
+}
 
 func kvShard() shard_client.Client {
 	return shard_client.New(`kv`)

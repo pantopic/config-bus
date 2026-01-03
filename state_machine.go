@@ -505,6 +505,22 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			return
 		}
 		res.Value = 1
+	case QUERY_HEADER:
+		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+			rev, err = sm.dbMeta.getRevision(txn)
+			if err != nil {
+				return
+			}
+			return
+		})
+		resp := sm.responseHeader(rev)
+		res.Data, err = proto.Marshal(resp)
+		if err != nil {
+			sm.log.Error("Invalid response", "resp", resp, "err", err)
+			res.Data = []byte(err.Error())
+			return
+		}
+		res.Value = 1
 	}
 	return
 }

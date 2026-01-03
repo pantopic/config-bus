@@ -76,13 +76,10 @@ func TestService(t *testing.T) {
 	t.Run("version", testVersion)
 	t.Run("watch", testWatch)
 	t.Run("controller", testController)
+	t.Run("maintenance", testMaintenance)
+	t.Run("cluster", testCluster)
 
 	// TODO - Prometheus metrics
-	// TODO - Correct Status
-	// TODO - Defragment
-	// TODO - Hash
-	// TODO - HashKV
-	// TODO - MemberList
 }
 
 // Run integration tests against locally running etcd instance
@@ -213,9 +210,9 @@ func setupPcb(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	// 5 seconds for shard to have active leader
+	// 10 seconds for shard to have active leader
 	require.True(t, await(10, 100, func() bool {
-		agents[0].State(ctx, func(s *zongzi.State) {
+		agents[0].StateLocal(func(s *zongzi.State) {
 			if found, ok := s.Shard(shard.ID); ok {
 				shard = found
 			}
@@ -362,9 +359,9 @@ func setupCluster(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	// 5 seconds for shard to have active leader
+	// 10 seconds for shard to have active leader
 	require.True(t, await(10, 100, func() bool {
-		agents[0].State(ctx, func(s *zongzi.State) {
+		agents[0].StateLocal(func(s *zongzi.State) {
 			if found, ok := s.Shard(shard.ID); ok {
 				shard = found
 			}
@@ -463,19 +460,18 @@ func setupCluster(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	// wait = func(t time.Duration) {
-	// 	time.Sleep(t)
-	// }
 	svcKv = newParityKvService(conn)
 	svcLease = newParityLeaseService(conn)
+	svcCluster = newParityClusterService(conn)
+	svcMaintenance = newParityMaintenanceService(conn)
 
 	// TODO - Replace services with wasm services
 	client := agents[0].Client(shard.ID)
 	// svcKv = NewServiceKv(client)
 	// svcLease = NewServiceLease(client)
 	svcWatch = NewServiceWatch(client)
-	svcCluster = NewServiceCluster(client, "")
-	svcMaintenance = NewServiceMaintenance(client)
+	// svcCluster = NewServiceCluster(client, "")
+	// svcMaintenance = NewServiceMaintenance(client)
 }
 
 func testInsert(t *testing.T) {
@@ -2586,6 +2582,28 @@ func testWatch(t *testing.T) {
 		<-done
 		return true
 	}))
+}
+
+func testMaintenance(t *testing.T) {
+	t.Run("status", func(t *testing.T) {
+		resp, err := svcMaintenance.Status(ctx, &internal.StatusRequest{})
+		require.Nil(t, err, err)
+		if parity {
+			assert.Equal(t, "3.5.9", resp.Version)
+		} else {
+			assert.Equal(t, "3.6.5", resp.Version)
+		}
+		assert.GreaterOrEqual(t, resp.RaftIndex, uint64(resp.Header.Revision))
+	})
+}
+
+func testCluster(t *testing.T) {
+	t.Run("status", func(t *testing.T) {
+		resp, err := svcCluster.MemberList(ctx, &internal.MemberListRequest{})
+		require.Nil(t, err, err)
+		assert.GreaterOrEqual(t, len(resp.Members), 1)
+		assert.GreaterOrEqual(t, resp.Members[0].ID, uint64(1))
+	})
 }
 
 func delOp(req *internal.DeleteRangeRequest) *internal.RequestOp {
