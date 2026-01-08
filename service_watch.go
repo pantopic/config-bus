@@ -54,7 +54,9 @@ func (s *serviceWatch) Watch(
 			req := ut.CreateRequest
 			if req.WatchId > 0 {
 				mu.RLock()
-				if _, ok := watches.Get(req.WatchId); ok {
+				_, ok := watches.Get(req.WatchId)
+				mu.RUnlock()
+				if ok {
 					slog.Info("Ignoring request to create existing watch", "id", req.WatchId)
 					if err = s.watchResp(server, &internal.WatchResponse{
 						WatchId:      -1,
@@ -65,10 +67,8 @@ func (s *serviceWatch) Watch(
 						slog.Error("Unable to send watch create failure response", "err", err.Error())
 						return err
 					}
-					mu.RUnlock()
-					break
+					continue
 				}
-				mu.RUnlock()
 			}
 			var w *watch
 			id := req.WatchId

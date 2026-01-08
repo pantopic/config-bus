@@ -1993,17 +1993,22 @@ func testWatch(t *testing.T) {
 	}
 	var watchID int64
 	t.Run("create", func(t *testing.T) {
+		var res *internal.WatchResponse
 		t.Run("new", func(t *testing.T) {
 			sendWatchCreate(&internal.WatchCreateRequest{
 				Key:      []byte(`test-watch-000`),
 				RangeEnd: []byte(`test-watch-100`),
 				// ProgressNotify: true,
 			})
-			res := <-s.resChan
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
 			if PCB_WATCH_ID_ZERO_INDEX {
 				require.Equal(t, int64(0), res.WatchId, res)
 				sendWatchCancel(int64(0))
-				res = <-s.resChan
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
 				require.Equal(t, int64(0), res.WatchId, res)
 				assert.True(t, res.Canceled)
 				sendWatchCreate(&internal.WatchCreateRequest{
@@ -2011,7 +2016,9 @@ func testWatch(t *testing.T) {
 					RangeEnd: []byte(`test-watch-100`),
 					// ProgressNotify: true,
 				})
-				res = <-s.resChan
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
 			} else {
 				require.Equal(t, int64(1), res.WatchId, res)
 			}
@@ -2027,7 +2034,9 @@ func testWatch(t *testing.T) {
 				RangeEnd: []byte(`test-watch-100`),
 				WatchId:  watchID,
 			})
-			res := <-s.resChan
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
 			require.EqualValues(t, -1, res.WatchId, res)
 			assert.True(t, res.Created, res)
 			assert.True(t, res.Canceled)
@@ -2040,13 +2049,17 @@ func testWatch(t *testing.T) {
 					RangeEnd:      []byte(`test-watch-100`),
 					StartRevision: 2,
 				})
-				res := <-s.resChan
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
 				assert.Greater(t, res.WatchId, int64(0), res)
 				assert.True(t, res.Created)
 				assert.False(t, res.Canceled)
 				assert.Equal(t, int64(0), res.CompactRevision)
 				wid := res.WatchId
-				res = <-s.resChan
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
 				assert.EqualValues(t, wid, res.WatchId, res)
 				assert.False(t, res.Created)
 				assert.True(t, res.Canceled)
@@ -2070,6 +2083,7 @@ func testWatch(t *testing.T) {
 		})
 	})
 	t.Run("receive", func(t *testing.T) {
+		var res *internal.WatchResponse
 		t.Run("put", func(t *testing.T) {
 			req := &internal.PutRequest{
 				Key:   []byte(`test-watch-000`),
@@ -2077,7 +2091,9 @@ func testWatch(t *testing.T) {
 			}
 			_, err = svcKv.Put(ctx, req)
 			require.Nil(t, err, err)
-			res := <-s.resChan
+			timeout(t, time.Second, func() {
+				res = <-s.resChan
+			})
 			assert.Equal(t, watchID, res.WatchId, res)
 			assert.False(t, res.Created)
 			assert.False(t, res.Canceled)

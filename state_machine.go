@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/PowerDNS/lmdb-go/lmdb"
@@ -531,8 +532,11 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
-	// slog.Info(`sm Watch`, `req`, req)
-	var err error
+	sm.watch(ctx, req, result, nil)
+}
+
+// watch is synchronous if callback is nil. Otherwise async.
+func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequest, result chan<- *Result, callback func()) (err error) {
 	var since = uint64(req.StartRevision)
 	var min uint64
 	err = sm.env.View(func(txn *lmdb.Txn) (err error) {
@@ -663,44 +667,101 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Error scanning", "err", err)
 		return
 	}
-	var sent int
-	var alertRev uint64
-loop:
+	sync := func() {
+		var sent int
+		var alertRev uint64
+		for {
+			select {
+			case <-ctx.Done():
+				sm.log.Debug("Watcher done", "id", req.WatchId)
+				return
+			case alertRev = <-alert:
+			alertLoop:
+				for {
+					select {
+					case alertRev = <-alert:
+						sm.log.Debug("Watch Alert Drain", `alertRev`, alertRev)
+					default:
+						break alertLoop
+					}
+				}
+				if alertRev <= rev {
+					// Skip scan for alerts received between Watch start and Event scan 2
+					sm.log.Debug("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
+					continue
+				}
+				rev, sent, err = scan()
+				if err != nil {
+					sm.log.Error("Error reading events", "err", err)
+					return
+				}
+				if sent == 0 && req.ProgressNotify {
+					res := zongzi.GetResult()
+					res.Data = append(res.Data, WatchMessageType_NOTIFY)
+					res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(rev))
+					if err != nil {
+						sm.log.Error("Error notifying progress", "err", err)
+						return
+					}
+					result <- res
+				}
+			}
+		}
+	}
+	// Sync
+	if callback != nil {
+		go func() {
+			defer callback()
+			sync()
+		}()
+	} else {
+		sync()
+	}
+	return
+}
+
+func (sm *stateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
+	watches := make(map[int64]context.CancelFunc)
+	mu := sync.Mutex{}
+	req := &internal.WatchRequest{}
 	for {
 		select {
+		case b := <-in:
+			if err := proto.Unmarshal(b, req); err != nil {
+				sm.log.Error("Invalid stream message", "message", b)
+				return
+			}
 		case <-ctx.Done():
-			sm.log.Debug("Watcher done", "id", req.WatchId)
-			break loop
-		case alertRev = <-alert:
-		alertLoop:
-			for {
-				select {
-				case alertRev = <-alert:
-					sm.log.Debug("Watch Alert Drain", `alertRev`, alertRev)
-				default:
-					break alertLoop
+			mu.Lock()
+			defer mu.Unlock()
+			for _, cancel := range watches {
+				cancel()
+			}
+			return
+		}
+		switch ut := req.RequestUnion.(type) {
+		case *internal.WatchRequest_CreateRequest:
+			req := ut.CreateRequest
+			mu.Lock()
+			ctx, watches[req.WatchId] = context.WithCancel(ctx)
+			mu.Unlock()
+			sm.watch(ctx, req, out, func() {
+				mu.Lock()
+				defer mu.Unlock()
+				if cancel, ok := watches[req.WatchId]; ok {
+					cancel()
+					delete(watches, req.WatchId)
 				}
+			})
+		case *internal.WatchRequest_CancelRequest:
+			req := ut.CancelRequest
+			mu.Lock()
+			if cancel, ok := watches[req.WatchId]; ok {
+				cancel()
+				delete(watches, req.WatchId)
 			}
-			if alertRev <= rev {
-				// Skip scan for alerts received between Watch start and Event scan 2
-				sm.log.Debug("Watch Alert Skip", "rev", rev, "alertRev", alertRev)
-				continue
-			}
-			rev, sent, err = scan()
-			if err != nil {
-				sm.log.Error("Error reading events", "err", err)
-				break loop
-			}
-			if sent == 0 && req.ProgressNotify {
-				res := zongzi.GetResult()
-				res.Data = append(res.Data, WatchMessageType_NOTIFY)
-				res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(rev))
-				if err != nil {
-					sm.log.Error("Error notifying progress", "err", err)
-					break loop
-				}
-				result <- res
-			}
+			mu.Unlock()
+		case *internal.WatchRequest_ProgressRequest:
 		}
 	}
 }
