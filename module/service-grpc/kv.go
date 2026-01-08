@@ -11,6 +11,7 @@ import (
 
 var (
 	rangeRequest = &internal.RangeRequest{}
+	shardNameKv  = []byte(`kv`)
 )
 
 func kvInit() {
@@ -23,7 +24,7 @@ func kvInit() {
 }
 
 func kvShard() shard_client.Client {
-	return shard_client.New(`kv`)
+	return shard_client.New(shardNameKv)
 }
 
 func kvRange(in []byte) (out []byte, err error) {
