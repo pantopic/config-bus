@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/pantopic/wazero-global/host"
 	"github.com/pantopic/wazero-grpc-server/host"
 	"github.com/pantopic/wazero-pipe/host"
 	"github.com/pantopic/wazero-pool"
@@ -98,15 +99,18 @@ func main() {
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	wasi_snapshot_preview1.MustInstantiate(ctx, runtime)
 	var (
-		hostModPipe        = wazero_pipe.New()
+		hostModGlobal      = wazero_global.New()
 		hostModGrpc        = wazero_grpc_server.New()
+		hostModPipe        = wazero_pipe.New()
 		hostModShardClient = wazero_shard_client.New(
 			wazero_shard_client.WithNamespace(`default`),
 			wazero_shard_client.WithResource(`pcb`),
 		)
 	)
-	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc)
-	if err != nil {
+	if err = hostModGlobal.Register(ctx, runtime); err != nil {
+		panic(err)
+	}
+	if err = hostModGrpc.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
 	if err = hostModPipe.Register(ctx, runtime); err != nil {
@@ -115,10 +119,14 @@ func main() {
 	if err = hostModShardClient.Register(ctx, runtime); err != nil {
 		panic(err)
 	}
-	if err = hostModGrpc.Register(ctx, runtime); err != nil {
+	pool, err := wazeropool.New(ctx, runtime, wasmServiceGrpc)
+	if err != nil {
 		panic(err)
 	}
 	pool.Run(func(mod api.Module) {
+		if ctx, err = hostModGlobal.InitContext(ctx, mod); err != nil {
+			panic(err)
+		}
 		if ctx, err = hostModPipe.InitContext(ctx, mod); err != nil {
 			panic(err)
 		}

@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/pantopic/wazero-grpc-server/sdk-go/codes"
 	"github.com/pantopic/wazero-grpc-server/sdk-go/status"
+	"github.com/pantopic/wazero-shard-client/sdk-go"
 )
 
 func grpcError(val uint64, out []byte, err error) ([]byte, error) {
@@ -14,4 +15,8 @@ func grpcError(val uint64, out []byte, err error) ([]byte, error) {
 		}
 	}
 	return out, err
+}
+
+func kvShard() shard_client.Client {
+	return shard_client.New(shardNameKv)
 }

@@ -39,7 +39,9 @@ const (
 	WatchMessageType_EVENT
 	WatchMessageType_SYNC
 	WatchMessageType_NOTIFY
+	WatchMessageType_CANCELED
 	WatchMessageType_ERR_COMPACTED
+	WatchMessageType_ERR_EXISTS
 )
 
 const (
@@ -102,11 +104,6 @@ var (
 	// Disabled by default. !!! VIOLATES PARITY !!!
 	PCB_WATCH_ID_ZERO_INDEX = false
 
-	// PCB_WATCH_CREATE_COMPACTED determines whether to create a watch and then immediately cancel it when a client
-	// requests a watch with a compacted StartRevision. This is bad API design. Only the cancellation should be sent.
-	// Enabled by default for parity.
-	PCB_WATCH_CREATE_COMPACTED = true
-
 	// PCB_TXN_OPS_MAX sets the maximum number of operations allowed per transaction.
 	// Matches etcd by default. Limited by [PCB_TXN_OPS_LIMIT]
 	PCB_TXN_OPS_MAX = 128
@@ -133,6 +130,24 @@ var (
 	PCB_BATCH_LEASE_RENEWAL_LIMIT    = 1000
 	PCB_BATCH_LEASE_RENEWAL_INTERVAL = 500 * time.Millisecond
 )
+
+var flagName = map[*bool]string{
+	&PCB_RANGE_COUNT_FULL:           "PCB_RANGE_COUNT_FULL",
+	&PCB_RANGE_COUNT_FAKE:           "PCB_RANGE_COUNT_FAKE",
+	&PCB_RANGE_COUNT_FILTER_CORRECT: "PCB_RANGE_COUNT_FILTER_CORRECT",
+	&PCB_PATCH_ENABLED:              "PCB_PATCH_ENABLED",
+	&PCB_COMPRESSION_ENABLED:        "PCB_COMPRESSION_ENABLED",
+	&PCB_TXN_MULTI_WRITE_ENABLED:    "PCB_TXN_MULTI_WRITE_ENABLED",
+	&PCB_WATCH_ID_ZERO_INDEX:        "PCB_WATCH_ID_ZERO_INDEX",
+	&PCB_READ_LOCAL:                 "PCB_READ_LOCAL",
+	&PCB_BATCH_LEASE_RENEWAL:        "PCB_BATCH_LEASE_RENEWAL",
+}
+
+var flagNameInt = map[*int]string{
+	&PCB_TXN_OPS_MAX:               "PCB_TXN_OPS_MAX",
+	&PCB_RESPONSE_SIZE_MAX:         "PCB_RESPONSE_SIZE_MAX",
+	&PCB_BATCH_LEASE_RENEWAL_LIMIT: "PCB_BATCH_LEASE_RENEWAL_LIMIT",
+}
 
 var (
 	ErrChecksumInvalid = fmt.Errorf(`Checksum invalid`)

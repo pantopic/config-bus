@@ -106,16 +106,3 @@ func TestKv(t *testing.T) {
 		assert.Equal(t, item.key, item2.key)
 	})
 }
-
-func withGlobal(flag *bool, val bool, fn func()) {
-	prev := *flag
-	*flag = val
-	fn()
-	*flag = prev
-}
-func withGlobalInt(flag *int, val int, fn func()) {
-	prev := *flag
-	*flag = val
-	fn()
-	*flag = prev
-}

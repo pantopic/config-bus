@@ -4,14 +4,26 @@ import (
 	"github.com/pantopic/wazero-pipe/sdk-go"
 )
 
+const (
+	PIPE_ID_LEASE = iota
+	PIPE_ID_WATCH
+)
+
+const (
+	SET_ID_WATCH = iota
+)
+
 var (
-	leaseBridge *pipe.Pipe[[]byte]
+	pipeLease *pipe.Pipe[[]byte]
+	pipeWatch *pipe.Pipe[[]byte]
 )
 
 func main() {
-	leaseBridge = pipe.New[[]byte](pipe.WithID(0))
-	kvInit()
-	leaseInit()
-	clusterInit()
-	maintenanceInit()
+	pipeLease = pipe.New[[]byte](pipe.WithID(PIPE_ID_LEASE))
+	pipeWatch = pipe.New[[]byte](pipe.WithID(PIPE_ID_WATCH))
+	serviceClusterInit()
+	serviceKvInit()
+	serviceLeaseInit()
+	serviceMaintenanceInit()
+	serviceWatchInit()
 }

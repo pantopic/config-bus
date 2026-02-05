@@ -20,7 +20,7 @@ var (
 	}
 )
 
-func maintenanceInit() {
+func serviceMaintenanceInit() {
 	grpc_server.NewService(`etcdserverpb.Maintenance`).
 		Unary(`Alarm`, maintenanceAlarm).
 		Unary(`Status`, maintenanceStatus).

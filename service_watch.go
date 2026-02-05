@@ -95,11 +95,6 @@ func (s *serviceWatch) Watch(
 			mu.RUnlock()
 			if !ok {
 				slog.Info("Ignoring request to cancel non-existent watch", "id", req.WatchId)
-				if err = s.watchResp(server, &internal.WatchResponse{
-					WatchId: req.WatchId,
-				}); err != nil {
-					slog.Error("Unable to send watch cancel failure response", "req", req, "err", err.Error())
-				}
 				break
 			}
 			w.Close()
@@ -257,31 +252,21 @@ func (s *serviceWatch) watch(
 					slog.Error("Error unmarshaling compaction error", "err", err)
 					return
 				}
-				if PCB_WATCH_CREATE_COMPACTED {
-					id = idFunc()
-					if err = s.watchResp(server, &internal.WatchResponse{
-						WatchId: id,
-						Created: true,
-					}); err != nil {
-						slog.Error("Error sending watch created response", "err", err)
-						return
-					}
-					if err = s.watchResp(server, &internal.WatchResponse{
-						WatchId:         id,
-						Canceled:        true,
-						CompactRevision: header.Revision,
-					}); err != nil {
-						slog.Error("Error sending compacted error response", "err", err)
-						return
-					}
-				} else {
-					if err = s.watchResp(server, &internal.WatchResponse{
-						WatchId:         req.WatchId,
-						CompactRevision: header.Revision,
-					}); err != nil {
-						slog.Error("Error sending compacted error response", "err", err)
-						return
-					}
+				id = idFunc()
+				if err = s.watchResp(server, &internal.WatchResponse{
+					WatchId: id,
+					Created: true,
+				}); err != nil {
+					slog.Error("Error sending watch created response", "err", err)
+					return
+				}
+				if err = s.watchResp(server, &internal.WatchResponse{
+					WatchId:         id,
+					Canceled:        true,
+					CompactRevision: header.Revision,
+				}); err != nil {
+					slog.Error("Error sending compacted error response", "err", err)
+					return
 				}
 				done()
 			}

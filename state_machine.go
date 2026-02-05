@@ -15,6 +15,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/logbn/byteinterval"
 	"github.com/logbn/zongzi"
+	"github.com/tidwall/btree"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
@@ -532,18 +533,17 @@ func (sm *stateMachine) Watch(ctx context.Context, query []byte, result chan<- *
 		sm.log.Error("Invalid query", "query", query)
 		return
 	}
-	sm.watch(ctx, req, result, nil)
+	sm.watch(ctx, req, result, nil, nil)
 }
 
 // watch is synchronous if callback is nil. Otherwise async.
-func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequest, result chan<- *Result, callback func()) (err error) {
+func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequest, result chan<- *Result, callback func(), nextID func() int64) (err error) {
 	var since = uint64(req.StartRevision)
 	var min uint64
 	err = sm.env.View(func(txn *lmdb.Txn) (err error) {
 		if min, err = sm.dbMeta.getRevisionMin(txn); err != nil {
 			return
 		}
-		// slog.Info(`sm Watch`, `since`, since, `min`, min)
 		if since > 0 && min > since {
 			err = internal.ErrGRPCCompacted
 		}
@@ -558,18 +558,21 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 			sm.log.Error("Error notifying progress", "err", err)
 			return
 		}
+		res.Value = uint64(req.WatchId)
 		result <- res
 		return
 	} else if err != nil {
 		sm.log.Error("Error checking min revision", "err", err)
 		return
 	}
+	if req.WatchId == 0 && nextID != nil {
+		req.WatchId = nextID()
+	}
 	var filtered = map[uint8]bool{}
 	for _, f := range req.Filters {
 		filtered[uint8(f)] = true
 	}
 	scan := func() (rev uint64, sent int, err error) {
-		// slog.Info(`sm Watch`, `req`, req)
 		err = sm.env.View(func(txn *lmdb.Txn) (err error) {
 			rev, err = sm.dbMeta.getRevision(txn)
 			if err != nil {
@@ -622,6 +625,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 					sm.log.Error("Error serializing event kv", "err", err)
 					return
 				}
+				res.Value = uint64(req.WatchId)
 				result <- res
 				sent++
 			}
@@ -633,6 +637,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 					sm.log.Error("Error marshaling header", "err", err)
 					return
 				}
+				res.Value = uint64(req.WatchId)
 				result <- res
 			}
 			return
@@ -648,6 +653,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 		sm.log.Error("Error sending init", "err", err)
 		return
 	}
+	res.Value = uint64(req.WatchId)
 	result <- res
 	var rev uint64
 	// Event scan 1
@@ -657,9 +663,8 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 	}
 	// Watch Start
 	var alert = make(chan uint64, 1e3)
-	if intv := sm.watches.Insert(req.Key, req.RangeEnd, alert); intv != nil {
-		defer intv.Remove()
-	} else {
+	intv := sm.watches.Insert(req.Key, req.RangeEnd, alert)
+	if intv == nil {
 		sm.log.Warn(`Invalid watch range`, `Key`, string(req.Key), `RangeEnd`, string(req.RangeEnd))
 	}
 	// Event scan 2
@@ -668,6 +673,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 		return
 	}
 	sync := func() {
+		defer intv.Remove()
 		var sent int
 		var alertRev uint64
 		for {
@@ -703,6 +709,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 						sm.log.Error("Error notifying progress", "err", err)
 						return
 					}
+					res.Value = uint64(req.WatchId)
 					result <- res
 				}
 			}
@@ -711,8 +718,8 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 	// Sync
 	if callback != nil {
 		go func() {
-			defer callback()
 			sync()
+			callback()
 		}()
 	} else {
 		sync()
@@ -721,9 +728,24 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 }
 
 func (sm *stateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<- *Result) {
-	watches := make(map[int64]context.CancelFunc)
+	var watches = &btree.Map[int64, context.CancelFunc]{}
 	mu := sync.Mutex{}
 	req := &internal.WatchRequest{}
+	var watchID int64
+	if PCB_WATCH_ID_ZERO_INDEX {
+		watchID--
+	}
+	nextWatchID := func() int64 {
+		mu.Lock()
+		defer mu.Unlock()
+		for {
+			watchID++
+			if _, ok := watches.Get(watchID); !ok {
+				break
+			}
+		}
+		return watchID
+	}
 	for {
 		select {
 		case b := <-in:
@@ -733,35 +755,70 @@ func (sm *stateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<-
 			}
 		case <-ctx.Done():
 			mu.Lock()
-			defer mu.Unlock()
-			for _, cancel := range watches {
+			for _, cancel := range watches.Values() {
 				cancel()
 			}
+			mu.Unlock()
 			return
 		}
 		switch ut := req.RequestUnion.(type) {
 		case *internal.WatchRequest_CreateRequest:
 			req := ut.CreateRequest
+			if req.WatchId == 0 {
+				req.WatchId = nextWatchID()
+			} else if _, ok := watches.Get(req.WatchId); ok {
+				res := zongzi.GetResult()
+				res.Data = append(res.Data, WatchMessageType_ERR_EXISTS)
+				res.Value = 1
+				out <- res
+				break
+			}
 			mu.Lock()
-			ctx, watches[req.WatchId] = context.WithCancel(ctx)
+			ctx, cancel := context.WithCancel(ctx)
+			watches.Set(req.WatchId, cancel)
 			mu.Unlock()
 			sm.watch(ctx, req, out, func() {
 				mu.Lock()
-				defer mu.Unlock()
-				if cancel, ok := watches[req.WatchId]; ok {
+				if cancel, ok := watches.Get(req.WatchId); ok {
 					cancel()
-					delete(watches, req.WatchId)
+					watches.Delete(req.WatchId)
 				}
-			})
+				mu.Unlock()
+			}, nextWatchID)
 		case *internal.WatchRequest_CancelRequest:
 			req := ut.CancelRequest
 			mu.Lock()
-			if cancel, ok := watches[req.WatchId]; ok {
+			if cancel, ok := watches.Get(req.WatchId); ok {
 				cancel()
-				delete(watches, req.WatchId)
+				watches.Delete(req.WatchId)
+				res := zongzi.GetResult()
+				res.Data = append(res.Data, WatchMessageType_CANCELED)
+				res.Value = uint64(req.WatchId)
+				out <- res
 			}
 			mu.Unlock()
 		case *internal.WatchRequest_ProgressRequest:
+			var rev uint64
+			err := sm.env.View(func(txn *lmdb.Txn) (err error) {
+				rev, err = sm.dbMeta.getRevision(txn)
+				if err != nil {
+					return
+				}
+				return
+			})
+			res := zongzi.GetResult()
+			res.Data = append(res.Data, WatchMessageType_NOTIFY)
+			res.Data, err = sm.proto.MarshalAppend(res.Data, sm.responseHeader(rev))
+			if err != nil {
+				sm.log.Error("Error notifying progress", "err", err)
+				return
+			}
+			minWatchId, _, _ := watches.Min()
+			res.Value = uint64(minWatchId)
+			out <- res
+		default:
+			sm.log.Error("Invalid request", "req", req)
+			return
 		}
 	}
 }

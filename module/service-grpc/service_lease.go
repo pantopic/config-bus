@@ -6,7 +6,7 @@ import (
 	"github.com/pantopic/wazero-grpc-server/sdk-go"
 )
 
-func leaseInit() {
+func serviceLeaseInit() {
 	grpc_server.NewService(`etcdserverpb.Lease`).
 		Unary(`LeaseGrant`, leaseGrant).
 		Unary(`LeaseRevoke`, leaseRevoke).
@@ -33,7 +33,7 @@ func leaseKeepaliveRecv(in iter.Seq[[]byte]) (err error) {
 		if err != nil {
 			break
 		}
-		leaseBridge.Send(out)
+		pipeLease.Send(out)
 	}
 	return
 }
@@ -42,7 +42,7 @@ func leaseKeepaliveSend() (out iter.Seq[[]byte], err error) {
 	var res []byte
 	out = func(yield func([]byte) bool) {
 		for {
-			res, err = leaseBridge.Recv()
+			res, err = pipeLease.Recv()
 			if err != nil {
 				break
 			}

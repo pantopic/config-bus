@@ -17,7 +17,7 @@ var (
 	}
 )
 
-func clusterInit() {
+func serviceClusterInit() {
 	grpc_server.NewService(`etcdserverpb.Cluster`).
 		Unary(`MemberAdd`, clusterMemberAdd).
 		Unary(`MemberRemove`, clusterMemberRemove).
