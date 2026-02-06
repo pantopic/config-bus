@@ -14,7 +14,7 @@ require (
 	github.com/pantopic/wazero-grpc-server/host v0.0.11
 	github.com/pantopic/wazero-pipe/host v0.0.3
 	github.com/pantopic/wazero-pool v0.0.6
-	github.com/pantopic/wazero-shard-client/host v0.0.0-20250811184815-79ac9960e070
+	github.com/pantopic/wazero-shard-client/host v0.0.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/stretchr/testify v1.10.0
 	github.com/tetratelabs/wazero v1.11.0

@@ -6,5 +6,5 @@ github.com/pantopic/wazero-grpc-server/sdk-go v0.0.11 h1:4gLM3MiwJ3AmmgFqksPqPTm
 github.com/pantopic/wazero-grpc-server/sdk-go v0.0.11/go.mod h1:hGD7Xh7atAX5dKKcJ0YX97RapK8WlXzw8ViLiIMtNtI=
 github.com/pantopic/wazero-pipe/sdk-go v0.0.3 h1:8MCAj/qf7ni1iean0L2H+aqL7Q/NvQtG5i6iVL9nMac=
 github.com/pantopic/wazero-pipe/sdk-go v0.0.3/go.mod h1:MZ7tJJL942OkPNGtDRwnQk1hP60ZSEmV4+s7fac93sM=
-github.com/pantopic/wazero-shard-client/sdk-go v0.0.0-20250811184815-79ac9960e070 h1:be6wTiKP7rtLzVTLASjKDF7x7+Uqaqwh343KNhyf/yY=
-github.com/pantopic/wazero-shard-client/sdk-go v0.0.0-20250811184815-79ac9960e070/go.mod h1:bAwjgvpHsSnfjRNbxgI/dg3aAhUzQ0Que8B71UCLQfc=
+github.com/pantopic/wazero-shard-client/sdk-go v0.0.1 h1:xJhDEJwvZpYk3p8GJiQFZEZ+nHqi2595I4rgIlJsOyw=
+github.com/pantopic/wazero-shard-client/sdk-go v0.0.1/go.mod h1:bAwjgvpHsSnfjRNbxgI/dg3aAhUzQ0Que8B71UCLQfc=
