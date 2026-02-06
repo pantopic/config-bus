@@ -7,9 +7,9 @@ require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/golang/snappy v1.0.0
-	github.com/kevburnsjr/batchy v0.0.0-20221021015910-67d040864806
-	github.com/logbn/byteinterval v0.0.2-0.20251121135322-7e5198c457d9
-	github.com/logbn/zongzi v0.0.20-0.20251121140144-1331e1333793
+	github.com/kevburnsjr/batchy v0.0.1
+	github.com/logbn/byteinterval v0.0.2
+	github.com/logbn/zongzi v0.0.21
 	github.com/pantopic/wazero-global/host v0.0.2
 	github.com/pantopic/wazero-grpc-server/host v0.0.11
 	github.com/pantopic/wazero-pipe/host v0.0.3
