@@ -50,7 +50,8 @@ var (
 	svcCluster     internal.ClusterServer
 	svcMaintenance internal.MaintenanceServer
 
-	globalOverride func(key string, val uint64)
+	globalSet func(key string, val uint64)
+	globalDel func(key string)
 )
 
 //go:embed cmd/cluster/service\-grpc\.wasm
@@ -457,7 +458,8 @@ func setupCluster(t *testing.T) {
 	); err != nil {
 		panic(err)
 	}
-	globalOverride = hostModGlobal.Override
+	globalSet = hostModGlobal.Set
+	globalDel = hostModGlobal.Del
 
 	grpcListener, err := net.Listen("tcp", ":2379")
 	if err != nil {

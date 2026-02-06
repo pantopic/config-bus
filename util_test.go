@@ -3,19 +3,13 @@ package pcb
 func withGlobal(flag *bool, val bool, fn func()) {
 	prev := *flag
 	*flag = val
-	if globalOverride != nil {
+	if globalSet != nil {
 		var gval = uint64(0)
 		if val {
 			gval = 1
 		}
-		globalOverride(flagName[flag], gval)
-		defer func() {
-			var gval = uint64(0)
-			if prev {
-				gval = 1
-			}
-			globalOverride(flagName[flag], uint64(gval))
-		}()
+		globalSet(flagName[flag], gval)
+		defer globalDel(flagName[flag])
 	}
 	fn()
 	*flag = prev
@@ -24,9 +18,9 @@ func withGlobal(flag *bool, val bool, fn func()) {
 func withGlobalInt(flag *int, val int, fn func()) {
 	prev := *flag
 	*flag = val
-	if globalOverride != nil {
-		globalOverride(flagNameInt[flag], uint64(val))
-		defer globalOverride(flagNameInt[flag], uint64(prev))
+	if globalSet != nil {
+		globalSet(flagNameInt[flag], uint64(val))
+		defer globalDel(flagNameInt[flag])
 	}
 	fn()
 	*flag = prev
