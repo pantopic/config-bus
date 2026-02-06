@@ -11,8 +11,8 @@ require (
 	github.com/logbn/byteinterval v0.0.2-0.20251121135322-7e5198c457d9
 	github.com/logbn/zongzi v0.0.20-0.20251121140144-1331e1333793
 	github.com/pantopic/wazero-global/host v0.0.2
-	github.com/pantopic/wazero-grpc-server/host v0.0.9
-	github.com/pantopic/wazero-pipe/host v0.0.2
+	github.com/pantopic/wazero-grpc-server/host v0.0.11
+	github.com/pantopic/wazero-pipe/host v0.0.3
 	github.com/pantopic/wazero-pool v0.0.6
 	github.com/pantopic/wazero-shard-client/host v0.0.0-20250811184815-79ac9960e070
 	github.com/soheilhy/cmux v0.1.5
