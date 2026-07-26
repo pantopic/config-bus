@@ -65,8 +65,6 @@ gen:
 		--go-grpc_out=internal \
 		--go-grpc_opt=paths=source_relative \
 		-I internal
-
-gen-lite:
 	@protoc internal/*.proto \
 		--plugin protoc-gen-go-lite="${GOBIN}/protoc-gen-go-lite" \
 		--go-lite_out=module/service-grpc/internal  \
@@ -74,13 +72,12 @@ gen-lite:
 		--go-lite_opt=features=marshal+unmarshal+size \
 		-I internal
 	@cp module/service-grpc/internal/* module/storage-kv/internal
+	@cp module/service-grpc/internal/* module/storage-lease/internal
 
 gen-install:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-gen-lite-install:
-	go install github.com/aperturerobotics/protobuf-go-lite/cmd/protoc-gen-go-lite@latest
+	go install github.com/aperturerobotics/protobuf-go-lite/cmd/protoc-gen-go-lite@v0.15.0
 
 wasm-storage-kv:
 	@cd module/storage-kv && tinygo build -buildmode=wasi-legacy -target=wasi -opt=s -gc=leaking -scheduler=none -o ../../embed/storage-kv.wasm -no-debug

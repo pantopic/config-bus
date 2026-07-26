@@ -6,9 +6,30 @@ option go_package = "github.com/pantopic/turbokube/internal";
 
 message TickRequest {
   uint64 term = 1;
+  LeaseItem lease_last_seen_new = 2;
+  LeaseItem lease_last_seen_revoked = 3;
 }
 message TickResponse {
   uint64 epoch = 1;
+  repeated LeaseItem leases_new = 2;
+  repeated LeaseItem leases_revoked = 3;
+}
+
+message LeaseItem {
+  int64 ID = 1;
+  uint64 TTL = 2;
+}
+
+message LeaseTickRequest {
+  uint64 epoch = 1;
+  repeated LeaseItem leases_new = 2;
+  repeated LeaseItem leases_revoked = 3;
+}
+message LeaseTickResponse {
+  uint64 epoch = 1;
+  LeaseItem lease_last_seen_new = 2;
+  LeaseItem lease_last_seen_revoked = 3;
+  repeated LeaseItem leases_expired = 4;
 }
 
 message TermRequest {

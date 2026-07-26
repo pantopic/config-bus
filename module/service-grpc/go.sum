@@ -1,5 +1,5 @@
-github.com/aperturerobotics/protobuf-go-lite v0.11.0 h1:IAaZISqrEpodqECYxk0yKWgROEbZtMhs7bErP+Zma9o=
-github.com/aperturerobotics/protobuf-go-lite v0.11.0/go.mod h1:c4kGy7Dkfz6B1m0t4QBIMQoNeQ7m+nYj3Qxxnlwhygo=
+github.com/aperturerobotics/protobuf-go-lite v0.15.0 h1:Ke9pkt5zO5iQf2q7iAYsXHlCDhGeQH0cvhCTIiiWUIg=
+github.com/aperturerobotics/protobuf-go-lite v0.15.0/go.mod h1:3Ay/E7iaw2KWLirK3+dDdNJZHK0hu8Y1/kKeYeUa+8s=
 github.com/pantopic/wazero-buffer-pool/sdk-go v0.0.1 h1:qCq/mydAA4ULKYgeVB11RQbIVwnYCcnDWOIQvUC9MLE=
 github.com/pantopic/wazero-buffer-pool/sdk-go v0.0.1/go.mod h1:RjQGFpEe7vWHFRJMyOEStnxs/wrCTuMuhtm0CMC5g2E=
 github.com/pantopic/wazero-grpc-server/sdk-go v0.0.13 h1:mJlf+zkc27J56XEpCMaGu8By04jL1Ts7aJC3foPdZt4=

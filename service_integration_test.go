@@ -491,6 +491,15 @@ func setupCluster(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+	// TODO - Add lease shard
+	if os.Getenv(`PCB_LEASE_PARTITIONS`) == `1` {
+		shard, _, err = agents[0].ShardCreate(ctx, Uri,
+			zongzi.WithName("default.pcb.default.lease"),
+			zongzi.WithPlacementMembers(3, `pantopic/turbokube=member`))
+		if err != nil {
+			panic(err)
+		}
+	}
 	// 10 seconds for shard to have active leader
 	require.True(t, await(10, 100, func() bool {
 		agents[0].StateLocal(func(s *zongzi.State) {

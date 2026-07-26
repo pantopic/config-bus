@@ -31,11 +31,12 @@ const (
 )
 
 const (
-	QUERY_KV_RANGE byte = iota
+	QUERY_HEADER byte = iota
+	QUERY_KV_RANGE
+	QUERY_LEASE_CHECK_BATCH
 	QUERY_LEASE_LEASES
 	QUERY_LEASE_TIME_TO_LIVE
 	QUERY_WATCH_PROGRESS
-	QUERY_HEADER
 )
 
 const (
@@ -134,6 +135,10 @@ var (
 	PCB_BATCH_LEASE_RENEWAL          = true
 	PCB_BATCH_LEASE_RENEWAL_LIMIT    = 1000
 	PCB_BATCH_LEASE_RENEWAL_INTERVAL = 500 * time.Millisecond
+
+	// PCB_LEASE_PARTITIONS specifies the number of lease shards to use.
+	// Matches etcd by default.
+	PCB_LEASE_PARTITIONS = global.NewUint64(`PCB_LEASE_PARTITIONS`, 0)
 )
 
 var (

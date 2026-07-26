@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	componentName = []byte(`default`)
-	shardNameKv   = []byte(`kv`)
+	componentName  = []byte(`default`)
+	shardNameKv    = []byte(`kv`)
+	shardNameLease = []byte(`lease`)
 )
 
 func autoSend(out []byte, err error) error {
@@ -36,4 +37,7 @@ func grpcError(val uint64, out []byte, err error) ([]byte, error) {
 
 func kvShard() shard_client.Client {
 	return shard_client.New(componentName, shardNameKv)
+}
+func leaseShard() shard_client.Client {
+	return shard_client.New(componentName, shardNameLease)
 }

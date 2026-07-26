@@ -314,6 +314,13 @@ message LeaseTimeToLiveResponse {
   repeated bytes keys = 5;
 }
 
+message LeaseCheckBatchRequest {
+  repeated int64 IDs = 1;
+}
+message LeaseCheckBatchResponse {
+  repeated int64 TTLs = 1;
+}
+
 message LeaseStatus {
   int64 ID = 1;
 }

@@ -3,27 +3,32 @@ package main
 import (
 	"os"
 	"strconv"
+
+	"github.com/pantopic/wazero-global/sdk-go"
 )
 
 const (
 	CMD_INTERNAL_TERM byte = iota
 	CMD_INTERNAL_TICK
-	CMD_KV_PUT
-	CMD_KV_DELETE_RANGE
 	CMD_KV_COMPACT
+	CMD_KV_DELETE_RANGE
+	CMD_KV_PUT
 	CMD_KV_TXN
 	CMD_LEASE_GRANT
-	CMD_LEASE_REVOKE
 	CMD_LEASE_KEEP_ALIVE
 	CMD_LEASE_KEEP_ALIVE_BATCH
+	CMD_LEASE_LOCK
+	CMD_LEASE_REVOKE
+	CMD_LEASE_UNLOCK
 )
 
 const (
-	QUERY_KV_RANGE byte = iota
+	QUERY_HEADER byte = iota
+	QUERY_KV_RANGE
+	QUERY_LEASE_CHECK_BATCH
 	QUERY_LEASE_LEASES
 	QUERY_LEASE_TIME_TO_LIVE
 	QUERY_WATCH_PROGRESS
-	QUERY_HEADER
 )
 
 var (
@@ -36,6 +41,10 @@ var (
 	// PCB_RESPONSE_SIZE_MAX sets the maximum request and response size.
 	// Matches etcd by default.
 	PCB_RESPONSE_SIZE_MAX = envUint64(`PCB_RESPONSE_SIZE_MAX`, 10<<20) // 10 MiB
+
+	// PCB_LEASE_PARTITIONS specifies the number of lease shards to use.
+	// Matches etcd by default.
+	PCB_LEASE_PARTITIONS = global.NewUint64(`PCB_LEASE_PARTITIONS`, 0)
 )
 
 const (
