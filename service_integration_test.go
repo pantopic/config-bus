@@ -53,6 +53,7 @@ var (
 	cluster = os.Getenv("PCB_CLUSTER_CHECK") == "true"
 	parity  = os.Getenv("PCB_PARITY_CHECK") == "true"
 	debug   = os.Getenv("PCB_LOG_LEVEL") == "debug"
+	zig     = os.Getenv("PCB_ZIG") == "true"
 	wait    func(time.Duration)
 
 	err            error
@@ -393,7 +394,11 @@ func setupCluster(t *testing.T) {
 		storageCtxCopy = append(storageCtxCopy, m.ContextCopy)
 	}
 	cfg := wazero.NewModuleConfig().WithStdout(os.Stdout)
-	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvDevWasm,
+	kvWasm := turbokube.StorageKvDevWasm
+	if zig {
+		kvWasm = turbokube.StorageKvZigDevWasm
+	}
+	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, kvWasm,
 		wazeropool.WithModuleConfig(cfg),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.StorageKvName),
@@ -541,7 +546,11 @@ func setupCluster(t *testing.T) {
 		}
 		svcCtxCopiers = append(svcCtxCopiers, m.ContextCopy)
 	}
-	poolServiceGrpc, err := wazeropool.New(ctx, runtimeSvcGrpc, turbokube.ServiceGrpcDevWasm,
+	svcWasm := turbokube.ServiceGrpcDevWasm
+	if zig {
+		svcWasm = turbokube.ServiceGrpcZigDevWasm
+	}
+	poolServiceGrpc, err := wazeropool.New(ctx, runtimeSvcGrpc, svcWasm,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.ServiceGrpcName),

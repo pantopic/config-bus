@@ -22,6 +22,9 @@ parity:
 test-cluster:
 	@PCB_CLUSTER_CHECK=true go test -v
 
+test-cluster-zig:
+	@PCB_CLUSTER_CHECK=true PCB_ZIG=true go test -v
+
 bench:
 	@go test -bench=. -run=_ -v
 
@@ -95,5 +98,27 @@ wasm-prod: wasm-storage-kv wasm-service-grpc
 wasm-storage: wasm-storage-kv wasm-storage-kv-dev
 wasm-service: wasm-service-grpc wasm-service-grpc-dev
 wasm: wasm-dev wasm-prod
+
+wasm-zig-storage-kv:
+	@cd module-zig/storage-kv && zig build --release=small
+	@cp module-zig/storage-kv/zig-out/bin/storage-kv.wasm embed/storage-kv.zig.wasm
+wasm-zig-storage-kv-dev:
+	@cd module-zig/storage-kv && zig build
+	@cp module-zig/storage-kv/zig-out/bin/storage-kv.wasm embed/storage-kv.zig.dev.wasm
+wasm-zig-service-grpc:
+	@cd module-zig/service-grpc && zig build --release=small
+	@cp module-zig/service-grpc/zig-out/bin/service-grpc.wasm embed/service-grpc.zig.wasm
+wasm-zig-service-grpc-dev:
+	@cd module-zig/service-grpc && zig build
+	@cp module-zig/service-grpc/zig-out/bin/service-grpc.wasm embed/service-grpc.zig.dev.wasm
+wasm-zig-dev: wasm-zig-storage-kv-dev wasm-zig-service-grpc-dev
+wasm-zig-prod: wasm-zig-storage-kv wasm-zig-service-grpc
+wasm-zig-storage: wasm-zig-storage-kv wasm-zig-storage-kv-dev
+wasm-zig-service: wasm-zig-service-grpc wasm-zig-service-grpc-dev
+wasm-zig: wasm-zig-dev wasm-zig-prod
+
+gen-zig:
+	@cd module-zig/service-grpc && zig build gen-proto
+	@cd module-zig/storage-kv && zig build gen-proto
 
 .PHONY: test

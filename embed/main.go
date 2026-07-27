@@ -21,3 +21,15 @@ var StorageKvWasm []byte
 
 //go:embed storage\-kv\.dev\.wasm
 var StorageKvDevWasm []byte
+
+//go:embed service\-grpc\.zig\.wasm
+var ServiceGrpcZigWasm []byte
+
+//go:embed service\-grpc\.zig\.dev\.wasm
+var ServiceGrpcZigDevWasm []byte
+
+//go:embed storage\-kv\.zig\.wasm
+var StorageKvZigWasm []byte
+
+//go:embed storage\-kv\.zig\.dev\.wasm
+var StorageKvZigDevWasm []byte
