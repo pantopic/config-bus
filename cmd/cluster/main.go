@@ -48,6 +48,7 @@ type extension interface {
 }
 
 func main() {
+	zig := os.Getenv("PCB_ZIG") == "true"
 	zongzi.SetLogLevel(zongzi.LogLevelInfo)
 	var cfg = getConfig()
 	var ctx = context.Background()
@@ -88,9 +89,14 @@ func main() {
 			}
 			ctxCopy = append(ctxCopy, m.ContextCopy)
 		}
-		poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvWasm,
+		kvWasm := turbokube.StorageKvWasm
+		if zig {
+			kvWasm = turbokube.StorageKvZigWasm
+		}
+		poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, kvWasm,
 			wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 			wazeropool.WithLimit(runtime.NumCPU()),
+			wazeropool.WithBurst(runtime.NumCPU()),
 			wazeropool.WithName(turbokube.StorageKvName),
 			wazeropool.WithVersion(turbokube.Version))
 		if err != nil {
@@ -181,7 +187,11 @@ func main() {
 		}
 		serviceContextCopiers = append(serviceContextCopiers, m.ContextCopy)
 	}
-	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, turbokube.ServiceGrpcWasm,
+	svcWasm := turbokube.ServiceGrpcWasm
+	if zig {
+		svcWasm = turbokube.ServiceGrpcZigWasm
+	}
+	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, svcWasm,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.ServiceGrpcName),
