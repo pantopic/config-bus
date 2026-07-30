@@ -5,7 +5,7 @@ cluster:
 	@go build -ldflags="-s -w" -o _dist/cluster ./cmd/cluster && cd cmd/cluster && docker compose up --build
 
 cluster-zig:
-	@PCB_ZIG=true go build -ldflags="-s -w" -o _dist/cluster ./cmd/cluster && cd cmd/cluster && docker compose up --build
+	@go build -ldflags="-s -w" -o _dist/cluster-zig ./cmd/cluster-zig && cd cmd/cluster-zig && docker compose up --build
 
 build:
 	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/standalone
@@ -14,7 +14,7 @@ build-cluster:
 	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster
 
 build-cluster-zig:
-	@PCB_ZIG=true go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster
+	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster-zig
 
 test:
 	@go test -v

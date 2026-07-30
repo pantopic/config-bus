@@ -1,6 +1,6 @@
 module github.com/pantopic/turbokube/module/service-grpc
 
-go 1.25.7
+go 1.25.12
 
 require (
 	github.com/aperturerobotics/protobuf-go-lite v0.11.0

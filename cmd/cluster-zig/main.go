@@ -49,7 +49,7 @@ type extension interface {
 
 func main() {
 	zig := os.Getenv("PCB_ZIG") == "true"
-	println(`PCB_ZIG: ` + os.Getenv("PCB_ZIG"))
+	println(`PCB_ZIG: `, os.Getenv("PCB_ZIG"), zig)
 	zongzi.SetLogLevel(zongzi.LogLevelInfo)
 	var cfg = getConfig()
 	var ctx = context.Background()
