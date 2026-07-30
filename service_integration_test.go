@@ -401,6 +401,7 @@ func setupCluster(t *testing.T) {
 	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, kvWasm,
 		wazeropool.WithModuleConfig(cfg),
 		wazeropool.WithLimit(runtime.NumCPU()),
+		wazeropool.WithBurst(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.StorageKvName),
 		wazeropool.WithVersion(turbokube.Version))
 	if err != nil {
