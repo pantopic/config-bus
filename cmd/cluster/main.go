@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -44,6 +46,9 @@ type extension interface {
 }
 
 func main() {
+	go func() {
+		slog.Info("pprof server", "err", http.ListenAndServe(":6060", nil))
+	}()
 	zongzi.SetLogLevel(zongzi.LogLevelInfo)
 	var cfg = getConfig()
 	var ctx = context.Background()

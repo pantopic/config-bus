@@ -28,7 +28,6 @@ const (
 
 var (
 	epoch      uint64
-	keys       [][]byte
 	newIndex   uint64
 	newRev     uint64
 	oldRev     uint64
@@ -118,6 +117,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		res.Header = responseHeader(newRev)
 		data, err = res.MarshalVT()
@@ -125,7 +125,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = val
-		keys = append(keys, affected...)
 	case CMD_KV_DELETE_RANGE:
 		var req = &internal.DeleteRangeRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -138,6 +137,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		resDel.Header = responseHeader(newRev)
 		data, err = resDel.MarshalVT()
@@ -145,7 +145,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = 1
-		keys = append(keys, affected...)
 	case CMD_KV_COMPACT:
 		var req = &internal.CompactionRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -187,6 +186,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		if err == ErrGRPCDuplicateKey ||
 			err == ErrGRPCKeyTooLong ||
@@ -202,7 +202,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 				panic(`Unable to marshal response: ` + err.Error())
 			}
 			value = 1
-			keys = append(keys, affected...)
 		}
 	case CMD_LEASE_GRANT:
 		var req = &internal.LeaseGrantRequest{}
@@ -232,6 +231,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		data, err = (&internal.LeaseRevokeResponse{
 			Header: responseHeader(newRev),
@@ -240,7 +240,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = val
-		keys = append(keys, affected...)
 	case CMD_LEASE_KEEP_ALIVE:
 		var req = &internal.LeaseKeepAliveRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -299,7 +298,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			}
 			if len(affected) > 0 {
 				newRev++
-				keys = append(keys, affected...)
+				range_watch.Queue(newRev, affected)
 			}
 		}
 		// revision compact
@@ -353,21 +352,21 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 func finish() {
 	var err error
 	if err = dbMeta.setIndex(txn, newIndex); err != nil {
+		range_watch.Clear()
 		panic(`Unable to set index: ` + err.Error())
 	}
 	if newRev > oldRev {
 		err = dbMeta.setRevision(txn, newRev)
 		if err != nil {
+			range_watch.Clear()
 			panic(`Unable to set revision: ` + err.Error())
 		}
 	}
 	if err := txn.Commit(); err != nil {
+		range_watch.Clear()
 		panic(`Unable to commit transaction: ` + err.Error())
 	}
-	if newRev > oldRev {
-		range_watch.Emit(oldRev, keys)
-	}
-	keys = keys[:0]
+	range_watch.Flush()
 	txn = 0
 }
 

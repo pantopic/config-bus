@@ -492,8 +492,6 @@ pub const KvStore = struct {
         return Kv.fromBytes(try allocator.dupe(u8, rk), v, if (item.rev.v != 0) item.val else null, false, allocator);
     }
 
-    /// Iterates events at or after `revision`. Panics on data errors,
-    /// mirroring Go's scan iterator. Keys are duped into `allocator`.
     pub fn scan(self: KvStore, txn: lmdb.Txn, allocator: std.mem.Allocator, revision: u64) Scan {
         const cur = txn.openCursor(self.evt.i) catch null;
         var s = Scan{ .store = self, .cur = cur, .allocator = allocator };

@@ -2348,7 +2348,7 @@ func testWatch(t *testing.T) {
 				t.Run("put", func(t *testing.T) {
 					req := &internal.PutRequest{
 						Key:   []byte(`test-watch-100`),
-						Value: []byte(`test-watch-value-000`),
+						Value: []byte(`test-watch-value-001`),
 					}
 					_, err = svcKv.Put(ctx, req)
 					require.Nil(t, err, err)
@@ -2361,8 +2361,9 @@ func testWatch(t *testing.T) {
 					require.Len(t, res.Events, 1)
 					assert.Equal(t, internal.Event_PUT, res.Events[0].Type)
 					assert.Nil(t, res.Events[0].PrevKv)
-					require.NotNil(t, req.Key, res.Events[0].Kv)
+					require.NotNil(t, res.Events[0].Kv)
 					assert.Equal(t, req.Key, res.Events[0].Kv.Key)
+					assert.Equal(t, req.Value, res.Events[0].Kv.Value)
 					timeout(t, time.Second, func() {
 						res = <-s2.resChan
 					})
@@ -2382,7 +2383,7 @@ func testWatch(t *testing.T) {
 					})
 					require.Equal(t, watchID1, res.WatchId)
 					require.False(t, res.Created)
-					require.True(t, res.Canceled)
+					require.True(t, res.Canceled, res)
 					s2.cancel(watchID2)
 					timeout(t, time.Second, func() {
 						res = <-s2.resChan
@@ -2427,7 +2428,9 @@ func testWatch(t *testing.T) {
 				require.Len(t, res.Events, 1)
 				assert.Equal(t, internal.Event_DELETE, res.Events[0].Type, res)
 				s.cancel(watchID)
-				res = <-s.resChan
+				timeout(t, time.Second, func() {
+					res = <-s.resChan
+				})
 				require.Equal(t, watchID, res.WatchId)
 				require.False(t, res.Created)
 				require.True(t, res.Canceled)
@@ -2859,7 +2862,7 @@ func testLoad(t *testing.T) {
 							n[res.WatchId] = 0
 						}
 						for _, e := range res.Events {
-							require.Equal(t, e.Kv.Key, fmt.Appendf(nil, "test-key-%08x", n[res.WatchId]%1000), e)
+							require.Equal(t, fmt.Appendf(nil, "test-key-%08x", n[res.WatchId]%1000), e.Kv.Key, e)
 							n[res.WatchId]++
 						}
 					}

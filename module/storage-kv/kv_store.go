@@ -537,11 +537,43 @@ func (db kvStoreImpl) scan(txn lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
 				panic(err)
 			}
 			if !yield(evt) {
-				break
+				return
 			}
 			k, v, err = cur.Get(k[:0], v[:0], lmdb.NextDup)
 			if lmdb.IsNotFound(err) {
 				k, v, err = cur.Get(k[:0], v[:0], lmdb.Next)
+			}
+		}
+	}
+}
+
+func (db kvStoreImpl) revScan(txn lmdb.Txn, revisions []uint64) iter.Seq[kvEvent] {
+	cur, err := txn.OpenCursor(db.evt.i)
+	if err != nil {
+		return nil
+	}
+	var evt kvEvent
+	var k, v []byte
+	return func(yield func(kvEvent) bool) {
+		defer cur.Close()
+		for _, rev := range revisions {
+			k = binary.BigEndian.AppendUint64(k[:0], rev<<12)
+			k, v, err = cur.Get(k, v[:0], lmdb.SetRange)
+			if lmdb.IsNotFound(err) {
+				panic(err)
+			}
+			if err != nil {
+				panic(err)
+			}
+			for !lmdb.IsNotFound(err) {
+				evt, err = db.evtFromBytes(k, v)
+				if err != nil {
+					panic(err)
+				}
+				if !yield(evt) {
+					return
+				}
+				k, v, err = cur.Get(k[:0], v[:0], lmdb.NextDup)
 			}
 		}
 	}

@@ -20,9 +20,9 @@ var (
 	watchRequest        = &internal.WatchRequest{}
 )
 
-func rangeWatchRecv(watchIdBytes []byte, alertRev uint64) {
+func rangeWatchRecv(watchIdBytes []byte, revs []uint64) {
 	watchID := binary.BigEndian.Uint64(watchIdBytes)
-	rev := watchRev.Load(watchID)
+	last := watchRev.Load(watchID)
 	b := watchCache.Get(watchIdBytes)
 	if len(b) == 0 {
 		println(`watchCache not found: ` + strconv.Itoa(int(watchID)))
@@ -33,13 +33,21 @@ func rangeWatchRecv(watchIdBytes []byte, alertRev uint64) {
 	if err != nil {
 		panic("Watch request malformed")
 	}
-	rev, sent, err := watchScan(watchCreateRequest, max(rev+1, alertRev))
-	if err != nil {
-		panic("Error reading events: " + err.Error())
+	var i, sent int
+	for ; i < len(revs); i++ {
+		if revs[i] > last {
+			break
+		}
 	}
-	watchRev.Store(watchID, rev)
-	if sent == 0 && watchCreateRequest.ProgressNotify {
-		sendCodeHeader(uint64(watchCreateRequest.WatchId), WatchMessageType_NOTIFY, rev)
+	if i < len(revs) {
+		last, sent, err = watchScanRevs(watchCreateRequest, revs[i:])
+		if err != nil {
+			panic("Error reading events: " + err.Error())
+		}
+		watchRev.Store(watchID, last)
+		if sent == 0 && watchCreateRequest.ProgressNotify {
+			sendCodeHeader(uint64(watchCreateRequest.WatchId), WatchMessageType_NOTIFY, last)
+		}
 	}
 }
 
@@ -85,14 +93,8 @@ func streamRecv(data []byte) {
 
 var filtered = map[uint8]bool{}
 
-func mapClear[K comparable, V any](m map[K]V) {
-	for k := range m {
-		delete(m, k)
-	}
-}
-
 func watchScan(req *internal.WatchCreateRequest, since uint64) (rev uint64, sent int, err error) {
-	defer mapClear(filtered)
+	defer clear(filtered)
 	for _, f := range req.Filters {
 		filtered[uint8(f)] = true
 	}
@@ -147,6 +149,63 @@ func watchScan(req *internal.WatchCreateRequest, since uint64) (rev uint64, sent
 	if sent > 0 {
 		sendCodeHeader(uint64(req.WatchId), WatchMessageType_SYNC, rev)
 	}
+	return
+}
+
+func watchScanRevs(req *internal.WatchCreateRequest, revs []uint64) (rev uint64, sent int, err error) {
+	defer clear(filtered)
+	for _, f := range req.Filters {
+		filtered[uint8(f)] = true
+	}
+	err = lmdb.View(func(txn lmdb.Txn) (err error) {
+		rev, err = dbMeta.getRevision(txn)
+		if err != nil {
+			return
+		}
+		for evt := range kvStore.revScan(txn, revs) {
+			if !bytes.Equal(evt.key, req.Key) {
+				if len(req.RangeEnd) == 0 || bytes.Equal(req.Key, req.RangeEnd) {
+					continue
+				}
+				if bytes.Compare(evt.key, req.Key) < 0 {
+					continue
+				}
+				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+					continue
+				}
+			}
+			if _, ok := filtered[evt.etype()]; ok {
+				continue
+			}
+			var current, prev kv
+			if evt.rev.isdel() {
+				current = kv{key: evt.key, rev: evt.rev}
+				if req.PrevKv {
+					_, prev, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
+				}
+			} else {
+				current, prev, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
+				if err != nil {
+					panic("Error getting event kv: " + string(evt.key))
+				}
+			}
+			eventResponse.Reset()
+			eventResponse.Type = internal.Event_EventType(evt.etype())
+			if current.rev.upper() > 0 {
+				eventResponse.Kv = current.ToProto(eventKvResponse)
+			}
+			if prev.rev.upper() > 0 {
+				eventResponse.PrevKv = prev.ToProto(eventKvPrevResponse)
+			}
+			sendCodeRevMsg(uint64(req.WatchId), WatchMessageType_EVENT, rev, eventResponse)
+			sent++
+		}
+		return
+	})
+	if sent > 0 {
+		sendCodeHeader(uint64(req.WatchId), WatchMessageType_SYNC, rev)
+	}
+	rev = revs[len(revs)-1]
 	return
 }
 
