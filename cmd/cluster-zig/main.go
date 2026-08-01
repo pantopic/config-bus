@@ -88,6 +88,7 @@ func main() {
 	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvZigWasm,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
+		wazeropool.WithMemoryLimit(16<<20),
 		wazeropool.WithName(turbokube.StorageKvName),
 		wazeropool.WithVersion(turbokube.Version))
 	if err != nil {
