@@ -553,6 +553,77 @@ pub const KvStore = struct {
         }
     };
 
+    pub fn revScan(self: KvStore, txn: lmdb.Txn, allocator: std.mem.Allocator, revisions: []u64) RevScan {
+        if (revisions.len == 0) std.debug.panic("revisions must not be empty", .{});
+        const cur = txn.openCursor(self.evt.i) catch null;
+        var s = RevScan{ .store = self, .cur = cur, .allocator = allocator, .revisions = revisions };
+        if (cur) |c| {
+            var kb: [8]u8 = undefined;
+            std.mem.writeInt(u64, &kb, revisions[0] << 12, .big);
+            if (c.get(&kb, "", lmdb.op_set_range)) |e| {
+                s.entry = e;
+            } else |err| {
+                if (err == lmdb.Error.NotFound) {
+                    s.finished = true;
+                } else {
+                    std.debug.panic("{s}", .{@errorName(err)});
+                }
+            }
+        }
+        return s;
+    }
+
+    pub const RevScan = struct {
+        store: KvStore,
+        cur: ?lmdb.Cursor,
+        allocator: std.mem.Allocator,
+        revisions: []u64,
+        entry: lmdb.Cursor.Entry = .{ .key = "", .val = "" },
+        finished: bool = false,
+        started: bool = false,
+        kb: [8]u8 = undefined,
+        i: u32 = 0,
+
+        pub fn next(self: *RevScan) ?KvEvent {
+            const cur = self.cur orelse return null;
+            if (self.finished) {
+                self.close();
+                return null;
+            }
+            if (self.started) {
+                if (cur.get("", "", lmdb.op_next_dup)) |e| {
+                    self.entry = e;
+                } else |err| {
+                    if (err != lmdb.Error.NotFound) std.debug.panic("{s}", .{@errorName(err)});
+                    self.i += 1;
+                    if (self.i >= self.revisions.len) {
+                        self.close();
+                        return null;
+                    }
+                    std.mem.writeInt(u64, &self.kb, self.revisions[self.i] << 12, .big);
+                    if (cur.get(&self.kb, "", lmdb.op_set_range)) |e| {
+                        self.entry = e;
+                    } else |err2| {
+                        if (err2 != lmdb.Error.NotFound) std.debug.panic("{s}", .{@errorName(err2)});
+                        self.close();
+                        return null;
+                    }
+                }
+            }
+            self.started = true;
+            const evt = self.store.evtFromBytes(self.allocator, self.entry.key, self.entry.val) catch |err|
+                std.debug.panic("{s}", .{@errorName(err)});
+            return evt;
+        }
+
+        pub fn close(self: *RevScan) void {
+            if (self.cur) |cur| {
+                cur.close();
+                self.cur = null;
+            }
+        }
+    };
+
     fn evtFromBytes(self: KvStore, allocator: std.mem.Allocator, k: []const u8, v: []const u8) !KvEvent {
         var evt = KvEvent{};
         evt.rev = try Keyrev.fromKey(k, v);

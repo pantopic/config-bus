@@ -1,5 +1,3 @@
-//! Mirrors module/storage-kv/main.go
-
 const std = @import("std");
 const atomic = @import("atomic");
 const global = @import("global");
@@ -28,31 +26,32 @@ const kvStore = dbs.kv_store;
 
 pub const codeNotFound: u64 = 5;
 
-pub const ATOMIC_UINT64_SET_GLOBAL: u32 = 0;
-pub const ATOMIC_UINT64_SET_WATCH_REV: u32 = 1;
-
-pub const ATOMIC_UINT64_GLOBAL_WATCH_ID: u64 = 0;
-
-pub const SMALL_CACHE_WATCH_CREATE_REQ: u64 = 0;
+pub const ATOMIC_UINT64_SET = enum(u32) {
+    GLOBAL,
+    WATCH_REV,
+};
+pub const ATOMIC_UINT64_GLOBAL = enum(u64) {
+    WATCH_ID,
+};
+pub const SMALL_CACHE = enum(u64) {
+    WATCH_CREATE_REQ,
+};
 
 var epoch: u64 = 0;
-var keys: std.ArrayList([]const u8) = .empty;
 var new_index: u64 = 0;
 var new_rev: u64 = 0;
 var old_rev: u64 = 0;
 var txn: lmdb.Txn = .{ .id = 0 };
 
-pub const watchCache = small_cache.newLocal(SMALL_CACHE_WATCH_CREATE_REQ);
-pub const watchID = atomic.Uint64Set.init(ATOMIC_UINT64_SET_GLOBAL).find(ATOMIC_UINT64_GLOBAL_WATCH_ID);
-pub const watchRev = atomic.Uint64Set.init(ATOMIC_UINT64_SET_WATCH_REV);
+pub const watchCache = small_cache
+    .newLocal(@intFromEnum(SMALL_CACHE.WATCH_CREATE_REQ));
+pub const watchID = atomic.Uint64Set
+    .init(@intFromEnum(ATOMIC_UINT64_SET.GLOBAL))
+    .find(@intFromEnum(ATOMIC_UINT64_GLOBAL.WATCH_ID));
+pub const watchRev = atomic.Uint64Set
+    .init(@intFromEnum(ATOMIC_UINT64_SET.WATCH_REV));
 
-// Per-batch arena: reset when a new update batch begins; holds decoded
-// commands, response buffers, and affected keys until finish(). Backed by the
-// wasm page allocator so it grows on demand (mirrors tinygo's leaking GC),
-// retaining capacity across resets.
 var batch_arena_state = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
-
-// Per-read arena: reset at the start of every read query.
 var read_arena_state = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
 
 var out: [2 * 1024 * 1024]u8 = undefined;
@@ -89,16 +88,18 @@ fn invalidCommand(allocator: std.mem.Allocator, cmd: []const u8) []const u8 {
 
 fn open() u64 {
     var index: u64 = 0;
-    const t = lmdb.begin(0) catch |err|
+    const t = lmdb.begin(0) catch |err| {
         std.debug.panic("Unable to open env {s}", .{@errorName(err)});
+    };
     index = dbMeta.init(t);
     dbStats.init(t);
     kvStore.init(t);
     dbLease.init(t);
     dbLeaseExp.init(t);
     dbLeaseKey.init(t);
-    t.commit() catch |err|
+    t.commit() catch |err| {
         std.debug.panic("Unable to open env {s}", .{@errorName(err)});
+    };
     return index;
 }
 
@@ -106,13 +107,15 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
     new_index = index;
     if (txn.id == 0) {
         _ = batch_arena_state.reset(.retain_capacity);
-        keys = .empty;
-        txn = lmdb.begin(0) catch |err|
+        txn = lmdb.begin(0) catch |err| {
             std.debug.panic("Unable to open txn: {s}", .{@errorName(err)});
-        epoch = dbMeta.getEpoch(txn) catch |err|
+        };
+        epoch = dbMeta.getEpoch(txn) catch |err| {
             std.debug.panic("Unable to get epoch: {s}", .{@errorName(err)});
-        const rev = dbMeta.getRevision(txn) catch |err|
+        };
+        const rev = dbMeta.getRevision(txn) catch |err| {
             std.debug.panic("Unable to get revision: {s}", .{@errorName(err)});
+        };
         new_rev = rev;
         old_rev = rev;
     }
@@ -142,28 +145,29 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
             };
             if (pr.affected.len > 0) {
                 new_rev += 1;
+                range_watch.queue(new_rev, pr.affected);
             }
             pr.res.header = responseHeader(new_rev);
-            const data = encodeToOut(pr.res, arena) catch |err|
+            const data = encodeToOut(pr.res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
-            keys.appendSlice(arena, pr.affected) catch
-                @panic("Unable to append keys");
+            };
             return .{ .value = pr.val, .data = data };
         },
         types.CMD_KV_DELETE_RANGE => {
             const req = decode(pb.DeleteRangeRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            var dr = cmdDeleteRange(txn, arena, new_rev + 1, 0, epoch, &req) catch |err|
+            var dr = cmdDeleteRange(txn, arena, new_rev + 1, 0, epoch, &req) catch |err| {
                 std.debug.panic("Unable to delete range: {s}", .{@errorName(err)});
+            };
             if (dr.affected.len > 0) {
                 new_rev += 1;
+                range_watch.queue(new_rev, dr.affected);
             }
             dr.res.header = responseHeader(new_rev);
-            const data = encodeToOut(dr.res, arena) catch |err|
+            const data = encodeToOut(dr.res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
-            keys.appendSlice(arena, dr.affected) catch
-                @panic("Unable to append keys");
+            };
             return .{ .value = 1, .data = data };
         },
         types.CMD_KV_COMPACT => {
@@ -195,10 +199,10 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
             const ops = if (success) req.success.items else req.failure.items;
             const to = txnOps(txn, arena, new_rev + 1, epoch, ops);
             res.responses = to.res;
-            const affected = to.affected;
             const txn_err = to.err;
-            if (affected.len > 0) {
+            if (to.affected.len > 0) {
                 new_rev += 1;
+                range_watch.queue(new_rev, to.affected);
             }
             if (txn_err) |err| {
                 if (err == error.GRPCDuplicateKey or err == error.GRPCKeyTooLong or err == error.GRPCEmptyKey) {
@@ -207,85 +211,93 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
                 return .{};
             }
             res.header = responseHeader(new_rev);
-            const data = encodeToOut(res, arena) catch |err|
+            const data = encodeToOut(res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
-            keys.appendSlice(arena, affected) catch
-                @panic("Unable to append keys");
+            };
             return .{ .value = 1, .data = data };
         },
         types.CMD_LEASE_GRANT => {
             const req = decode(pb.LeaseGrantRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            var gr = cmdLeaseGrant(txn, epoch, &req) catch |err|
+            var gr = cmdLeaseGrant(txn, epoch, &req) catch |err| {
                 std.debug.panic("Unable to grant lease: {s}", .{@errorName(err)});
+            };
             gr.res.header = responseHeader(new_rev);
-            const data = encodeToOut(gr.res, arena) catch |err|
+            const data = encodeToOut(gr.res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
+            };
             return .{ .value = gr.val, .data = data };
         },
         types.CMD_LEASE_REVOKE => {
             const req = decode(pb.LeaseRevokeRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            const rr = cmdLeaseRevoke(txn, arena, new_rev + 1, epoch, util.u64Of(req.ID)) catch |err|
+            const rr = cmdLeaseRevoke(txn, arena, new_rev + 1, epoch, util.u64Of(req.ID)) catch |err| {
                 std.debug.panic("Unable to revoke lease: {s}", .{@errorName(err)});
+            };
             if (rr.keys.len > 0) {
                 new_rev += 1;
+                range_watch.queue(new_rev, rr.keys);
             }
             const resp = pb.LeaseRevokeResponse{
                 .header = responseHeader(new_rev),
             };
-            const data = encodeToOut(resp, arena) catch |err|
+            const data = encodeToOut(resp, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
-            keys.appendSlice(arena, rr.keys) catch
-                @panic("Unable to append keys");
+            };
             return .{ .value = rr.val, .data = data };
         },
         types.CMD_LEASE_KEEP_ALIVE => {
             const req = decode(pb.LeaseKeepAliveRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            var ka = cmdLeaseKeepAlive(txn, epoch, &req) catch |err|
+            var ka = cmdLeaseKeepAlive(txn, epoch, &req) catch |err| {
                 std.debug.panic("Unable to keep lease alive: {s}", .{@errorName(err)});
+            };
             ka.res.header = responseHeader(new_rev);
-            const data = encodeToOut(ka.res, arena) catch |err|
+            const data = encodeToOut(ka.res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
+            };
             return .{ .value = ka.val, .data = data };
         },
         types.CMD_LEASE_KEEP_ALIVE_BATCH => {
             const req = decode(pb.LeaseKeepAliveBatchRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            var kb = cmdLeaseKeepAliveBatch(txn, arena, epoch, &req) catch |err|
+            var kb = cmdLeaseKeepAliveBatch(txn, arena, epoch, &req) catch |err| {
                 std.debug.panic("Unable to keep lease alive batch: {s}", .{@errorName(err)});
+            };
             kb.res.header = responseHeader(new_rev);
-            const data = encodeToOut(kb.res, arena) catch |err|
+            const data = encodeToOut(kb.res, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
+            };
             return .{ .value = kb.val, .data = data };
         },
         types.CMD_INTERNAL_TICK => {
             const req = decode(pb.TickRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            const term = dbMeta.getTerm(txn) catch |err|
+            const term = dbMeta.getTerm(txn) catch |err| {
                 std.debug.panic("Unable to get term: {s}", .{@errorName(err)});
+            };
             if (term > req.term) {
                 return .{ .data = errors.msg(error.TermExpired) };
             }
             epoch += 1;
-            dbMeta.setEpoch(txn, epoch) catch |err|
+            dbMeta.setEpoch(txn, epoch) catch |err| {
                 std.debug.panic("Unable to set epoch: {s}", .{@errorName(err)});
+            };
             // lease expire
             var scan = dbLeaseExp.scan(txn, epoch);
             defer scan.close();
             while (scan.next()) |id| {
-                const rr = cmdLeaseRevoke(txn, arena, new_rev + 1, epoch, id) catch |err|
+                const rr = cmdLeaseRevoke(txn, arena, new_rev + 1, epoch, id) catch |err| {
                     std.debug.panic("Unable to revoke lease: {s}", .{@errorName(err)});
+                };
                 if (rr.keys.len > 0) {
                     new_rev += 1;
-                    keys.appendSlice(arena, rr.keys) catch
-                        @panic("Unable to append keys");
+                    range_watch.queue(new_rev, rr.keys);
                 }
             }
             // revision compact
@@ -301,24 +313,28 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
             const resp = pb.TickResponse{
                 .epoch = epoch,
             };
-            const data = encodeToOut(resp, arena) catch |err|
+            const data = encodeToOut(resp, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
+            };
             return .{ .value = index, .data = data };
         },
         types.CMD_INTERNAL_TERM => {
             const req = decode(pb.TermRequest, arena, cmd[0 .. cmd.len - 1]) catch {
                 return .{ .data = invalidCommand(arena, cmd) };
             };
-            const term = dbMeta.getTerm(txn) catch |err|
+            const term = dbMeta.getTerm(txn) catch |err| {
                 std.debug.panic("Unable to get term: {s}", .{@errorName(err)});
+            };
             if (term > req.term) {
                 return .{ .data = errors.msg(error.TermExpired) };
             }
-            dbMeta.setTerm(txn, req.term) catch |err|
+            dbMeta.setTerm(txn, req.term) catch |err| {
                 std.debug.panic("Unable to set term: {s}", .{@errorName(err)});
+            };
             const resp = pb.TermResponse{};
-            const data = encodeToOut(resp, arena) catch |err|
+            const data = encodeToOut(resp, arena) catch |err| {
                 std.debug.panic("Unable to marshal response: {s}", .{@errorName(err)});
+            };
             return .{ .value = index, .data = data };
         },
         else => return .{},
@@ -326,18 +342,21 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
 }
 
 fn finish() void {
-    dbMeta.setIndex(txn, new_index) catch |err|
+    dbMeta.setIndex(txn, new_index) catch |err| {
+        range_watch.clear() catch unreachable;
         std.debug.panic("Unable to set index: {s}", .{@errorName(err)});
+    };
     if (new_rev > old_rev) {
-        dbMeta.setRevision(txn, new_rev) catch |err|
+        dbMeta.setRevision(txn, new_rev) catch |err| {
+            range_watch.clear() catch unreachable;
             std.debug.panic("Unable to set revision: {s}", .{@errorName(err)});
+        };
     }
-    txn.commit() catch |err|
+    txn.commit() catch |err| {
+        range_watch.clear() catch unreachable;
         std.debug.panic("Unable to commit transaction: {s}", .{@errorName(err)});
-    if (new_rev > old_rev) {
-        range_watch.emit(old_rev, keys.items);
-    }
-    keys = .empty;
+    };
+    range_watch.flush() catch unreachable;
     txn = .{ .id = 0 };
 }
 
@@ -476,8 +495,6 @@ fn cmdDeleteRange(
     var res = pb.DeleteRangeResponse{};
     const dr = try kvStore.deleteRange(t, arena, rev, subrev, epoch_, req.key, req.range_end);
     var affected = std.ArrayList([]const u8).empty;
-    // Mirrors Go's `keys = make([][]byte, len(prev))` + append: the result
-    // begins with len(prev) empty keys.
     try affected.appendNTimes(arena, "", dr.items.len);
     for (dr.items) |krec| {
         try affected.append(arena, krec.key);

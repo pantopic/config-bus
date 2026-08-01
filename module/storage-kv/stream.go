@@ -107,17 +107,6 @@ func watchScan(req *internal.WatchCreateRequest, since uint64) (rev uint64, sent
 			return
 		}
 		for evt := range kvStore.scan(txn, since) {
-			if !bytes.Equal(evt.key, req.Key) {
-				if len(req.RangeEnd) == 0 || bytes.Equal(req.Key, req.RangeEnd) {
-					continue
-				}
-				if bytes.Compare(evt.key, req.Key) < 0 {
-					continue
-				}
-				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
-					continue
-				}
-			}
 			if _, ok := filtered[evt.etype()]; ok {
 				continue
 			}
