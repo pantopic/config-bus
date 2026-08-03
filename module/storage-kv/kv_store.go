@@ -428,7 +428,9 @@ func (db kvStoreImpl) compact(txn lmdb.Txn, max uint64) (last uint64, err error)
 			clear(keys)
 		}
 	}
-	println(`compacted`, scanned, keycount)
+	if keycount > 0 {
+		println(`compacted`, scanned, keycount)
+	}
 	return
 }
 

@@ -85,7 +85,7 @@ func main() {
 		}
 		ctxCopy = append(ctxCopy, m.ContextCopy)
 	}
-	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvWasm,
+	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvDevWasm,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		// wazeropool.WithBurst(runtime.NumCPU()),
@@ -120,6 +120,7 @@ func main() {
 				log.Info("poolStorageKv.Stats", "total", stats.Total,
 					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
 					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+					"recycled", stats.Recycled,
 				)
 			}
 		}
@@ -179,7 +180,7 @@ func main() {
 		}
 		svcCtxCopy = append(svcCtxCopy, m.ContextCopy)
 	}
-	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, turbokube.ServiceGrpcWasm,
+	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, turbokube.ServiceGrpcDevWasm,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.ServiceGrpcName),
@@ -208,6 +209,7 @@ func main() {
 				log.Info("poolServiceGrpc.Stats", "total", stats.Total,
 					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
 					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+					"recycled", stats.Recycled,
 				)
 			}
 		}

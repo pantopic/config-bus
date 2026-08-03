@@ -2133,7 +2133,7 @@ func testHttp(t *testing.T) {
 	}
 }
 
-func watchServe(t *testing.T, ctx context.Context, fn func(s *mockWatchServer)) {
+func watchServe(t *testing.T, fn func(s *mockWatchServer)) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := newMockWatchServer(ctx)
 	done := make(chan bool)
@@ -2152,7 +2152,7 @@ func watchServe(t *testing.T, ctx context.Context, fn func(s *mockWatchServer)) 
 
 func testWatch(t *testing.T) {
 	var watchID int64
-	watchServe(t, context.Background(), func(s *mockWatchServer) {
+	watchServe(t, func(s *mockWatchServer) {
 		var res *internal.WatchResponse
 		t.Run("create", func(t *testing.T) {
 			t.Run("new", func(t *testing.T) {
@@ -2319,7 +2319,7 @@ func testWatch(t *testing.T) {
 			})
 		})
 		t.Run("multiple clients", func(t *testing.T) {
-			watchServe(t, context.Background(), func(s2 *mockWatchServer) {
+			watchServe(t, func(s2 *mockWatchServer) {
 				s.create(&internal.WatchCreateRequest{
 					Key:      []byte(`test-watch-100`),
 					RangeEnd: []byte(`test-watch-200`),
@@ -2355,7 +2355,7 @@ func testWatch(t *testing.T) {
 					timeout(t, time.Second, func() {
 						res = <-s.resChan
 					})
-					assert.True(t, res.WatchId == watchID1)
+					assert.Equal(t, watchID1, res.WatchId)
 					assert.False(t, res.Created)
 					assert.False(t, res.Canceled)
 					require.Len(t, res.Events, 1)
@@ -2367,7 +2367,7 @@ func testWatch(t *testing.T) {
 					timeout(t, time.Second, func() {
 						res = <-s2.resChan
 					})
-					assert.True(t, res.WatchId == watchID2)
+					assert.Equal(t, watchID2, res.WatchId)
 					assert.False(t, res.Created)
 					assert.False(t, res.Canceled)
 					require.Len(t, res.Events, 1)
@@ -2753,7 +2753,7 @@ func testWatch(t *testing.T) {
 		})
 	})
 	withGlobalInt(&PCB_RESPONSE_SIZE_MAX, 1<<20, func() {
-		watchServe(t, ctx, func(s *mockWatchServer) {
+		watchServe(t, func(s *mockWatchServer) {
 			var res *internal.WatchResponse
 			t.Run("fragment", func(t *testing.T) {
 				var randValue = func(len int) []byte {
@@ -2846,7 +2846,7 @@ func testLoad(t *testing.T) {
 	for range 5 {
 		wg.Go(func() {
 			var n = make(map[int64]int)
-			watchServe(t, context.Background(), func(s *mockWatchServer) {
+			watchServe(t, func(s *mockWatchServer) {
 				for range 2 {
 					s.create(&internal.WatchCreateRequest{
 						Key:      fmt.Appendf(nil, "test-key-%08x", 0),

@@ -32,7 +32,6 @@ func shardRecv(_, data []byte, id uint64) {
 		grpc_server.Send(data)
 	case WatchMessageType_EVENT:
 		events := bufferPoolWatchEvent.Find(id)
-		// println(len(data))
 		if events.Append(data[1:]) {
 			return
 		}
@@ -75,7 +74,6 @@ func shardRecv(_, data []byte, id uint64) {
 		for b := range events.Iter() {
 			evt := &internal.Event{}
 			if err = evt.UnmarshalVT(b[8:]); err != nil {
-				println(len(b), string(b))
 				events.Reset()
 				panic(`Unable to unmarshal event in sync: ` + err.Error())
 			}

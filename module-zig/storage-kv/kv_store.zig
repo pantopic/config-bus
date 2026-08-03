@@ -422,7 +422,9 @@ pub const KvStore = struct {
                 keys.clearRetainingCapacity();
             }
         }
-        std.debug.print("compacted {d} {d}\n", .{ scanned, keycount });
+        if (keycount > 0) {
+            std.debug.print("compacted {d} {d}\n", .{ scanned, keycount });
+        }
         return last;
     }
 

@@ -119,6 +119,7 @@ func main() {
 				log.Info("poolStorageKv.Stats", "total", stats.Total,
 					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
 					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+					"recycled", stats.Recycled,
 				)
 			}
 		}
@@ -207,6 +208,7 @@ func main() {
 				log.Info("poolServiceGrpc.Stats", "total", stats.Total,
 					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
 					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+					"recycled", stats.Recycled,
 				)
 			}
 		}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"strconv"
 
@@ -25,21 +24,21 @@ func rangeWatchRecv(watchIdBytes []byte, revs []uint64) {
 	last := watchRev.Load(watchID)
 	b := watchCache.Get(watchIdBytes)
 	if len(b) == 0 {
-		println(`watchCache not found: ` + strconv.Itoa(int(watchID)))
-		return
+		panic(`watchCache not found: ` + strconv.Itoa(int(watchID)) + ` ` + string(watchIdBytes))
 	}
 	watchCreateRequest.Reset()
 	err := watchCreateRequest.UnmarshalVT(b)
 	if err != nil {
 		panic("Watch request malformed")
 	}
+	var rev uint64
 	var i, sent int
-	for ; i < len(revs); i++ {
-		if revs[i] > last {
+	for i, rev = range revs {
+		if rev > last {
 			break
 		}
 	}
-	if i < len(revs) {
+	if rev > last {
 		last, sent, err = watchScanRevs(watchCreateRequest, revs[i:])
 		if err != nil {
 			panic("Error reading events: " + err.Error())
@@ -152,17 +151,6 @@ func watchScanRevs(req *internal.WatchCreateRequest, revs []uint64) (rev uint64,
 			return
 		}
 		for evt := range kvStore.revScan(txn, revs) {
-			if !bytes.Equal(evt.key, req.Key) {
-				if len(req.RangeEnd) == 0 || bytes.Equal(req.Key, req.RangeEnd) {
-					continue
-				}
-				if bytes.Compare(evt.key, req.Key) < 0 {
-					continue
-				}
-				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
-					continue
-				}
-			}
 			if _, ok := filtered[evt.etype()]; ok {
 				continue
 			}
