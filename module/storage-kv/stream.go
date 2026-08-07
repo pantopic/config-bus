@@ -51,7 +51,11 @@ func rangeWatchRecv(watchIdBytes []byte, revs []uint64) {
 }
 
 func streamOpen() {
-	// println(`wasm stream open`)
+	range_watch.GroupStart()
+}
+
+func streamClosed() {
+	range_watch.GroupStop()
 }
 
 func streamRecv(data []byte) {
@@ -265,8 +269,4 @@ func sendCodeRevMsg(val uint64, code byte, rev uint64, msg Message) {
 		panic("Error serializing event kv: " + err.Error())
 	}
 	statemachine.StreamSend(val, data)
-}
-
-func streamClosed() {
-	// println(`wasm stream closed`)
 }

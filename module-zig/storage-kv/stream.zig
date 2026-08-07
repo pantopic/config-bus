@@ -59,7 +59,11 @@ pub fn rangeWatchRecv(watch_id_bytes: []const u8, revisions: []u64) void {
 }
 
 pub fn streamOpen() void {
-    // std.debug.print("wasm stream open\n", .{});
+    range_watch.groupStart();
+}
+
+pub fn streamClosed() void {
+    range_watch.groupStop();
 }
 
 pub fn streamRecv(data: []u8) void {
@@ -297,8 +301,4 @@ fn sendCodeRevMsg(val: u64, code: u8, rev: u64, msg: anytype) void {
         std.debug.panic("Error serializing event kv: {s}", .{@errorName(err)});
     };
     statemachine.streamSend(val, out[0 .. 9 + writer.buffered().len]);
-}
-
-pub fn streamClosed() void {
-    // std.debug.print("wasm stream closed\n", .{});
 }
