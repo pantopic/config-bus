@@ -189,18 +189,229 @@ func (*TermResponse) Descriptor() ([]byte, []int) {
 	return file_internal_proto_rawDescGZIP(), []int{3}
 }
 
+type LeaseKeepAliveBatchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDs           []int64                `protobuf:"varint,1,rep,packed,name=IDs,proto3" json:"IDs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseKeepAliveBatchRequest) Reset() {
+	*x = LeaseKeepAliveBatchRequest{}
+	mi := &file_internal_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseKeepAliveBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseKeepAliveBatchRequest) ProtoMessage() {}
+
+func (x *LeaseKeepAliveBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseKeepAliveBatchRequest.ProtoReflect.Descriptor instead.
+func (*LeaseKeepAliveBatchRequest) Descriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *LeaseKeepAliveBatchRequest) GetIDs() []int64 {
+	if x != nil {
+		return x.IDs
+	}
+	return nil
+}
+
+type LeaseKeepAliveBatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Header        *ResponseHeader        `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
+	TTLs          []int64                `protobuf:"varint,2,rep,packed,name=TTLs,proto3" json:"TTLs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseKeepAliveBatchResponse) Reset() {
+	*x = LeaseKeepAliveBatchResponse{}
+	mi := &file_internal_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseKeepAliveBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseKeepAliveBatchResponse) ProtoMessage() {}
+
+func (x *LeaseKeepAliveBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseKeepAliveBatchResponse.ProtoReflect.Descriptor instead.
+func (*LeaseKeepAliveBatchResponse) Descriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LeaseKeepAliveBatchResponse) GetHeader() *ResponseHeader {
+	if x != nil {
+		return x.Header
+	}
+	return nil
+}
+
+func (x *LeaseKeepAliveBatchResponse) GetTTLs() []int64 {
+	if x != nil {
+		return x.TTLs
+	}
+	return nil
+}
+
+type WatchEventBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Event         *Event                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	WatchIds      []int64                `protobuf:"varint,2,rep,packed,name=watch_ids,json=watchIds,proto3" json:"watch_ids,omitempty"`
+	WatchIdsPrev  []int64                `protobuf:"varint,3,rep,packed,name=watch_ids_prev,json=watchIdsPrev,proto3" json:"watch_ids_prev,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchEventBatch) Reset() {
+	*x = WatchEventBatch{}
+	mi := &file_internal_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchEventBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchEventBatch) ProtoMessage() {}
+
+func (x *WatchEventBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchEventBatch.ProtoReflect.Descriptor instead.
+func (*WatchEventBatch) Descriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WatchEventBatch) GetEvent() *Event {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+func (x *WatchEventBatch) GetWatchIds() []int64 {
+	if x != nil {
+		return x.WatchIds
+	}
+	return nil
+}
+
+func (x *WatchEventBatch) GetWatchIdsPrev() []int64 {
+	if x != nil {
+		return x.WatchIdsPrev
+	}
+	return nil
+}
+
+type WatchSyncBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IDs           []int64                `protobuf:"varint,1,rep,packed,name=IDs,proto3" json:"IDs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchSyncBatch) Reset() {
+	*x = WatchSyncBatch{}
+	mi := &file_internal_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchSyncBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchSyncBatch) ProtoMessage() {}
+
+func (x *WatchSyncBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchSyncBatch.ProtoReflect.Descriptor instead.
+func (*WatchSyncBatch) Descriptor() ([]byte, []int) {
+	return file_internal_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *WatchSyncBatch) GetIDs() []int64 {
+	if x != nil {
+		return x.IDs
+	}
+	return nil
+}
+
 var File_internal_proto protoreflect.FileDescriptor
 
 const file_internal_proto_rawDesc = "" +
 	"\n" +
-	"\x0einternal.proto\x12\fetcdserverpb\"!\n" +
+	"\x0einternal.proto\x12\fetcdserverpb\x1a\tapi.proto\"!\n" +
 	"\vTickRequest\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\"$\n" +
 	"\fTickResponse\x12\x14\n" +
 	"\x05epoch\x18\x01 \x01(\x04R\x05epoch\"!\n" +
 	"\vTermRequest\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\"\x0e\n" +
-	"\fTermResponseB(Z&github.com/pantopic/turbokube/internalb\x06proto3"
+	"\fTermResponse\".\n" +
+	"\x1aLeaseKeepAliveBatchRequest\x12\x10\n" +
+	"\x03IDs\x18\x01 \x03(\x03R\x03IDs\"g\n" +
+	"\x1bLeaseKeepAliveBatchResponse\x124\n" +
+	"\x06header\x18\x01 \x01(\v2\x1c.etcdserverpb.ResponseHeaderR\x06header\x12\x12\n" +
+	"\x04TTLs\x18\x02 \x03(\x03R\x04TTLs\"\x7f\n" +
+	"\x0fWatchEventBatch\x12)\n" +
+	"\x05event\x18\x01 \x01(\v2\x13.etcdserverpb.EventR\x05event\x12\x1b\n" +
+	"\twatch_ids\x18\x02 \x03(\x03R\bwatchIds\x12$\n" +
+	"\x0ewatch_ids_prev\x18\x03 \x03(\x03R\fwatchIdsPrev\"\"\n" +
+	"\x0eWatchSyncBatch\x12\x10\n" +
+	"\x03IDs\x18\x01 \x03(\x03R\x03IDsB(Z&github.com/pantopic/turbokube/internalb\x06proto3"
 
 var (
 	file_internal_proto_rawDescOnce sync.Once
@@ -214,19 +425,27 @@ func file_internal_proto_rawDescGZIP() []byte {
 	return file_internal_proto_rawDescData
 }
 
-var file_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_internal_proto_goTypes = []any{
-	(*TickRequest)(nil),  // 0: etcdserverpb.TickRequest
-	(*TickResponse)(nil), // 1: etcdserverpb.TickResponse
-	(*TermRequest)(nil),  // 2: etcdserverpb.TermRequest
-	(*TermResponse)(nil), // 3: etcdserverpb.TermResponse
+	(*TickRequest)(nil),                 // 0: etcdserverpb.TickRequest
+	(*TickResponse)(nil),                // 1: etcdserverpb.TickResponse
+	(*TermRequest)(nil),                 // 2: etcdserverpb.TermRequest
+	(*TermResponse)(nil),                // 3: etcdserverpb.TermResponse
+	(*LeaseKeepAliveBatchRequest)(nil),  // 4: etcdserverpb.LeaseKeepAliveBatchRequest
+	(*LeaseKeepAliveBatchResponse)(nil), // 5: etcdserverpb.LeaseKeepAliveBatchResponse
+	(*WatchEventBatch)(nil),             // 6: etcdserverpb.WatchEventBatch
+	(*WatchSyncBatch)(nil),              // 7: etcdserverpb.WatchSyncBatch
+	(*ResponseHeader)(nil),              // 8: etcdserverpb.ResponseHeader
+	(*Event)(nil),                       // 9: etcdserverpb.Event
 }
 var file_internal_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	8, // 0: etcdserverpb.LeaseKeepAliveBatchResponse.header:type_name -> etcdserverpb.ResponseHeader
+	9, // 1: etcdserverpb.WatchEventBatch.event:type_name -> etcdserverpb.Event
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_internal_proto_init() }
@@ -234,13 +453,14 @@ func file_internal_proto_init() {
 	if File_internal_proto != nil {
 		return
 	}
+	file_api_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_proto_rawDesc), len(file_internal_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

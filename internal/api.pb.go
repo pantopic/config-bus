@@ -419,7 +419,7 @@ func (x AlarmRequest_AlarmAction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AlarmRequest_AlarmAction.Descriptor instead.
 func (AlarmRequest_AlarmAction) EnumDescriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{59, 0}
+	return file_api_proto_rawDescGZIP(), []int{57, 0}
 }
 
 type DowngradeRequest_DowngradeAction int32
@@ -468,7 +468,7 @@ func (x DowngradeRequest_DowngradeAction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DowngradeRequest_DowngradeAction.Descriptor instead.
 func (DowngradeRequest_DowngradeAction) EnumDescriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{61, 0}
+	return file_api_proto_rawDescGZIP(), []int{59, 0}
 }
 
 type KeyValue struct {
@@ -2887,102 +2887,6 @@ func (x *LeaseKeepAliveResponse) GetTTL() int64 {
 	return 0
 }
 
-type LeaseKeepAliveBatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IDs           []int64                `protobuf:"varint,1,rep,packed,name=IDs,proto3" json:"IDs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LeaseKeepAliveBatchRequest) Reset() {
-	*x = LeaseKeepAliveBatchRequest{}
-	mi := &file_api_proto_msgTypes[36]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LeaseKeepAliveBatchRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LeaseKeepAliveBatchRequest) ProtoMessage() {}
-
-func (x *LeaseKeepAliveBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[36]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LeaseKeepAliveBatchRequest.ProtoReflect.Descriptor instead.
-func (*LeaseKeepAliveBatchRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{36}
-}
-
-func (x *LeaseKeepAliveBatchRequest) GetIDs() []int64 {
-	if x != nil {
-		return x.IDs
-	}
-	return nil
-}
-
-type LeaseKeepAliveBatchResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Header        *ResponseHeader        `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	TTLs          []int64                `protobuf:"varint,2,rep,packed,name=TTLs,proto3" json:"TTLs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LeaseKeepAliveBatchResponse) Reset() {
-	*x = LeaseKeepAliveBatchResponse{}
-	mi := &file_api_proto_msgTypes[37]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LeaseKeepAliveBatchResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LeaseKeepAliveBatchResponse) ProtoMessage() {}
-
-func (x *LeaseKeepAliveBatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[37]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LeaseKeepAliveBatchResponse.ProtoReflect.Descriptor instead.
-func (*LeaseKeepAliveBatchResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{37}
-}
-
-func (x *LeaseKeepAliveBatchResponse) GetHeader() *ResponseHeader {
-	if x != nil {
-		return x.Header
-	}
-	return nil
-}
-
-func (x *LeaseKeepAliveBatchResponse) GetTTLs() []int64 {
-	if x != nil {
-		return x.TTLs
-	}
-	return nil
-}
-
 type LeaseTimeToLiveRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ID            int64                  `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
@@ -2993,7 +2897,7 @@ type LeaseTimeToLiveRequest struct {
 
 func (x *LeaseTimeToLiveRequest) Reset() {
 	*x = LeaseTimeToLiveRequest{}
-	mi := &file_api_proto_msgTypes[38]
+	mi := &file_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3005,7 +2909,7 @@ func (x *LeaseTimeToLiveRequest) String() string {
 func (*LeaseTimeToLiveRequest) ProtoMessage() {}
 
 func (x *LeaseTimeToLiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[38]
+	mi := &file_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3018,7 +2922,7 @@ func (x *LeaseTimeToLiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseTimeToLiveRequest.ProtoReflect.Descriptor instead.
 func (*LeaseTimeToLiveRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{38}
+	return file_api_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *LeaseTimeToLiveRequest) GetID() int64 {
@@ -3048,7 +2952,7 @@ type LeaseTimeToLiveResponse struct {
 
 func (x *LeaseTimeToLiveResponse) Reset() {
 	*x = LeaseTimeToLiveResponse{}
-	mi := &file_api_proto_msgTypes[39]
+	mi := &file_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3060,7 +2964,7 @@ func (x *LeaseTimeToLiveResponse) String() string {
 func (*LeaseTimeToLiveResponse) ProtoMessage() {}
 
 func (x *LeaseTimeToLiveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[39]
+	mi := &file_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3073,7 +2977,7 @@ func (x *LeaseTimeToLiveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseTimeToLiveResponse.ProtoReflect.Descriptor instead.
 func (*LeaseTimeToLiveResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{39}
+	return file_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *LeaseTimeToLiveResponse) GetHeader() *ResponseHeader {
@@ -3120,7 +3024,7 @@ type LeaseStatus struct {
 
 func (x *LeaseStatus) Reset() {
 	*x = LeaseStatus{}
-	mi := &file_api_proto_msgTypes[40]
+	mi := &file_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3132,7 +3036,7 @@ func (x *LeaseStatus) String() string {
 func (*LeaseStatus) ProtoMessage() {}
 
 func (x *LeaseStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[40]
+	mi := &file_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3145,7 +3049,7 @@ func (x *LeaseStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseStatus.ProtoReflect.Descriptor instead.
 func (*LeaseStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{40}
+	return file_api_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *LeaseStatus) GetID() int64 {
@@ -3163,7 +3067,7 @@ type LeaseLeasesRequest struct {
 
 func (x *LeaseLeasesRequest) Reset() {
 	*x = LeaseLeasesRequest{}
-	mi := &file_api_proto_msgTypes[41]
+	mi := &file_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3175,7 +3079,7 @@ func (x *LeaseLeasesRequest) String() string {
 func (*LeaseLeasesRequest) ProtoMessage() {}
 
 func (x *LeaseLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[41]
+	mi := &file_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3188,7 +3092,7 @@ func (x *LeaseLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseLeasesRequest.ProtoReflect.Descriptor instead.
 func (*LeaseLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{41}
+	return file_api_proto_rawDescGZIP(), []int{39}
 }
 
 type LeaseLeasesResponse struct {
@@ -3201,7 +3105,7 @@ type LeaseLeasesResponse struct {
 
 func (x *LeaseLeasesResponse) Reset() {
 	*x = LeaseLeasesResponse{}
-	mi := &file_api_proto_msgTypes[42]
+	mi := &file_api_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3213,7 +3117,7 @@ func (x *LeaseLeasesResponse) String() string {
 func (*LeaseLeasesResponse) ProtoMessage() {}
 
 func (x *LeaseLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[42]
+	mi := &file_api_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3226,7 +3130,7 @@ func (x *LeaseLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseLeasesResponse.ProtoReflect.Descriptor instead.
 func (*LeaseLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{42}
+	return file_api_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *LeaseLeasesResponse) GetHeader() *ResponseHeader {
@@ -3256,7 +3160,7 @@ type Member struct {
 
 func (x *Member) Reset() {
 	*x = Member{}
-	mi := &file_api_proto_msgTypes[43]
+	mi := &file_api_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3268,7 +3172,7 @@ func (x *Member) String() string {
 func (*Member) ProtoMessage() {}
 
 func (x *Member) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[43]
+	mi := &file_api_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3281,7 +3185,7 @@ func (x *Member) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Member.ProtoReflect.Descriptor instead.
 func (*Member) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{43}
+	return file_api_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *Member) GetID() uint64 {
@@ -3329,7 +3233,7 @@ type MemberAddRequest struct {
 
 func (x *MemberAddRequest) Reset() {
 	*x = MemberAddRequest{}
-	mi := &file_api_proto_msgTypes[44]
+	mi := &file_api_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3341,7 +3245,7 @@ func (x *MemberAddRequest) String() string {
 func (*MemberAddRequest) ProtoMessage() {}
 
 func (x *MemberAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[44]
+	mi := &file_api_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3354,7 +3258,7 @@ func (x *MemberAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberAddRequest.ProtoReflect.Descriptor instead.
 func (*MemberAddRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{44}
+	return file_api_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *MemberAddRequest) GetPeerURLs() []string {
@@ -3382,7 +3286,7 @@ type MemberAddResponse struct {
 
 func (x *MemberAddResponse) Reset() {
 	*x = MemberAddResponse{}
-	mi := &file_api_proto_msgTypes[45]
+	mi := &file_api_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3394,7 +3298,7 @@ func (x *MemberAddResponse) String() string {
 func (*MemberAddResponse) ProtoMessage() {}
 
 func (x *MemberAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[45]
+	mi := &file_api_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3407,7 +3311,7 @@ func (x *MemberAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberAddResponse.ProtoReflect.Descriptor instead.
 func (*MemberAddResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{45}
+	return file_api_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *MemberAddResponse) GetHeader() *ResponseHeader {
@@ -3440,7 +3344,7 @@ type MemberRemoveRequest struct {
 
 func (x *MemberRemoveRequest) Reset() {
 	*x = MemberRemoveRequest{}
-	mi := &file_api_proto_msgTypes[46]
+	mi := &file_api_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3452,7 +3356,7 @@ func (x *MemberRemoveRequest) String() string {
 func (*MemberRemoveRequest) ProtoMessage() {}
 
 func (x *MemberRemoveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[46]
+	mi := &file_api_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3465,7 +3369,7 @@ func (x *MemberRemoveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberRemoveRequest.ProtoReflect.Descriptor instead.
 func (*MemberRemoveRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{46}
+	return file_api_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *MemberRemoveRequest) GetID() uint64 {
@@ -3485,7 +3389,7 @@ type MemberRemoveResponse struct {
 
 func (x *MemberRemoveResponse) Reset() {
 	*x = MemberRemoveResponse{}
-	mi := &file_api_proto_msgTypes[47]
+	mi := &file_api_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3497,7 +3401,7 @@ func (x *MemberRemoveResponse) String() string {
 func (*MemberRemoveResponse) ProtoMessage() {}
 
 func (x *MemberRemoveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[47]
+	mi := &file_api_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3510,7 +3414,7 @@ func (x *MemberRemoveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberRemoveResponse.ProtoReflect.Descriptor instead.
 func (*MemberRemoveResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{47}
+	return file_api_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *MemberRemoveResponse) GetHeader() *ResponseHeader {
@@ -3537,7 +3441,7 @@ type MemberUpdateRequest struct {
 
 func (x *MemberUpdateRequest) Reset() {
 	*x = MemberUpdateRequest{}
-	mi := &file_api_proto_msgTypes[48]
+	mi := &file_api_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3549,7 +3453,7 @@ func (x *MemberUpdateRequest) String() string {
 func (*MemberUpdateRequest) ProtoMessage() {}
 
 func (x *MemberUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[48]
+	mi := &file_api_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3562,7 +3466,7 @@ func (x *MemberUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberUpdateRequest.ProtoReflect.Descriptor instead.
 func (*MemberUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{48}
+	return file_api_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *MemberUpdateRequest) GetID() uint64 {
@@ -3589,7 +3493,7 @@ type MemberUpdateResponse struct {
 
 func (x *MemberUpdateResponse) Reset() {
 	*x = MemberUpdateResponse{}
-	mi := &file_api_proto_msgTypes[49]
+	mi := &file_api_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3601,7 +3505,7 @@ func (x *MemberUpdateResponse) String() string {
 func (*MemberUpdateResponse) ProtoMessage() {}
 
 func (x *MemberUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[49]
+	mi := &file_api_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3614,7 +3518,7 @@ func (x *MemberUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberUpdateResponse.ProtoReflect.Descriptor instead.
 func (*MemberUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{49}
+	return file_api_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *MemberUpdateResponse) GetHeader() *ResponseHeader {
@@ -3640,7 +3544,7 @@ type MemberListRequest struct {
 
 func (x *MemberListRequest) Reset() {
 	*x = MemberListRequest{}
-	mi := &file_api_proto_msgTypes[50]
+	mi := &file_api_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3652,7 +3556,7 @@ func (x *MemberListRequest) String() string {
 func (*MemberListRequest) ProtoMessage() {}
 
 func (x *MemberListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[50]
+	mi := &file_api_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3665,7 +3569,7 @@ func (x *MemberListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberListRequest.ProtoReflect.Descriptor instead.
 func (*MemberListRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{50}
+	return file_api_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *MemberListRequest) GetLinearizable() bool {
@@ -3685,7 +3589,7 @@ type MemberListResponse struct {
 
 func (x *MemberListResponse) Reset() {
 	*x = MemberListResponse{}
-	mi := &file_api_proto_msgTypes[51]
+	mi := &file_api_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3697,7 +3601,7 @@ func (x *MemberListResponse) String() string {
 func (*MemberListResponse) ProtoMessage() {}
 
 func (x *MemberListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[51]
+	mi := &file_api_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3710,7 +3614,7 @@ func (x *MemberListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberListResponse.ProtoReflect.Descriptor instead.
 func (*MemberListResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{51}
+	return file_api_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MemberListResponse) GetHeader() *ResponseHeader {
@@ -3736,7 +3640,7 @@ type MemberPromoteRequest struct {
 
 func (x *MemberPromoteRequest) Reset() {
 	*x = MemberPromoteRequest{}
-	mi := &file_api_proto_msgTypes[52]
+	mi := &file_api_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3748,7 +3652,7 @@ func (x *MemberPromoteRequest) String() string {
 func (*MemberPromoteRequest) ProtoMessage() {}
 
 func (x *MemberPromoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[52]
+	mi := &file_api_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3761,7 +3665,7 @@ func (x *MemberPromoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberPromoteRequest.ProtoReflect.Descriptor instead.
 func (*MemberPromoteRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{52}
+	return file_api_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *MemberPromoteRequest) GetID() uint64 {
@@ -3781,7 +3685,7 @@ type MemberPromoteResponse struct {
 
 func (x *MemberPromoteResponse) Reset() {
 	*x = MemberPromoteResponse{}
-	mi := &file_api_proto_msgTypes[53]
+	mi := &file_api_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3793,7 +3697,7 @@ func (x *MemberPromoteResponse) String() string {
 func (*MemberPromoteResponse) ProtoMessage() {}
 
 func (x *MemberPromoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[53]
+	mi := &file_api_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3806,7 +3710,7 @@ func (x *MemberPromoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberPromoteResponse.ProtoReflect.Descriptor instead.
 func (*MemberPromoteResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{53}
+	return file_api_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *MemberPromoteResponse) GetHeader() *ResponseHeader {
@@ -3831,7 +3735,7 @@ type DefragmentRequest struct {
 
 func (x *DefragmentRequest) Reset() {
 	*x = DefragmentRequest{}
-	mi := &file_api_proto_msgTypes[54]
+	mi := &file_api_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3843,7 +3747,7 @@ func (x *DefragmentRequest) String() string {
 func (*DefragmentRequest) ProtoMessage() {}
 
 func (x *DefragmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[54]
+	mi := &file_api_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3856,7 +3760,7 @@ func (x *DefragmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DefragmentRequest.ProtoReflect.Descriptor instead.
 func (*DefragmentRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{54}
+	return file_api_proto_rawDescGZIP(), []int{52}
 }
 
 type DefragmentResponse struct {
@@ -3868,7 +3772,7 @@ type DefragmentResponse struct {
 
 func (x *DefragmentResponse) Reset() {
 	*x = DefragmentResponse{}
-	mi := &file_api_proto_msgTypes[55]
+	mi := &file_api_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3880,7 +3784,7 @@ func (x *DefragmentResponse) String() string {
 func (*DefragmentResponse) ProtoMessage() {}
 
 func (x *DefragmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[55]
+	mi := &file_api_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3893,7 +3797,7 @@ func (x *DefragmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DefragmentResponse.ProtoReflect.Descriptor instead.
 func (*DefragmentResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{55}
+	return file_api_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DefragmentResponse) GetHeader() *ResponseHeader {
@@ -3912,7 +3816,7 @@ type MoveLeaderRequest struct {
 
 func (x *MoveLeaderRequest) Reset() {
 	*x = MoveLeaderRequest{}
-	mi := &file_api_proto_msgTypes[56]
+	mi := &file_api_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3924,7 +3828,7 @@ func (x *MoveLeaderRequest) String() string {
 func (*MoveLeaderRequest) ProtoMessage() {}
 
 func (x *MoveLeaderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[56]
+	mi := &file_api_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3937,7 +3841,7 @@ func (x *MoveLeaderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveLeaderRequest.ProtoReflect.Descriptor instead.
 func (*MoveLeaderRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{56}
+	return file_api_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *MoveLeaderRequest) GetTargetID() uint64 {
@@ -3956,7 +3860,7 @@ type MoveLeaderResponse struct {
 
 func (x *MoveLeaderResponse) Reset() {
 	*x = MoveLeaderResponse{}
-	mi := &file_api_proto_msgTypes[57]
+	mi := &file_api_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3968,7 +3872,7 @@ func (x *MoveLeaderResponse) String() string {
 func (*MoveLeaderResponse) ProtoMessage() {}
 
 func (x *MoveLeaderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[57]
+	mi := &file_api_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3981,7 +3885,7 @@ func (x *MoveLeaderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveLeaderResponse.ProtoReflect.Descriptor instead.
 func (*MoveLeaderResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{57}
+	return file_api_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *MoveLeaderResponse) GetHeader() *ResponseHeader {
@@ -4001,7 +3905,7 @@ type AlarmMember struct {
 
 func (x *AlarmMember) Reset() {
 	*x = AlarmMember{}
-	mi := &file_api_proto_msgTypes[58]
+	mi := &file_api_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4013,7 +3917,7 @@ func (x *AlarmMember) String() string {
 func (*AlarmMember) ProtoMessage() {}
 
 func (x *AlarmMember) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[58]
+	mi := &file_api_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4026,7 +3930,7 @@ func (x *AlarmMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmMember.ProtoReflect.Descriptor instead.
 func (*AlarmMember) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{58}
+	return file_api_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *AlarmMember) GetMemberID() uint64 {
@@ -4054,7 +3958,7 @@ type AlarmRequest struct {
 
 func (x *AlarmRequest) Reset() {
 	*x = AlarmRequest{}
-	mi := &file_api_proto_msgTypes[59]
+	mi := &file_api_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4066,7 +3970,7 @@ func (x *AlarmRequest) String() string {
 func (*AlarmRequest) ProtoMessage() {}
 
 func (x *AlarmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[59]
+	mi := &file_api_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4079,7 +3983,7 @@ func (x *AlarmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmRequest.ProtoReflect.Descriptor instead.
 func (*AlarmRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{59}
+	return file_api_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *AlarmRequest) GetAction() AlarmRequest_AlarmAction {
@@ -4113,7 +4017,7 @@ type AlarmResponse struct {
 
 func (x *AlarmResponse) Reset() {
 	*x = AlarmResponse{}
-	mi := &file_api_proto_msgTypes[60]
+	mi := &file_api_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4125,7 +4029,7 @@ func (x *AlarmResponse) String() string {
 func (*AlarmResponse) ProtoMessage() {}
 
 func (x *AlarmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[60]
+	mi := &file_api_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4138,7 +4042,7 @@ func (x *AlarmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmResponse.ProtoReflect.Descriptor instead.
 func (*AlarmResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{60}
+	return file_api_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *AlarmResponse) GetHeader() *ResponseHeader {
@@ -4165,7 +4069,7 @@ type DowngradeRequest struct {
 
 func (x *DowngradeRequest) Reset() {
 	*x = DowngradeRequest{}
-	mi := &file_api_proto_msgTypes[61]
+	mi := &file_api_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4177,7 +4081,7 @@ func (x *DowngradeRequest) String() string {
 func (*DowngradeRequest) ProtoMessage() {}
 
 func (x *DowngradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[61]
+	mi := &file_api_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4190,7 +4094,7 @@ func (x *DowngradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DowngradeRequest.ProtoReflect.Descriptor instead.
 func (*DowngradeRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{61}
+	return file_api_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *DowngradeRequest) GetAction() DowngradeRequest_DowngradeAction {
@@ -4217,7 +4121,7 @@ type DowngradeResponse struct {
 
 func (x *DowngradeResponse) Reset() {
 	*x = DowngradeResponse{}
-	mi := &file_api_proto_msgTypes[62]
+	mi := &file_api_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4229,7 +4133,7 @@ func (x *DowngradeResponse) String() string {
 func (*DowngradeResponse) ProtoMessage() {}
 
 func (x *DowngradeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[62]
+	mi := &file_api_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4242,7 +4146,7 @@ func (x *DowngradeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DowngradeResponse.ProtoReflect.Descriptor instead.
 func (*DowngradeResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{62}
+	return file_api_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *DowngradeResponse) GetHeader() *ResponseHeader {
@@ -4267,7 +4171,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_api_proto_msgTypes[63]
+	mi := &file_api_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4279,7 +4183,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[63]
+	mi := &file_api_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4292,7 +4196,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{63}
+	return file_api_proto_rawDescGZIP(), []int{61}
 }
 
 type StatusResponse struct {
@@ -4315,7 +4219,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_api_proto_msgTypes[64]
+	mi := &file_api_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4327,7 +4231,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[64]
+	mi := &file_api_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4340,7 +4244,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{64}
+	return file_api_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *StatusResponse) GetHeader() *ResponseHeader {
@@ -4632,12 +4536,7 @@ const file_api_proto_rawDesc = "" +
 	"\x16LeaseKeepAliveResponse\x124\n" +
 	"\x06header\x18\x01 \x01(\v2\x1c.etcdserverpb.ResponseHeaderR\x06header\x12\x0e\n" +
 	"\x02ID\x18\x02 \x01(\x03R\x02ID\x12\x10\n" +
-	"\x03TTL\x18\x03 \x01(\x03R\x03TTL\".\n" +
-	"\x1aLeaseKeepAliveBatchRequest\x12\x10\n" +
-	"\x03IDs\x18\x01 \x03(\x03R\x03IDs\"g\n" +
-	"\x1bLeaseKeepAliveBatchResponse\x124\n" +
-	"\x06header\x18\x01 \x01(\v2\x1c.etcdserverpb.ResponseHeaderR\x06header\x12\x12\n" +
-	"\x04TTLs\x18\x02 \x03(\x03R\x04TTLs\"<\n" +
+	"\x03TTL\x18\x03 \x01(\x03R\x03TTL\"<\n" +
 	"\x16LeaseTimeToLiveRequest\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\x03R\x02ID\x12\x12\n" +
 	"\x04keys\x18\x02 \x01(\bR\x04keys\"\xa5\x01\n" +
@@ -4791,7 +4690,7 @@ func file_api_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 65)
+var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_api_proto_goTypes = []any{
 	(AlarmType)(0),                        // 0: etcdserverpb.AlarmType
 	(Event_EventType)(0),                  // 1: etcdserverpb.Event.EventType
@@ -4838,35 +4737,33 @@ var file_api_proto_goTypes = []any{
 	(*LeaseCheckpointResponse)(nil),       // 42: etcdserverpb.LeaseCheckpointResponse
 	(*LeaseKeepAliveRequest)(nil),         // 43: etcdserverpb.LeaseKeepAliveRequest
 	(*LeaseKeepAliveResponse)(nil),        // 44: etcdserverpb.LeaseKeepAliveResponse
-	(*LeaseKeepAliveBatchRequest)(nil),    // 45: etcdserverpb.LeaseKeepAliveBatchRequest
-	(*LeaseKeepAliveBatchResponse)(nil),   // 46: etcdserverpb.LeaseKeepAliveBatchResponse
-	(*LeaseTimeToLiveRequest)(nil),        // 47: etcdserverpb.LeaseTimeToLiveRequest
-	(*LeaseTimeToLiveResponse)(nil),       // 48: etcdserverpb.LeaseTimeToLiveResponse
-	(*LeaseStatus)(nil),                   // 49: etcdserverpb.LeaseStatus
-	(*LeaseLeasesRequest)(nil),            // 50: etcdserverpb.LeaseLeasesRequest
-	(*LeaseLeasesResponse)(nil),           // 51: etcdserverpb.LeaseLeasesResponse
-	(*Member)(nil),                        // 52: etcdserverpb.Member
-	(*MemberAddRequest)(nil),              // 53: etcdserverpb.MemberAddRequest
-	(*MemberAddResponse)(nil),             // 54: etcdserverpb.MemberAddResponse
-	(*MemberRemoveRequest)(nil),           // 55: etcdserverpb.MemberRemoveRequest
-	(*MemberRemoveResponse)(nil),          // 56: etcdserverpb.MemberRemoveResponse
-	(*MemberUpdateRequest)(nil),           // 57: etcdserverpb.MemberUpdateRequest
-	(*MemberUpdateResponse)(nil),          // 58: etcdserverpb.MemberUpdateResponse
-	(*MemberListRequest)(nil),             // 59: etcdserverpb.MemberListRequest
-	(*MemberListResponse)(nil),            // 60: etcdserverpb.MemberListResponse
-	(*MemberPromoteRequest)(nil),          // 61: etcdserverpb.MemberPromoteRequest
-	(*MemberPromoteResponse)(nil),         // 62: etcdserverpb.MemberPromoteResponse
-	(*DefragmentRequest)(nil),             // 63: etcdserverpb.DefragmentRequest
-	(*DefragmentResponse)(nil),            // 64: etcdserverpb.DefragmentResponse
-	(*MoveLeaderRequest)(nil),             // 65: etcdserverpb.MoveLeaderRequest
-	(*MoveLeaderResponse)(nil),            // 66: etcdserverpb.MoveLeaderResponse
-	(*AlarmMember)(nil),                   // 67: etcdserverpb.AlarmMember
-	(*AlarmRequest)(nil),                  // 68: etcdserverpb.AlarmRequest
-	(*AlarmResponse)(nil),                 // 69: etcdserverpb.AlarmResponse
-	(*DowngradeRequest)(nil),              // 70: etcdserverpb.DowngradeRequest
-	(*DowngradeResponse)(nil),             // 71: etcdserverpb.DowngradeResponse
-	(*StatusRequest)(nil),                 // 72: etcdserverpb.StatusRequest
-	(*StatusResponse)(nil),                // 73: etcdserverpb.StatusResponse
+	(*LeaseTimeToLiveRequest)(nil),        // 45: etcdserverpb.LeaseTimeToLiveRequest
+	(*LeaseTimeToLiveResponse)(nil),       // 46: etcdserverpb.LeaseTimeToLiveResponse
+	(*LeaseStatus)(nil),                   // 47: etcdserverpb.LeaseStatus
+	(*LeaseLeasesRequest)(nil),            // 48: etcdserverpb.LeaseLeasesRequest
+	(*LeaseLeasesResponse)(nil),           // 49: etcdserverpb.LeaseLeasesResponse
+	(*Member)(nil),                        // 50: etcdserverpb.Member
+	(*MemberAddRequest)(nil),              // 51: etcdserverpb.MemberAddRequest
+	(*MemberAddResponse)(nil),             // 52: etcdserverpb.MemberAddResponse
+	(*MemberRemoveRequest)(nil),           // 53: etcdserverpb.MemberRemoveRequest
+	(*MemberRemoveResponse)(nil),          // 54: etcdserverpb.MemberRemoveResponse
+	(*MemberUpdateRequest)(nil),           // 55: etcdserverpb.MemberUpdateRequest
+	(*MemberUpdateResponse)(nil),          // 56: etcdserverpb.MemberUpdateResponse
+	(*MemberListRequest)(nil),             // 57: etcdserverpb.MemberListRequest
+	(*MemberListResponse)(nil),            // 58: etcdserverpb.MemberListResponse
+	(*MemberPromoteRequest)(nil),          // 59: etcdserverpb.MemberPromoteRequest
+	(*MemberPromoteResponse)(nil),         // 60: etcdserverpb.MemberPromoteResponse
+	(*DefragmentRequest)(nil),             // 61: etcdserverpb.DefragmentRequest
+	(*DefragmentResponse)(nil),            // 62: etcdserverpb.DefragmentResponse
+	(*MoveLeaderRequest)(nil),             // 63: etcdserverpb.MoveLeaderRequest
+	(*MoveLeaderResponse)(nil),            // 64: etcdserverpb.MoveLeaderResponse
+	(*AlarmMember)(nil),                   // 65: etcdserverpb.AlarmMember
+	(*AlarmRequest)(nil),                  // 66: etcdserverpb.AlarmRequest
+	(*AlarmResponse)(nil),                 // 67: etcdserverpb.AlarmResponse
+	(*DowngradeRequest)(nil),              // 68: etcdserverpb.DowngradeRequest
+	(*DowngradeResponse)(nil),             // 69: etcdserverpb.DowngradeResponse
+	(*StatusRequest)(nil),                 // 70: etcdserverpb.StatusRequest
+	(*StatusResponse)(nil),                // 71: etcdserverpb.StatusResponse
 }
 var file_api_proto_depIdxs = []int32{
 	1,  // 0: etcdserverpb.Event.type:type_name -> etcdserverpb.Event.EventType
@@ -4910,84 +4807,83 @@ var file_api_proto_depIdxs = []int32{
 	40, // 38: etcdserverpb.LeaseCheckpointRequest.checkpoints:type_name -> etcdserverpb.LeaseCheckpoint
 	11, // 39: etcdserverpb.LeaseCheckpointResponse.header:type_name -> etcdserverpb.ResponseHeader
 	11, // 40: etcdserverpb.LeaseKeepAliveResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 41: etcdserverpb.LeaseKeepAliveBatchResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 42: etcdserverpb.LeaseTimeToLiveResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 43: etcdserverpb.LeaseLeasesResponse.header:type_name -> etcdserverpb.ResponseHeader
-	49, // 44: etcdserverpb.LeaseLeasesResponse.leases:type_name -> etcdserverpb.LeaseStatus
-	11, // 45: etcdserverpb.MemberAddResponse.header:type_name -> etcdserverpb.ResponseHeader
-	52, // 46: etcdserverpb.MemberAddResponse.member:type_name -> etcdserverpb.Member
-	52, // 47: etcdserverpb.MemberAddResponse.members:type_name -> etcdserverpb.Member
-	11, // 48: etcdserverpb.MemberRemoveResponse.header:type_name -> etcdserverpb.ResponseHeader
-	52, // 49: etcdserverpb.MemberRemoveResponse.members:type_name -> etcdserverpb.Member
-	11, // 50: etcdserverpb.MemberUpdateResponse.header:type_name -> etcdserverpb.ResponseHeader
-	52, // 51: etcdserverpb.MemberUpdateResponse.members:type_name -> etcdserverpb.Member
-	11, // 52: etcdserverpb.MemberListResponse.header:type_name -> etcdserverpb.ResponseHeader
-	52, // 53: etcdserverpb.MemberListResponse.members:type_name -> etcdserverpb.Member
-	11, // 54: etcdserverpb.MemberPromoteResponse.header:type_name -> etcdserverpb.ResponseHeader
-	52, // 55: etcdserverpb.MemberPromoteResponse.members:type_name -> etcdserverpb.Member
-	11, // 56: etcdserverpb.DefragmentResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 57: etcdserverpb.MoveLeaderResponse.header:type_name -> etcdserverpb.ResponseHeader
-	0,  // 58: etcdserverpb.AlarmMember.alarm:type_name -> etcdserverpb.AlarmType
-	7,  // 59: etcdserverpb.AlarmRequest.action:type_name -> etcdserverpb.AlarmRequest.AlarmAction
-	0,  // 60: etcdserverpb.AlarmRequest.alarm:type_name -> etcdserverpb.AlarmType
-	11, // 61: etcdserverpb.AlarmResponse.header:type_name -> etcdserverpb.ResponseHeader
-	67, // 62: etcdserverpb.AlarmResponse.alarms:type_name -> etcdserverpb.AlarmMember
-	8,  // 63: etcdserverpb.DowngradeRequest.action:type_name -> etcdserverpb.DowngradeRequest.DowngradeAction
-	11, // 64: etcdserverpb.DowngradeResponse.header:type_name -> etcdserverpb.ResponseHeader
-	11, // 65: etcdserverpb.StatusResponse.header:type_name -> etcdserverpb.ResponseHeader
-	12, // 66: etcdserverpb.KV.Range:input_type -> etcdserverpb.RangeRequest
-	14, // 67: etcdserverpb.KV.Put:input_type -> etcdserverpb.PutRequest
-	16, // 68: etcdserverpb.KV.DeleteRange:input_type -> etcdserverpb.DeleteRangeRequest
-	21, // 69: etcdserverpb.KV.Txn:input_type -> etcdserverpb.TxnRequest
-	23, // 70: etcdserverpb.KV.Compact:input_type -> etcdserverpb.CompactionRequest
-	31, // 71: etcdserverpb.Watch.Watch:input_type -> etcdserverpb.WatchRequest
-	36, // 72: etcdserverpb.Lease.LeaseGrant:input_type -> etcdserverpb.LeaseGrantRequest
-	38, // 73: etcdserverpb.Lease.LeaseRevoke:input_type -> etcdserverpb.LeaseRevokeRequest
-	43, // 74: etcdserverpb.Lease.LeaseKeepAlive:input_type -> etcdserverpb.LeaseKeepAliveRequest
-	47, // 75: etcdserverpb.Lease.LeaseTimeToLive:input_type -> etcdserverpb.LeaseTimeToLiveRequest
-	50, // 76: etcdserverpb.Lease.LeaseLeases:input_type -> etcdserverpb.LeaseLeasesRequest
-	53, // 77: etcdserverpb.Cluster.MemberAdd:input_type -> etcdserverpb.MemberAddRequest
-	55, // 78: etcdserverpb.Cluster.MemberRemove:input_type -> etcdserverpb.MemberRemoveRequest
-	57, // 79: etcdserverpb.Cluster.MemberUpdate:input_type -> etcdserverpb.MemberUpdateRequest
-	59, // 80: etcdserverpb.Cluster.MemberList:input_type -> etcdserverpb.MemberListRequest
-	61, // 81: etcdserverpb.Cluster.MemberPromote:input_type -> etcdserverpb.MemberPromoteRequest
-	68, // 82: etcdserverpb.Maintenance.Alarm:input_type -> etcdserverpb.AlarmRequest
-	72, // 83: etcdserverpb.Maintenance.Status:input_type -> etcdserverpb.StatusRequest
-	63, // 84: etcdserverpb.Maintenance.Defragment:input_type -> etcdserverpb.DefragmentRequest
-	27, // 85: etcdserverpb.Maintenance.Hash:input_type -> etcdserverpb.HashRequest
-	25, // 86: etcdserverpb.Maintenance.HashKV:input_type -> etcdserverpb.HashKVRequest
-	29, // 87: etcdserverpb.Maintenance.Snapshot:input_type -> etcdserverpb.SnapshotRequest
-	65, // 88: etcdserverpb.Maintenance.MoveLeader:input_type -> etcdserverpb.MoveLeaderRequest
-	70, // 89: etcdserverpb.Maintenance.Downgrade:input_type -> etcdserverpb.DowngradeRequest
-	13, // 90: etcdserverpb.KV.Range:output_type -> etcdserverpb.RangeResponse
-	15, // 91: etcdserverpb.KV.Put:output_type -> etcdserverpb.PutResponse
-	17, // 92: etcdserverpb.KV.DeleteRange:output_type -> etcdserverpb.DeleteRangeResponse
-	22, // 93: etcdserverpb.KV.Txn:output_type -> etcdserverpb.TxnResponse
-	24, // 94: etcdserverpb.KV.Compact:output_type -> etcdserverpb.CompactionResponse
-	35, // 95: etcdserverpb.Watch.Watch:output_type -> etcdserverpb.WatchResponse
-	37, // 96: etcdserverpb.Lease.LeaseGrant:output_type -> etcdserverpb.LeaseGrantResponse
-	39, // 97: etcdserverpb.Lease.LeaseRevoke:output_type -> etcdserverpb.LeaseRevokeResponse
-	44, // 98: etcdserverpb.Lease.LeaseKeepAlive:output_type -> etcdserverpb.LeaseKeepAliveResponse
-	48, // 99: etcdserverpb.Lease.LeaseTimeToLive:output_type -> etcdserverpb.LeaseTimeToLiveResponse
-	51, // 100: etcdserverpb.Lease.LeaseLeases:output_type -> etcdserverpb.LeaseLeasesResponse
-	54, // 101: etcdserverpb.Cluster.MemberAdd:output_type -> etcdserverpb.MemberAddResponse
-	56, // 102: etcdserverpb.Cluster.MemberRemove:output_type -> etcdserverpb.MemberRemoveResponse
-	58, // 103: etcdserverpb.Cluster.MemberUpdate:output_type -> etcdserverpb.MemberUpdateResponse
-	60, // 104: etcdserverpb.Cluster.MemberList:output_type -> etcdserverpb.MemberListResponse
-	62, // 105: etcdserverpb.Cluster.MemberPromote:output_type -> etcdserverpb.MemberPromoteResponse
-	69, // 106: etcdserverpb.Maintenance.Alarm:output_type -> etcdserverpb.AlarmResponse
-	73, // 107: etcdserverpb.Maintenance.Status:output_type -> etcdserverpb.StatusResponse
-	64, // 108: etcdserverpb.Maintenance.Defragment:output_type -> etcdserverpb.DefragmentResponse
-	28, // 109: etcdserverpb.Maintenance.Hash:output_type -> etcdserverpb.HashResponse
-	26, // 110: etcdserverpb.Maintenance.HashKV:output_type -> etcdserverpb.HashKVResponse
-	30, // 111: etcdserverpb.Maintenance.Snapshot:output_type -> etcdserverpb.SnapshotResponse
-	66, // 112: etcdserverpb.Maintenance.MoveLeader:output_type -> etcdserverpb.MoveLeaderResponse
-	71, // 113: etcdserverpb.Maintenance.Downgrade:output_type -> etcdserverpb.DowngradeResponse
-	90, // [90:114] is the sub-list for method output_type
-	66, // [66:90] is the sub-list for method input_type
-	66, // [66:66] is the sub-list for extension type_name
-	66, // [66:66] is the sub-list for extension extendee
-	0,  // [0:66] is the sub-list for field type_name
+	11, // 41: etcdserverpb.LeaseTimeToLiveResponse.header:type_name -> etcdserverpb.ResponseHeader
+	11, // 42: etcdserverpb.LeaseLeasesResponse.header:type_name -> etcdserverpb.ResponseHeader
+	47, // 43: etcdserverpb.LeaseLeasesResponse.leases:type_name -> etcdserverpb.LeaseStatus
+	11, // 44: etcdserverpb.MemberAddResponse.header:type_name -> etcdserverpb.ResponseHeader
+	50, // 45: etcdserverpb.MemberAddResponse.member:type_name -> etcdserverpb.Member
+	50, // 46: etcdserverpb.MemberAddResponse.members:type_name -> etcdserverpb.Member
+	11, // 47: etcdserverpb.MemberRemoveResponse.header:type_name -> etcdserverpb.ResponseHeader
+	50, // 48: etcdserverpb.MemberRemoveResponse.members:type_name -> etcdserverpb.Member
+	11, // 49: etcdserverpb.MemberUpdateResponse.header:type_name -> etcdserverpb.ResponseHeader
+	50, // 50: etcdserverpb.MemberUpdateResponse.members:type_name -> etcdserverpb.Member
+	11, // 51: etcdserverpb.MemberListResponse.header:type_name -> etcdserverpb.ResponseHeader
+	50, // 52: etcdserverpb.MemberListResponse.members:type_name -> etcdserverpb.Member
+	11, // 53: etcdserverpb.MemberPromoteResponse.header:type_name -> etcdserverpb.ResponseHeader
+	50, // 54: etcdserverpb.MemberPromoteResponse.members:type_name -> etcdserverpb.Member
+	11, // 55: etcdserverpb.DefragmentResponse.header:type_name -> etcdserverpb.ResponseHeader
+	11, // 56: etcdserverpb.MoveLeaderResponse.header:type_name -> etcdserverpb.ResponseHeader
+	0,  // 57: etcdserverpb.AlarmMember.alarm:type_name -> etcdserverpb.AlarmType
+	7,  // 58: etcdserverpb.AlarmRequest.action:type_name -> etcdserverpb.AlarmRequest.AlarmAction
+	0,  // 59: etcdserverpb.AlarmRequest.alarm:type_name -> etcdserverpb.AlarmType
+	11, // 60: etcdserverpb.AlarmResponse.header:type_name -> etcdserverpb.ResponseHeader
+	65, // 61: etcdserverpb.AlarmResponse.alarms:type_name -> etcdserverpb.AlarmMember
+	8,  // 62: etcdserverpb.DowngradeRequest.action:type_name -> etcdserverpb.DowngradeRequest.DowngradeAction
+	11, // 63: etcdserverpb.DowngradeResponse.header:type_name -> etcdserverpb.ResponseHeader
+	11, // 64: etcdserverpb.StatusResponse.header:type_name -> etcdserverpb.ResponseHeader
+	12, // 65: etcdserverpb.KV.Range:input_type -> etcdserverpb.RangeRequest
+	14, // 66: etcdserverpb.KV.Put:input_type -> etcdserverpb.PutRequest
+	16, // 67: etcdserverpb.KV.DeleteRange:input_type -> etcdserverpb.DeleteRangeRequest
+	21, // 68: etcdserverpb.KV.Txn:input_type -> etcdserverpb.TxnRequest
+	23, // 69: etcdserverpb.KV.Compact:input_type -> etcdserverpb.CompactionRequest
+	31, // 70: etcdserverpb.Watch.Watch:input_type -> etcdserverpb.WatchRequest
+	36, // 71: etcdserverpb.Lease.LeaseGrant:input_type -> etcdserverpb.LeaseGrantRequest
+	38, // 72: etcdserverpb.Lease.LeaseRevoke:input_type -> etcdserverpb.LeaseRevokeRequest
+	43, // 73: etcdserverpb.Lease.LeaseKeepAlive:input_type -> etcdserverpb.LeaseKeepAliveRequest
+	45, // 74: etcdserverpb.Lease.LeaseTimeToLive:input_type -> etcdserverpb.LeaseTimeToLiveRequest
+	48, // 75: etcdserverpb.Lease.LeaseLeases:input_type -> etcdserverpb.LeaseLeasesRequest
+	51, // 76: etcdserverpb.Cluster.MemberAdd:input_type -> etcdserverpb.MemberAddRequest
+	53, // 77: etcdserverpb.Cluster.MemberRemove:input_type -> etcdserverpb.MemberRemoveRequest
+	55, // 78: etcdserverpb.Cluster.MemberUpdate:input_type -> etcdserverpb.MemberUpdateRequest
+	57, // 79: etcdserverpb.Cluster.MemberList:input_type -> etcdserverpb.MemberListRequest
+	59, // 80: etcdserverpb.Cluster.MemberPromote:input_type -> etcdserverpb.MemberPromoteRequest
+	66, // 81: etcdserverpb.Maintenance.Alarm:input_type -> etcdserverpb.AlarmRequest
+	70, // 82: etcdserverpb.Maintenance.Status:input_type -> etcdserverpb.StatusRequest
+	61, // 83: etcdserverpb.Maintenance.Defragment:input_type -> etcdserverpb.DefragmentRequest
+	27, // 84: etcdserverpb.Maintenance.Hash:input_type -> etcdserverpb.HashRequest
+	25, // 85: etcdserverpb.Maintenance.HashKV:input_type -> etcdserverpb.HashKVRequest
+	29, // 86: etcdserverpb.Maintenance.Snapshot:input_type -> etcdserverpb.SnapshotRequest
+	63, // 87: etcdserverpb.Maintenance.MoveLeader:input_type -> etcdserverpb.MoveLeaderRequest
+	68, // 88: etcdserverpb.Maintenance.Downgrade:input_type -> etcdserverpb.DowngradeRequest
+	13, // 89: etcdserverpb.KV.Range:output_type -> etcdserverpb.RangeResponse
+	15, // 90: etcdserverpb.KV.Put:output_type -> etcdserverpb.PutResponse
+	17, // 91: etcdserverpb.KV.DeleteRange:output_type -> etcdserverpb.DeleteRangeResponse
+	22, // 92: etcdserverpb.KV.Txn:output_type -> etcdserverpb.TxnResponse
+	24, // 93: etcdserverpb.KV.Compact:output_type -> etcdserverpb.CompactionResponse
+	35, // 94: etcdserverpb.Watch.Watch:output_type -> etcdserverpb.WatchResponse
+	37, // 95: etcdserverpb.Lease.LeaseGrant:output_type -> etcdserverpb.LeaseGrantResponse
+	39, // 96: etcdserverpb.Lease.LeaseRevoke:output_type -> etcdserverpb.LeaseRevokeResponse
+	44, // 97: etcdserverpb.Lease.LeaseKeepAlive:output_type -> etcdserverpb.LeaseKeepAliveResponse
+	46, // 98: etcdserverpb.Lease.LeaseTimeToLive:output_type -> etcdserverpb.LeaseTimeToLiveResponse
+	49, // 99: etcdserverpb.Lease.LeaseLeases:output_type -> etcdserverpb.LeaseLeasesResponse
+	52, // 100: etcdserverpb.Cluster.MemberAdd:output_type -> etcdserverpb.MemberAddResponse
+	54, // 101: etcdserverpb.Cluster.MemberRemove:output_type -> etcdserverpb.MemberRemoveResponse
+	56, // 102: etcdserverpb.Cluster.MemberUpdate:output_type -> etcdserverpb.MemberUpdateResponse
+	58, // 103: etcdserverpb.Cluster.MemberList:output_type -> etcdserverpb.MemberListResponse
+	60, // 104: etcdserverpb.Cluster.MemberPromote:output_type -> etcdserverpb.MemberPromoteResponse
+	67, // 105: etcdserverpb.Maintenance.Alarm:output_type -> etcdserverpb.AlarmResponse
+	71, // 106: etcdserverpb.Maintenance.Status:output_type -> etcdserverpb.StatusResponse
+	62, // 107: etcdserverpb.Maintenance.Defragment:output_type -> etcdserverpb.DefragmentResponse
+	28, // 108: etcdserverpb.Maintenance.Hash:output_type -> etcdserverpb.HashResponse
+	26, // 109: etcdserverpb.Maintenance.HashKV:output_type -> etcdserverpb.HashKVResponse
+	30, // 110: etcdserverpb.Maintenance.Snapshot:output_type -> etcdserverpb.SnapshotResponse
+	64, // 111: etcdserverpb.Maintenance.MoveLeader:output_type -> etcdserverpb.MoveLeaderResponse
+	69, // 112: etcdserverpb.Maintenance.Downgrade:output_type -> etcdserverpb.DowngradeResponse
+	89, // [89:113] is the sub-list for method output_type
+	65, // [65:89] is the sub-list for method input_type
+	65, // [65:65] is the sub-list for extension type_name
+	65, // [65:65] is the sub-list for extension extendee
+	0,  // [0:65] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_init() }
@@ -5025,7 +4921,7 @@ func file_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_rawDesc), len(file_api_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   65,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

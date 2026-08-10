@@ -45,6 +45,11 @@ type extension interface {
 	ContextCopy(dst, src context.Context) context.Context
 }
 
+var (
+	wasmKv  = turbokube.StorageKvDevWasm
+	wasmSvc = turbokube.ServiceGrpcDevWasm
+)
+
 func main() {
 	go func() {
 		slog.Info("pprof server", "err", http.ListenAndServe(":6060", nil))
@@ -85,7 +90,7 @@ func main() {
 		}
 		ctxCopy = append(ctxCopy, m.ContextCopy)
 	}
-	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvDevWasm,
+	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, wasmKv,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		// wazeropool.WithBurst(runtime.NumCPU()),
@@ -180,7 +185,7 @@ func main() {
 		}
 		svcCtxCopy = append(svcCtxCopy, m.ContextCopy)
 	}
-	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, turbokube.ServiceGrpcDevWasm,
+	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, wasmSvc,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.ServiceGrpcName),

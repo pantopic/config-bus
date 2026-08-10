@@ -42,7 +42,9 @@ const (
 	WatchMessageType_UNKNOWN byte = iota
 	WatchMessageType_INIT
 	WatchMessageType_EVENT
+	WatchMessageType_EVENT_BATCH
 	WatchMessageType_SYNC
+	WatchMessageType_SYNC_BATCH
 	WatchMessageType_NOTIFY
 	WatchMessageType_CANCELED
 	WatchMessageType_ERR_COMPACTED

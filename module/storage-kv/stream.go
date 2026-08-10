@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"strconv"
 
@@ -15,38 +16,123 @@ var (
 	eventKvPrevResponse = &internal.KeyValue{}
 	eventKvResponse     = &internal.KeyValue{}
 	eventResponse       = &internal.Event{}
-	watchCreateRequest  = &internal.WatchCreateRequest{}
 	watchRequest        = &internal.WatchRequest{}
+	watchEventBatch     = &internal.WatchEventBatch{Event: &internal.Event{}}
+	watchSyncBatch      = &internal.WatchSyncBatch{}
 )
 
-func rangeWatchRecv(watchIdBytes []byte, revs []uint64) {
-	watchID := binary.BigEndian.Uint64(watchIdBytes)
-	last := watchRev.Load(watchID)
-	b := watchCache.Get(watchIdBytes)
-	if len(b) == 0 {
-		panic(`watchCache not found: ` + strconv.Itoa(int(watchID)) + ` ` + string(watchIdBytes))
-	}
-	watchCreateRequest.Reset()
-	err := watchCreateRequest.UnmarshalVT(b)
-	if err != nil {
-		panic("Watch request malformed")
+func rangeWatchRecv(notices []range_watch.Notice) {
+	watchSyncBatch.Reset()
+	reqs := make(map[uint64]*internal.WatchCreateRequest)
+	revs := make([]uint64, len(notices))
+	prev := make([]int, len(notices))
+	sent := make(map[uint64]int)
+	mins := make(map[uint64]uint64)
+	for i, n := range notices {
+		revs[i] = n.Val
+		for _, watchIdBytes := range n.IDs {
+			watchID := binary.BigEndian.Uint64(watchIdBytes)
+			watchSyncBatch.IDs = append(watchSyncBatch.IDs, int64(watchID))
+			req, ok := reqs[watchID]
+			if !ok {
+				b := watchCache.Get(watchIdBytes)
+				if len(b) == 0 {
+					panic(`watchCache not found: ` + strconv.Itoa(int(watchID)) + ` ` + string(watchIdBytes))
+				}
+				req = &internal.WatchCreateRequest{}
+				err := req.UnmarshalVT(b)
+				if err != nil {
+					panic("Watch request malformed")
+				}
+				reqs[watchID] = req
+				mins[watchID] = watchRev.Load(watchID)
+			}
+			if req.PrevKv {
+				prev[i]++
+			}
+		}
 	}
 	var rev uint64
-	var i, sent int
-	for i, rev = range revs {
-		if rev > last {
-			break
-		}
-	}
-	if rev > last {
-		last, sent, err = watchScanRevs(watchCreateRequest, revs[i:])
+	err := lmdb.View(func(txn lmdb.Txn) (err error) {
+		rev, err = dbMeta.getRevision(txn)
 		if err != nil {
-			panic("Error reading events: " + err.Error())
+			return
 		}
-		watchRev.Store(watchID, last)
-		if sent == 0 && watchCreateRequest.ProgressNotify {
-			sendCodeHeader(uint64(watchCreateRequest.WatchId), WatchMessageType_NOTIFY, last)
+		var n uint64
+		var i int
+		for evt := range kvStore.revScan(txn, revs) {
+			if n != evt.rev.upper() {
+				if n > 0 {
+					i++
+				}
+				n = evt.rev.upper()
+			}
+			var current, previous kv
+			if evt.rev.isdel() {
+				current = kv{key: evt.key, rev: evt.rev}
+				if prev[i] > 0 {
+					_, previous, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), true)
+				}
+			} else {
+				current, previous, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), prev[i] > 0)
+				if err != nil {
+					panic("Error getting event kv: " + string(evt.key))
+				}
+			}
+			kv := current.ToProto(eventKvResponse)
+			notice := notices[i]
+			e := watchEventBatch.Event
+			e.Reset()
+			watchEventBatch.Reset()
+			e.Type = internal.Event_EventType(evt.etype())
+			if current.rev.upper() > 0 {
+				e.Kv = kv
+			}
+			if prev[i] > 0 && previous.rev.upper() > 0 {
+				e.PrevKv = previous.ToProto(eventKvPrevResponse)
+			}
+			watchEventBatch.Event = e
+			watchEventBatch.Revision = rev
+		watches:
+			for _, watchIdBytes := range notice.IDs {
+				watchID := binary.BigEndian.Uint64(watchIdBytes)
+				req := reqs[watchID]
+				min := mins[watchID]
+				if min > 0 && evt.rev.upper() <= min {
+					continue watches
+				}
+				for _, f := range req.Filters {
+					if evt.etype() == uint8(f) {
+						continue watches
+					}
+				}
+				switch bytes.Compare(evt.key, req.Key) {
+				case 1:
+					if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+						continue watches
+					}
+				case -1:
+					continue watches
+				}
+				if !req.PrevKv {
+					watchEventBatch.WatchIds = append(watchEventBatch.WatchIds, int64(watchID))
+				} else {
+					watchEventBatch.WatchIdsPrev = append(watchEventBatch.WatchIdsPrev, int64(watchID))
+				}
+				sent[watchID]++
+			}
+			if len(watchEventBatch.WatchIds) > 0 || len(watchEventBatch.WatchIdsPrev) > 0 {
+				sendCodeMsg(0, WatchMessageType_EVENT_BATCH, watchEventBatch)
+			}
 		}
+		return
+	})
+	if err != nil {
+		panic("Error reading events: " + err.Error())
+	}
+	if len(watchSyncBatch.IDs) > 0 {
+		watchSyncBatch.Revision = rev
+		sendCodeMsg(0, WatchMessageType_SYNC_BATCH, watchSyncBatch)
 	}
 }
 
@@ -133,7 +219,7 @@ func watchScan(req *internal.WatchCreateRequest, since uint64) (rev uint64, sent
 			if prev.rev.upper() > 0 {
 				eventResponse.PrevKv = prev.ToProto(eventKvPrevResponse)
 			}
-			sendCodeRevMsg(uint64(req.WatchId), WatchMessageType_EVENT, rev, eventResponse)
+			sendCodeMsg(uint64(req.WatchId), WatchMessageType_EVENT, eventResponse)
 			sent++
 		}
 		return
@@ -141,52 +227,6 @@ func watchScan(req *internal.WatchCreateRequest, since uint64) (rev uint64, sent
 	if sent > 0 {
 		sendCodeHeader(uint64(req.WatchId), WatchMessageType_SYNC, rev)
 	}
-	return
-}
-
-func watchScanRevs(req *internal.WatchCreateRequest, revs []uint64) (rev uint64, sent int, err error) {
-	defer clear(filtered)
-	for _, f := range req.Filters {
-		filtered[uint8(f)] = true
-	}
-	err = lmdb.View(func(txn lmdb.Txn) (err error) {
-		rev, err = dbMeta.getRevision(txn)
-		if err != nil {
-			return
-		}
-		for evt := range kvStore.revScan(txn, revs) {
-			if _, ok := filtered[evt.etype()]; ok {
-				continue
-			}
-			var current, prev kv
-			if evt.rev.isdel() {
-				current = kv{key: evt.key, rev: evt.rev}
-				if req.PrevKv {
-					_, prev, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
-				}
-			} else {
-				current, prev, err = kvStore.getRev(txn, evt.key, evt.rev.upper(), req.PrevKv)
-				if err != nil {
-					panic("Error getting event kv: " + string(evt.key))
-				}
-			}
-			eventResponse.Reset()
-			eventResponse.Type = internal.Event_EventType(evt.etype())
-			if current.rev.upper() > 0 {
-				eventResponse.Kv = current.ToProto(eventKvResponse)
-			}
-			if prev.rev.upper() > 0 {
-				eventResponse.PrevKv = prev.ToProto(eventKvPrevResponse)
-			}
-			sendCodeRevMsg(uint64(req.WatchId), WatchMessageType_EVENT, rev, eventResponse)
-			sent++
-		}
-		return
-	})
-	if sent > 0 {
-		sendCodeHeader(uint64(req.WatchId), WatchMessageType_SYNC, rev)
-	}
-	rev = revs[len(revs)-1]
 	return
 }
 
@@ -261,11 +301,10 @@ func sendCodeHeader(val uint64, code byte, rev uint64) {
 	statemachine.StreamSend(val, data)
 }
 
-func sendCodeRevMsg(val uint64, code byte, rev uint64, msg Message) {
-	data := make([]byte, 1+8+msg.SizeVT())
+func sendCodeMsg(val uint64, code byte, msg Message) {
+	data := make([]byte, 1+msg.SizeVT())
 	data[0] = code
-	binary.BigEndian.PutUint64(data[1:], rev)
-	if _, err := msg.MarshalToSizedBufferVT(data[9:]); err != nil {
+	if _, err := msg.MarshalToSizedBufferVT(data[1:]); err != nil {
 		panic("Error serializing event kv: " + err.Error())
 	}
 	statemachine.StreamSend(val, data)

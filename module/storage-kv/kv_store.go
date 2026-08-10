@@ -198,7 +198,7 @@ func (db kvStoreImpl) getRange(
 				next = append(next, rev)
 				item.val = nil
 				for _, r := range next {
-					v, err = txn.Get(db.val.i, r.key(), v)
+					v, err = txn.Get(db.val.i, r.key(), v[:0])
 					if err != nil {
 						return
 					}
@@ -488,7 +488,7 @@ func (db kvStoreImpl) getRev(txn lmdb.Txn, key []byte, revision uint64, withPrev
 	}
 	next = append(next, krec.rev)
 	for _, rev := range next {
-		if v2, err = txn.Get(db.val.i, rev.key(), v2); err != nil {
+		if v2, err = txn.Get(db.val.i, rev.key(), v2[:0]); err != nil {
 			return
 		}
 		item, err = item.FromBytes(rev.key(), v2, item.val, false)
