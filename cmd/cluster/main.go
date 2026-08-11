@@ -121,13 +121,12 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			if stats := poolStorageKv.Stats(); stats.Active > 0 {
-				log.Info("poolStorageKv.Stats", "total", stats.Total,
-					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
-					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
-					"recycled", stats.Recycled,
-				)
-			}
+			stats := poolStorageKv.Stats()
+			log.Info("poolStorageKv.Stats", "total", stats.Total,
+				"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
+				"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+				"recycled", stats.Recycled,
+			)
 		}
 	}()
 	if err = agent.Start(ctx); err != nil {
