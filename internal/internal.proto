@@ -34,7 +34,7 @@ message WatchEventBatch {
   repeated int64 watch_ids_prev = 4;
 }
 
-message WatchSyncBatch {
+message WatchEventSync {
   repeated int64 IDs = 1;
   uint64 revision = 2;
 }

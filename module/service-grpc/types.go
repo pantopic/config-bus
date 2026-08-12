@@ -8,22 +8,22 @@ import (
 const (
 	CMD_INTERNAL_TERM byte = iota
 	CMD_INTERNAL_TICK
-	CMD_KV_PUT
-	CMD_KV_DELETE_RANGE
 	CMD_KV_COMPACT
+	CMD_KV_DELETE_RANGE
+	CMD_KV_PUT
 	CMD_KV_TXN
 	CMD_LEASE_GRANT
-	CMD_LEASE_REVOKE
 	CMD_LEASE_KEEP_ALIVE
 	CMD_LEASE_KEEP_ALIVE_BATCH
+	CMD_LEASE_REVOKE
 )
 
 const (
-	QUERY_KV_RANGE byte = iota
+	QUERY_HEADER byte = iota
+	QUERY_KV_RANGE
 	QUERY_LEASE_LEASES
 	QUERY_LEASE_TIME_TO_LIVE
 	QUERY_WATCH_PROGRESS
-	QUERY_HEADER
 )
 
 var (
@@ -39,16 +39,14 @@ var (
 )
 
 const (
-	WatchMessageType_UNKNOWN byte = iota
-	WatchMessageType_INIT
-	WatchMessageType_EVENT
-	WatchMessageType_EVENT_BATCH
-	WatchMessageType_SYNC
-	WatchMessageType_SYNC_BATCH
-	WatchMessageType_NOTIFY
+	WatchMessageType__UNKNOWN byte = iota
 	WatchMessageType_CANCELED
 	WatchMessageType_ERR_COMPACTED
 	WatchMessageType_ERR_EXISTS
+	WatchMessageType_EVENT_BATCH
+	WatchMessageType_EVENT_SYNC
+	WatchMessageType_INIT
+	WatchMessageType_NOTIFY
 )
 
 const (

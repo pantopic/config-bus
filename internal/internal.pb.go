@@ -288,8 +288,9 @@ func (x *LeaseKeepAliveBatchResponse) GetTTLs() []int64 {
 type WatchEventBatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Event         *Event                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	WatchIds      []int64                `protobuf:"varint,2,rep,packed,name=watch_ids,json=watchIds,proto3" json:"watch_ids,omitempty"`
-	WatchIdsPrev  []int64                `protobuf:"varint,3,rep,packed,name=watch_ids_prev,json=watchIdsPrev,proto3" json:"watch_ids_prev,omitempty"`
+	Revision      uint64                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
+	WatchIds      []int64                `protobuf:"varint,3,rep,packed,name=watch_ids,json=watchIds,proto3" json:"watch_ids,omitempty"`
+	WatchIdsPrev  []int64                `protobuf:"varint,4,rep,packed,name=watch_ids_prev,json=watchIdsPrev,proto3" json:"watch_ids_prev,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -331,6 +332,13 @@ func (x *WatchEventBatch) GetEvent() *Event {
 	return nil
 }
 
+func (x *WatchEventBatch) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 func (x *WatchEventBatch) GetWatchIds() []int64 {
 	if x != nil {
 		return x.WatchIds
@@ -345,27 +353,28 @@ func (x *WatchEventBatch) GetWatchIdsPrev() []int64 {
 	return nil
 }
 
-type WatchSyncBatch struct {
+type WatchEventSync struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IDs           []int64                `protobuf:"varint,1,rep,packed,name=IDs,proto3" json:"IDs,omitempty"`
+	Revision      uint64                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WatchSyncBatch) Reset() {
-	*x = WatchSyncBatch{}
+func (x *WatchEventSync) Reset() {
+	*x = WatchEventSync{}
 	mi := &file_internal_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WatchSyncBatch) String() string {
+func (x *WatchEventSync) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WatchSyncBatch) ProtoMessage() {}
+func (*WatchEventSync) ProtoMessage() {}
 
-func (x *WatchSyncBatch) ProtoReflect() protoreflect.Message {
+func (x *WatchEventSync) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -377,16 +386,23 @@ func (x *WatchSyncBatch) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WatchSyncBatch.ProtoReflect.Descriptor instead.
-func (*WatchSyncBatch) Descriptor() ([]byte, []int) {
+// Deprecated: Use WatchEventSync.ProtoReflect.Descriptor instead.
+func (*WatchEventSync) Descriptor() ([]byte, []int) {
 	return file_internal_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *WatchSyncBatch) GetIDs() []int64 {
+func (x *WatchEventSync) GetIDs() []int64 {
 	if x != nil {
 		return x.IDs
 	}
 	return nil
+}
+
+func (x *WatchEventSync) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
 }
 
 var File_internal_proto protoreflect.FileDescriptor
@@ -405,13 +421,15 @@ const file_internal_proto_rawDesc = "" +
 	"\x03IDs\x18\x01 \x03(\x03R\x03IDs\"g\n" +
 	"\x1bLeaseKeepAliveBatchResponse\x124\n" +
 	"\x06header\x18\x01 \x01(\v2\x1c.etcdserverpb.ResponseHeaderR\x06header\x12\x12\n" +
-	"\x04TTLs\x18\x02 \x03(\x03R\x04TTLs\"\x7f\n" +
+	"\x04TTLs\x18\x02 \x03(\x03R\x04TTLs\"\x9b\x01\n" +
 	"\x0fWatchEventBatch\x12)\n" +
-	"\x05event\x18\x01 \x01(\v2\x13.etcdserverpb.EventR\x05event\x12\x1b\n" +
-	"\twatch_ids\x18\x02 \x03(\x03R\bwatchIds\x12$\n" +
-	"\x0ewatch_ids_prev\x18\x03 \x03(\x03R\fwatchIdsPrev\"\"\n" +
-	"\x0eWatchSyncBatch\x12\x10\n" +
-	"\x03IDs\x18\x01 \x03(\x03R\x03IDsB(Z&github.com/pantopic/turbokube/internalb\x06proto3"
+	"\x05event\x18\x01 \x01(\v2\x13.etcdserverpb.EventR\x05event\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x04R\brevision\x12\x1b\n" +
+	"\twatch_ids\x18\x03 \x03(\x03R\bwatchIds\x12$\n" +
+	"\x0ewatch_ids_prev\x18\x04 \x03(\x03R\fwatchIdsPrev\">\n" +
+	"\x0eWatchEventSync\x12\x10\n" +
+	"\x03IDs\x18\x01 \x03(\x03R\x03IDs\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x04R\brevisionB(Z&github.com/pantopic/turbokube/internalb\x06proto3"
 
 var (
 	file_internal_proto_rawDescOnce sync.Once
@@ -434,7 +452,7 @@ var file_internal_proto_goTypes = []any{
 	(*LeaseKeepAliveBatchRequest)(nil),  // 4: etcdserverpb.LeaseKeepAliveBatchRequest
 	(*LeaseKeepAliveBatchResponse)(nil), // 5: etcdserverpb.LeaseKeepAliveBatchResponse
 	(*WatchEventBatch)(nil),             // 6: etcdserverpb.WatchEventBatch
-	(*WatchSyncBatch)(nil),              // 7: etcdserverpb.WatchSyncBatch
+	(*WatchEventSync)(nil),              // 7: etcdserverpb.WatchEventSync
 	(*ResponseHeader)(nil),              // 8: etcdserverpb.ResponseHeader
 	(*Event)(nil),                       // 9: etcdserverpb.Event
 }

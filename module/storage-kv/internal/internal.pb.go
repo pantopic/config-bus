@@ -160,26 +160,26 @@ func (x *WatchEventBatch) GetWatchIdsPrev() []int64 {
 	return nil
 }
 
-type WatchSyncBatch struct {
+type WatchEventSync struct {
 	unknownFields []byte
 	IDs           []int64 `protobuf:"varint,1,rep,packed,name=IDs,proto3" json:"IDs,omitempty"`
 	Revision      uint64  `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 }
 
-func (x *WatchSyncBatch) Reset() {
-	*x = WatchSyncBatch{}
+func (x *WatchEventSync) Reset() {
+	*x = WatchEventSync{}
 }
 
-func (*WatchSyncBatch) ProtoMessage() {}
+func (*WatchEventSync) ProtoMessage() {}
 
-func (x *WatchSyncBatch) GetIDs() []int64 {
+func (x *WatchEventSync) GetIDs() []int64 {
 	if x != nil {
 		return x.IDs
 	}
 	return nil
 }
 
-func (x *WatchSyncBatch) GetRevision() uint64 {
+func (x *WatchEventSync) GetRevision() uint64 {
 	if x != nil {
 		return x.Revision
 	}
@@ -541,7 +541,7 @@ func (m *WatchEventBatch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *WatchSyncBatch) MarshalVT() (dAtA []byte, err error) {
+func (m *WatchEventSync) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -554,12 +554,12 @@ func (m *WatchSyncBatch) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *WatchSyncBatch) MarshalToVT(dAtA []byte) (int, error) {
+func (m *WatchEventSync) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *WatchSyncBatch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *WatchEventSync) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -718,7 +718,7 @@ func (m *WatchEventBatch) SizeVT() (n int) {
 	return n
 }
 
-func (m *WatchSyncBatch) SizeVT() (n int) {
+func (m *WatchEventSync) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1547,7 +1547,7 @@ func (m *WatchEventBatch) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *WatchSyncBatch) UnmarshalVT(dAtA []byte) error {
+func (m *WatchEventSync) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1570,10 +1570,10 @@ func (m *WatchSyncBatch) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: WatchSyncBatch: wiretype end group for non-group")
+			return fmt.Errorf("proto: WatchEventSync: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: WatchSyncBatch: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WatchEventSync: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

@@ -14,10 +14,9 @@ import (
 var (
 	eventKvPrevResponse = &internal.KeyValue{}
 	eventKvResponse     = &internal.KeyValue{}
-	eventResponse       = &internal.Event{}
 	watchRequest        = &internal.WatchRequest{}
 	watchEventBatch     = &internal.WatchEventBatch{Event: &internal.Event{}}
-	watchSyncBatch      = &internal.WatchSyncBatch{}
+	watchEventSync      = &internal.WatchEventSync{}
 )
 
 func streamRecv(data []byte) {
@@ -145,6 +144,14 @@ func watchScan(req *internal.WatchCreateRequest, since uint64, start bool) (rev 
 			if _, ok := filtered[evt.etype()]; ok {
 				continue
 			}
+			switch bytes.Compare(evt.key, req.Key) {
+			case 1:
+				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
+					continue
+				}
+			case -1:
+				continue
+			}
 			var current, prev kv
 			if evt.rev.isdel() {
 				current = kv{key: evt.key, rev: evt.rev}
@@ -157,21 +164,29 @@ func watchScan(req *internal.WatchCreateRequest, since uint64, start bool) (rev 
 					panic("Error getting event kv: " + string(evt.key))
 				}
 			}
-			eventResponse.Reset()
-			eventResponse.Type = internal.Event_EventType(evt.etype())
+			e := watchEventBatch.Event
+			watchEventBatch.Reset()
+			e.Reset()
+			e.Type = internal.Event_EventType(evt.etype())
 			if current.rev.upper() > 0 {
-				eventResponse.Kv = current.ToProto(eventKvResponse)
+				e.Kv = current.ToProto(eventKvResponse)
 			}
 			if prev.rev.upper() > 0 {
-				eventResponse.PrevKv = prev.ToProto(eventKvPrevResponse)
+				e.PrevKv = prev.ToProto(eventKvPrevResponse)
 			}
-			sendCodeMsg(uint64(req.WatchId), WatchMessageType_EVENT, eventResponse)
+			watchEventBatch.Event = e
+			watchEventBatch.Revision = rev
+			watchEventBatch.WatchIds = append(watchEventBatch.WatchIds, int64(req.WatchId))
+			sendCodeMsg(uint64(req.WatchId), WatchMessageType_EVENT_BATCH, watchEventBatch)
 			sent++
 		}
 		return
 	})
 	if sent > 0 {
-		sendCodeHeader(uint64(req.WatchId), WatchMessageType_SYNC, rev)
+		watchEventSync.Reset()
+		watchEventSync.IDs = append(watchEventSync.IDs, int64(req.WatchId))
+		watchEventSync.Revision = rev
+		sendCodeMsg(0, WatchMessageType_EVENT_SYNC, watchEventSync)
 	}
 	return
 }
@@ -185,7 +200,7 @@ func streamClosed() {
 }
 
 func rangeWatchRecv(notices []range_watch.Notice) {
-	watchSyncBatch.Reset()
+	watchEventSync.Reset()
 	reqs := make(map[uint64]*internal.WatchCreateRequest)
 	revs := make([]uint64, len(notices))
 	prev := make([]int, len(notices))
@@ -195,7 +210,7 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 		revs[i] = n.Val
 		for _, watchIdBytes := range n.IDs {
 			watchID := binary.BigEndian.Uint64(watchIdBytes)
-			watchSyncBatch.IDs = append(watchSyncBatch.IDs, int64(watchID))
+			watchEventSync.IDs = append(watchEventSync.IDs, int64(watchID))
 			req, ok := reqs[watchID]
 			if !ok {
 				b := watchCache.Get(watchIdBytes)
@@ -297,9 +312,14 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 	if err != nil {
 		panic("Error reading events: " + err.Error())
 	}
-	if len(watchSyncBatch.IDs) > 0 {
-		watchSyncBatch.Revision = rev
-		sendCodeMsg(0, WatchMessageType_SYNC_BATCH, watchSyncBatch)
+	if len(watchEventSync.IDs) > 0 {
+		watchEventSync.Revision = rev
+		sendCodeMsg(0, WatchMessageType_EVENT_SYNC, watchEventSync)
+	}
+	for id, req := range reqs {
+		if sent[id] == 0 && req.ProgressNotify {
+			sendCodeHeader(id, WatchMessageType_NOTIFY, rev)
+		}
 	}
 }
 

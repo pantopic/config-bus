@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"sync"
 
@@ -12,7 +13,7 @@ import (
 
 var evtPool = sync.Pool{New: func() any { return &internal.Event{} }}
 var watchEventBatch = &internal.WatchEventBatch{Event: &internal.Event{}}
-var watchSyncBatch = &internal.WatchSyncBatch{}
+var watchEventSync = &internal.WatchEventSync{}
 
 func shardRecv(_, data []byte, id uint64) {
 	var err error
@@ -35,40 +36,6 @@ func shardRecv(_, data []byte, id uint64) {
 			panic(`Unable to marshal watch response: ` + err.Error())
 		}
 		grpc_server.Send(data)
-	case WatchMessageType_EVENT:
-		evt := evtPool.Get().(*internal.Event)
-		evt.Reset()
-		if err := evt.UnmarshalVT(data[1:]); err != nil {
-			panic(`Unable to unmarshal event A: ` + err.Error())
-		}
-		sendEvent(int64(id), uint64(evt.Kv.ModRevision), data[1:], evt)
-		evtPool.Put(evt)
-	case WatchMessageType_SYNC:
-		events := bufferPoolWatchEvent.Find(id)
-		resp := &internal.WatchResponse{
-			Header:  &internal.ResponseHeader{},
-			WatchId: int64(id),
-		}
-		if err = resp.Header.UnmarshalVT(data[1:]); err != nil {
-			panic(`Unable to unmarshal response header: ` + err.Error())
-		}
-		for b := range events.Iter() {
-			evt := evtPool.Get().(*internal.Event)
-			evt.Reset()
-			if err = evt.UnmarshalVT(b); err != nil {
-				events.Reset()
-				panic(`Unable to unmarshal event in sync: ` + err.Error())
-			}
-			resp.Events = append(resp.Events, evt)
-		}
-		if data, err = resp.MarshalVT(); err != nil {
-			panic(`Unable to marshal watch response: ` + err.Error())
-		}
-		for _, e := range resp.Events {
-			evtPool.Put(e)
-		}
-		grpc_server.Send(data)
-		events.Reset()
 	case WatchMessageType_EVENT_BATCH:
 		watchEventBatch.Reset()
 		if err = watchEventBatch.UnmarshalVT(data[1:]); err != nil {
@@ -93,14 +60,14 @@ func shardRecv(_, data []byte, id uint64) {
 				sendEvent(id, watchEventBatch.Revision, b, watchEventBatch.Event)
 			}
 		}
-	case WatchMessageType_SYNC_BATCH:
-		watchSyncBatch.Reset()
-		if err = watchSyncBatch.UnmarshalVT(data[1:]); err != nil {
+	case WatchMessageType_EVENT_SYNC:
+		watchEventSync.Reset()
+		if err = watchEventSync.UnmarshalVT(data[1:]); err != nil {
 			panic(`Unable to unmarshal watch event batch: ` + err.Error())
 		}
-		for _, id := range watchSyncBatch.IDs {
+		for _, id := range watchEventSync.IDs {
 			events := bufferPoolWatchEvent.Find(uint64(id))
-			clearEvents(events, id, watchSyncBatch.Revision, nil, nil)
+			clearEvents(events, id, watchEventSync.Revision, nil, nil)
 		}
 	case WatchMessageType_NOTIFY:
 		watchResp.Reset()
@@ -161,27 +128,28 @@ func shardRecv(_, data []byte, id uint64) {
 
 func sendEvent(id int64, rev uint64, b []byte, evt *internal.Event) {
 	events := bufferPoolWatchEvent.Find(uint64(id))
-	if events.Append(b) {
+	b2 := binary.BigEndian.AppendUint64(b, rev)
+	if events.Append(b2) {
 		return
 	}
 	clearEvents(events, id, rev, b, evt)
-	if !events.Append(b) {
+	if !events.Append(b2) {
 		panic(`Failed to append watch event after reset`)
 	}
 }
 
 func clearEvents(events buffer_pool.MultiValue, id int64, rev uint64, b []byte, evt *internal.Event) {
-	var lastRev int64
+	var lastRev uint64
 	resp := &internal.WatchResponse{
 		Header:  &internal.ResponseHeader{},
 		WatchId: int64(id),
 	}
 	for b := range events.Iter() {
 		evt := &internal.Event{}
-		if err := evt.UnmarshalVT(b); err != nil {
+		if err := evt.UnmarshalVT(b[:len(b)-8]); err != nil {
 			panic(`Unable to unmarshal event B: ` + err.Error())
 		}
-		lastRev = evt.Kv.ModRevision
+		lastRev = binary.BigEndian.Uint64(b[len(b)-8:])
 		resp.Events = append(resp.Events, evt)
 	}
 	if len(resp.Events) == 0 {
@@ -197,14 +165,16 @@ func clearEvents(events buffer_pool.MultiValue, id int64, rev uint64, b []byte, 
 				panic(`Unable to unmarshal event C: ` + err.Error())
 			}
 		}
-		if lastRev == evt.Kv.ModRevision {
+		if lastRev == rev {
 			resp.Fragment = true
 		}
 		if recycle {
-			evtPool.Put(evt)
+			defer evtPool.Put(evt)
 		}
+		resp.Header.Revision = int64(lastRev)
+	} else {
+		resp.Header.Revision = int64(rev)
 	}
-	resp.Header.Revision = int64(rev)
 	res, err := resp.MarshalVT()
 	if err != nil {
 		panic(`Unable to marshal watch response: ` + err.Error())

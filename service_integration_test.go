@@ -2797,7 +2797,7 @@ func testWatch(t *testing.T) {
 					})
 					assert.True(t, res.WatchId == watchID, res.WatchId)
 					require.Greater(t, len(res.Events), 0, res)
-					require.Equal(t, res.Events[len(res.Events)-1].Kv.ModRevision, res.Header.Revision)
+					assert.Equal(t, rev[len(rev)-1], res.Header.Revision)
 					total += len(res.Events)
 					num++
 					if !res.Fragment {
