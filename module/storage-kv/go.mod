@@ -3,7 +3,7 @@ module github.com/pantopic/turbokube/module/storage-kv
 go 1.25.7
 
 require (
-	github.com/aperturerobotics/protobuf-go-lite v0.11.0
+	github.com/aperturerobotics/protobuf-go-lite v0.17.0
 	github.com/golang/snappy v1.0.0
 	github.com/pantopic/wazero-atomic/sdk-go v0.0.3
 	github.com/pantopic/wazero-global/sdk-go v0.0.2

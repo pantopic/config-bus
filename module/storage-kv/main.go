@@ -20,21 +20,23 @@ const (
 	ATOMIC_UINT64_SET_WATCH_REV
 )
 const (
-	ATOMIC_UINT64_GLOBAL_WATCH_ID = iota
+	ATOMIC_UINT64_GLOBAL_WATCH_ID_SEQ = iota
+	ATOMIC_UINT64_GLOBAL_WATCH_PROGRESS
 )
 const (
 	SMALL_CACHE_WATCH_CREATE_REQ = iota
 )
 
 var (
-	epoch      uint64
-	newIndex   uint64
-	newRev     uint64
-	oldRev     uint64
-	txn        lmdb.Txn
-	watchCache = small_cache.NewLocal(SMALL_CACHE_WATCH_CREATE_REQ)
-	watchID    = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_ID)
-	watchRev   = atomic.NewUint64Set(ATOMIC_UINT64_SET_WATCH_REV)
+	epoch         uint64
+	newIndex      uint64
+	newRev        uint64
+	oldRev        uint64
+	txn           lmdb.Txn
+	watchCache    = small_cache.NewLocal(SMALL_CACHE_WATCH_CREATE_REQ)
+	watchID       = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_ID_SEQ)
+	watchProgress = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_PROGRESS)
+	watchRev      = atomic.NewUint64Set(ATOMIC_UINT64_SET_WATCH_REV)
 )
 
 func init() {
@@ -352,18 +354,15 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 func finish() {
 	var err error
 	if err = dbMeta.setIndex(txn, newIndex); err != nil {
-		range_watch.Clear()
 		panic(`Unable to set index: ` + err.Error())
 	}
 	if newRev > oldRev {
 		err = dbMeta.setRevision(txn, newRev)
 		if err != nil {
-			range_watch.Clear()
 			panic(`Unable to set revision: ` + err.Error())
 		}
 	}
 	if err := txn.Commit(); err != nil {
-		range_watch.Clear()
 		panic(`Unable to commit transaction: ` + err.Error())
 	}
 	range_watch.Flush()
@@ -454,14 +453,8 @@ func read(query []byte) (value uint64, data []byte) {
 		}
 		value = 1
 	case QUERY_WATCH_PROGRESS:
-		err := lmdb.View(func(txn lmdb.Txn) (err error) {
-			rev, err = dbMeta.getRevision(txn)
-			if err != nil {
-				return
-			}
-			return
-		})
-		resp := responseHeader(rev)
+		var err error
+		resp := responseHeader(watchProgress.Load())
 		data, err = resp.MarshalVT()
 		if err != nil {
 			data = []byte(err.Error())

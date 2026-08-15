@@ -122,10 +122,10 @@ func main() {
 		for {
 			time.Sleep(5 * time.Second)
 			stats := poolStorageKv.Stats()
-			log.Info("poolStorageKv.Stats", "total", stats.Total,
-				"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
+			log.Info("poolStorageKv", "total", stats.Total,
+				"memAvg", (stats.MemSize/max(stats.Total, 1))>>20, "memMax", stats.MemMax>>20, "memMin", stats.MemMin>>20,
 				"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
-				"recycled", stats.Recycled,
+				"recycled", stats.Recycled, "limit", stats.Limit,
 			)
 		}
 	}()
@@ -209,13 +209,12 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			if stats := poolServiceGrpc.Stats(); stats.Active > 0 {
-				log.Info("poolServiceGrpc.Stats", "total", stats.Total,
-					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
-					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
-					"recycled", stats.Recycled,
-				)
-			}
+			stats := poolServiceGrpc.Stats()
+			log.Info("poolServiceGrpc", "total", stats.Total,
+				"memAvg", (stats.MemSize/max(stats.Total, 1))>>20, "memMax", stats.MemMax>>20, "memMin", stats.MemMin>>20,
+				"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+				"recycled", stats.Recycled, "limit", stats.Limit,
+			)
 		}
 	}()
 

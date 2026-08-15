@@ -143,7 +143,7 @@ func (db kvStoreImpl) getRange(
 	var k, b, v []byte
 	var isFullScan = bytes.Equal(key, []byte{0}) && bytes.Equal(end, []byte{0})
 	k = append(k[:0], key...)
-	k, b, err = cur.Get(k, b, lmdb.SetRange)
+	k, b, err = cur.Get(k, b[:0], lmdb.SetRange)
 	for !lmdb.IsNotFound(err) {
 		if err != nil {
 			return
@@ -198,7 +198,7 @@ func (db kvStoreImpl) getRange(
 				next = append(next, rev)
 				item.val = nil
 				for _, r := range next {
-					v, err = txn.Get(db.val.i, r.key(), v[:0])
+					v, err = txn.Get(db.val.i, r.key(), v)
 					if err != nil {
 						return
 					}
@@ -217,7 +217,7 @@ func (db kvStoreImpl) getRange(
 					count--
 					goto next
 				}
-				items = append(items, item)
+				items = append(items, item) // TODO: Replace slice response with iterator yield for RangeStream
 			} else if PCB_RANGE_COUNT_FAKE() {
 				break
 			}
@@ -488,7 +488,7 @@ func (db kvStoreImpl) getRev(txn lmdb.Txn, key []byte, revision uint64, withPrev
 	}
 	next = append(next, krec.rev)
 	for _, rev := range next {
-		if v2, err = txn.Get(db.val.i, rev.key(), v2[:0]); err != nil {
+		if v2, err = txn.Get(db.val.i, rev.key(), v2); err != nil {
 			return
 		}
 		item, err = item.FromBytes(rev.key(), v2, item.val, false)

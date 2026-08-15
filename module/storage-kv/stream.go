@@ -51,6 +51,7 @@ func streamRecv(data []byte) {
 		if len(minWatchIdBytes) == 8 {
 			minWatchId = binary.BigEndian.Uint64(minWatchIdBytes)
 		}
+		// println(`WatchMessageType_NOTIFY`, minWatchId, rev)
 		sendCodeHeader(minWatchId, WatchMessageType_NOTIFY, rev)
 	}
 }
@@ -118,6 +119,9 @@ func watchStart(req *internal.WatchCreateRequest) (err error) {
 		if err = range_watch.Start(watchIdBytes); err != nil {
 			panic("Error starting range watch: " + err.Error())
 		}
+	}
+	if req.ProgressNotify {
+		sendCodeHeader(uint64(req.WatchId), WatchMessageType_NOTIFY, rev)
 	}
 	return
 }
@@ -196,6 +200,7 @@ func streamOpen() {
 }
 
 func streamClosed() {
+	// range_watch.Each(func(w *range_watch.Watch) { watchCache.Del(w.id) })
 	range_watch.GroupStop()
 }
 
@@ -231,12 +236,7 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 			}
 		}
 	}
-	var rev uint64
 	err := lmdb.View(func(txn lmdb.Txn) (err error) {
-		rev, err = dbMeta.getRevision(txn)
-		if err != nil {
-			return
-		}
 		var n uint64
 		var i int
 		for evt := range kvStore.revScan(txn, revs) {
@@ -271,7 +271,8 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 				e.PrevKv = previous.ToProto(eventKvPrevResponse)
 			}
 			watchEventBatch.Event = e
-			watchEventBatch.Revision = rev
+			watchEventBatch.Revision = revs[len(revs)-1]
+			// watchEventBatch.Revision = uint64(e.Kv.ModRevision)
 		watches:
 			for _, watchIdBytes := range notice.IDs {
 				watchID := binary.BigEndian.Uint64(watchIdBytes)
@@ -313,14 +314,15 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 		panic("Error reading events: " + err.Error())
 	}
 	if len(watchEventSync.IDs) > 0 {
-		watchEventSync.Revision = rev
+		watchEventSync.Revision = revs[len(revs)-1]
 		sendCodeMsg(0, WatchMessageType_EVENT_SYNC, watchEventSync)
 	}
 	for id, req := range reqs {
 		if sent[id] == 0 && req.ProgressNotify {
-			sendCodeHeader(id, WatchMessageType_NOTIFY, rev)
+			sendCodeHeader(id, WatchMessageType_NOTIFY, revs[len(revs)-1])
 		}
 	}
+	watchProgress.Store(revs[len(revs)-1])
 }
 
 func sendCodeHeader(val uint64, code byte, rev uint64) {

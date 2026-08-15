@@ -21,9 +21,9 @@ func leaseKeepaliveClose() (err error) {
 }
 
 func leaseLeases(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_LEASES), true)))
+	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_LEASES), false)))
 }
 
 func leaseTimeToLive(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_TIME_TO_LIVE), true)))
+	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_TIME_TO_LIVE), false)))
 }

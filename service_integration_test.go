@@ -753,11 +753,12 @@ func testRange(t *testing.T) {
 	})
 	require.Nil(t, err, err)
 	rev1 := resp1.Header.Revision
-	_, err = svcKv.Put(ctx, &internal.PutRequest{
+	resp2, err := svcKv.Put(ctx, &internal.PutRequest{
 		Key:   []byte(`test-range-key-2`),
 		Value: []byte(`test-range-value-2`),
 	})
 	require.Nil(t, err, err)
+	rev2 := resp2.Header.Revision
 	t.Run("all", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte{0},
@@ -795,6 +796,22 @@ func testRange(t *testing.T) {
 		require.Equal(t, 1, len(resp.Kvs))
 		assert.Equal(t, []byte(`test-range-key-1`), resp.Kvs[0].Key, string(resp.Kvs[0].Key))
 		assert.Equal(t, []byte(`test-range-value-2`), resp.Kvs[0].Value, string(resp.Kvs[0].Value))
+		t.Run("future", func(t *testing.T) {
+			_, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-range-key-1`),
+				RangeEnd: []byte(`test-range-key-3`),
+				Revision: rev1 + 10,
+			})
+			assert.NotNil(t, err)
+			require.True(t, strings.Contains(err.Error(), "OutOfRange"))
+		})
+		t.Run("future2", func(t *testing.T) {
+			_, err := svcKv.Range(ctx, &internal.RangeRequest{
+				Key:      []byte(`test-range-key-1`),
+				Revision: rev2,
+			})
+			assert.Nil(t, err)
+		})
 	})
 	t.Run("next", func(t *testing.T) {
 		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
@@ -2197,7 +2214,7 @@ func testWatch(t *testing.T) {
 					WatchId:  watchID,
 				})
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // Watch Created & Canceled
 				})
 				require.EqualValues(t, -1, res.WatchId, res)
 				assert.True(t, res.Created, res)
@@ -2211,7 +2228,7 @@ func testWatch(t *testing.T) {
 					StartRevision: 2,
 				})
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // WatchCreated
 				})
 				assert.Greater(t, res.WatchId, int64(0), res)
 				assert.True(t, res.Created)
@@ -2219,7 +2236,7 @@ func testWatch(t *testing.T) {
 				assert.Equal(t, int64(0), res.CompactRevision)
 				wid := res.WatchId
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // WatchCanceled
 				})
 				assert.EqualValues(t, wid, res.WatchId, res)
 				assert.False(t, res.Created)
@@ -2236,7 +2253,7 @@ func testWatch(t *testing.T) {
 				_, err = svcKv.Put(ctx, req)
 				require.Nil(t, err, err)
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // Event
 				})
 				assert.Equal(t, watchID, res.WatchId, res)
 				assert.False(t, res.Created)
@@ -2251,9 +2268,11 @@ func testWatch(t *testing.T) {
 		})
 		t.Run("cancel", func(t *testing.T) {
 			t.Run("existing", func(t *testing.T) {
-				s.cancel(watchID)
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					s.cancel(watchID)
+				})
+				timeout(t, time.Second, func() {
+					res = <-s.resChan // WatchCanceled
 				})
 				require.Equal(t, watchID, res.WatchId)
 				require.False(t, res.Created)
@@ -2267,7 +2286,7 @@ func testWatch(t *testing.T) {
 				WatchId:  100,
 			})
 			timeout(t, time.Second, func() {
-				res = <-s.resChan
+				res = <-s.resChan // WatchCreated
 			})
 			require.Equal(t, int64(100), res.WatchId, res)
 			assert.True(t, res.Created)
@@ -2281,7 +2300,7 @@ func testWatch(t *testing.T) {
 				WatchId:  101,
 			})
 			timeout(t, time.Second, func() {
-				res = <-s.resChan
+				res = <-s.resChan // WatchCreated
 			})
 			require.Equal(t, int64(101), res.WatchId, res)
 			assert.True(t, res.Created)
@@ -2294,7 +2313,9 @@ func testWatch(t *testing.T) {
 				_, err = svcKv.Put(ctx, req)
 				require.Nil(t, err, err)
 				for range 2 {
-					res := <-s.resChan
+					timeout(t, time.Second, func() {
+						res = <-s.resChan // Event
+					})
 					assert.True(t, res.WatchId == watchID1 || res.WatchId == watchID2, res.WatchId)
 					assert.False(t, res.Created)
 					assert.False(t, res.Canceled)
@@ -2311,8 +2332,12 @@ func testWatch(t *testing.T) {
 				require.Equal(t, watchID1, res.WatchId)
 				require.False(t, res.Created)
 				require.True(t, res.Canceled)
-				s.cancel(watchID2)
-				res = <-s.resChan
+				timeout(t, time.Second, func() {
+					s.cancel(watchID2)
+				})
+				timeout(t, time.Second, func() {
+					res = <-s.resChan // WatchCanceled
+				})
 				require.Equal(t, watchID2, res.WatchId)
 				require.False(t, res.Created)
 				require.True(t, res.Canceled)
@@ -2326,7 +2351,7 @@ func testWatch(t *testing.T) {
 					WatchId:  102,
 				})
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // WatchCreated
 				})
 				require.Equal(t, int64(102), res.WatchId, res)
 				assert.True(t, res.Created)
@@ -2340,20 +2365,22 @@ func testWatch(t *testing.T) {
 					WatchId:  103,
 				})
 				timeout(t, time.Second, func() {
-					res = <-s2.resChan
+					res = <-s2.resChan // WatchCreated
 				})
 				require.Equal(t, int64(103), res.WatchId, res)
 				assert.True(t, res.Created)
 				watchID2 := res.WatchId
+				var rev int64
 				t.Run("put", func(t *testing.T) {
 					req := &internal.PutRequest{
 						Key:   []byte(`test-watch-100`),
 						Value: []byte(`test-watch-value-001`),
 					}
-					_, err = svcKv.Put(ctx, req)
+					resp, err := svcKv.Put(ctx, req)
 					require.Nil(t, err, err)
+					rev = resp.Header.Revision
 					timeout(t, time.Second, func() {
-						res = <-s.resChan
+						res = <-s.resChan // Event
 					})
 					assert.Equal(t, watchID1, res.WatchId)
 					assert.False(t, res.Created)
@@ -2365,7 +2392,7 @@ func testWatch(t *testing.T) {
 					assert.Equal(t, req.Key, res.Events[0].Kv.Key)
 					assert.Equal(t, req.Value, res.Events[0].Kv.Value)
 					timeout(t, time.Second, func() {
-						res = <-s2.resChan
+						res = <-s2.resChan // Event
 					})
 					assert.Equal(t, watchID2, res.WatchId)
 					assert.False(t, res.Created)
@@ -2376,10 +2403,23 @@ func testWatch(t *testing.T) {
 					require.NotNil(t, req.Key, res.Events[0].Kv)
 					assert.Equal(t, req.Key, res.Events[0].Kv.Key)
 				})
+				t.Run("progress", func(t *testing.T) {
+					timeout(t, time.Second, func() {
+						s2.progress()
+					})
+					timeout(t, time.Second, func() {
+						res = <-s2.resChan // ProgressNotify
+					})
+					assert.False(t, res.Created)
+					assert.False(t, res.Canceled)
+					assert.Equal(t, watchID2, res.WatchId)
+					assert.Empty(t, res.Events)
+					assert.Equal(t, rev, res.Header.Revision)
+				})
 				t.Run("cancel", func(t *testing.T) {
 					s.cancel(watchID1)
 					timeout(t, time.Second, func() {
-						res = <-s.resChan
+						res = <-s.resChan // WatchCanceled
 					})
 					require.Equal(t, watchID1, res.WatchId)
 					require.False(t, res.Created)
@@ -2671,11 +2711,9 @@ func testWatch(t *testing.T) {
 					Key:   fmt.Appendf(nil, `test-watch-alert-%03d`, i),
 					Value: fmt.Appendf(nil, `test-watch-alert-value-%03d`, i),
 				}
-				// var res *internal.PutResponse
 				timeout(t, time.Second, func() {
 					_, err = svcKv.Put(ctx, req)
 				})
-				// log.Printf("%s %d", string(req.Key), res.Header.Revision)
 				require.Nil(t, err, err)
 			}
 			for j := 0; j < 10; {
@@ -2687,7 +2725,6 @@ func testWatch(t *testing.T) {
 				assert.False(t, res.Canceled)
 				require.Greater(t, len(res.Events), 0, res)
 				for i := range res.Events {
-					// println(string(res.Events[i].Kv.Key))
 					assert.Equal(t, internal.Event_PUT, res.Events[i].Type)
 					assert.Nil(t, res.Events[i].PrevKv)
 					assert.Equal(t, fmt.Sprintf(`test-watch-alert-%03d`, j), string(res.Events[i].Kv.Key))
@@ -2704,8 +2741,8 @@ func testWatch(t *testing.T) {
 		})
 		t.Run("revision", func(t *testing.T) {
 			var revs []int64
-			var n = 100
-			var m = n / 2
+			const n = 100
+			const m = n / 2
 			for i := range n {
 				req := &internal.PutRequest{
 					Key:   fmt.Appendf(nil, `test-watch-rev-%03d`, i),
@@ -2721,14 +2758,20 @@ func testWatch(t *testing.T) {
 				StartRevision: revs[m],
 			})
 			timeout(t, time.Second, func() {
-				res = <-s.resChan // WatchCreated
+				res = <-s.resChan // Watch Created
 			})
 			require.Greater(t, res.WatchId, int64(0), res)
 			assert.True(t, res.Created)
 			watchID = res.WatchId
-			for j := 0; j < m; {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   fmt.Appendf(nil, `test-watch-rev-%03d`, n),
+				Value: fmt.Appendf(nil, `test-watch-rev-value-%03d`, n),
+			})
+			require.Nil(t, err, err)
+			revs = append(revs, resp.Header.Revision)
+			for j := 0; j < m+1; {
 				timeout(t, time.Second, func() {
-					res = <-s.resChan
+					res = <-s.resChan // Watch Event 050-100
 				})
 				assert.True(t, res.WatchId == watchID, res.WatchId)
 				assert.False(t, res.Created)
@@ -2745,7 +2788,7 @@ func testWatch(t *testing.T) {
 			}
 			s.cancel(watchID)
 			timeout(t, time.Second, func() {
-				res = <-s.resChan // WatchCanceled
+				res = <-s.resChan // Watch Canceled
 			})
 			require.Equal(t, watchID, res.WatchId)
 			require.False(t, res.Created)
