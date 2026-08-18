@@ -1,11 +1,13 @@
 package main
 
 func leaseGrant(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_LEASE_GRANT))))
+	kvShard().AsyncApply(append(in, CMD_LEASE_GRANT), []byte("leaseGrant"))
+	return
 }
 
 func leaseRevoke(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_LEASE_REVOKE))))
+	kvShard().AsyncApply(append(in, CMD_LEASE_REVOKE), []byte("leaseRevoke"))
+	return
 }
 
 func leaseKeepaliveOpen() (err error) {
@@ -13,7 +15,8 @@ func leaseKeepaliveOpen() (err error) {
 }
 
 func leaseKeepaliveRecv(item []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(item, CMD_LEASE_KEEP_ALIVE))))
+	kvShard().AsyncApply(append(item, CMD_LEASE_KEEP_ALIVE), []byte(`leaseKeepaliveRecv`))
+	return
 }
 
 func leaseKeepaliveClose() (err error) {
@@ -21,9 +24,11 @@ func leaseKeepaliveClose() (err error) {
 }
 
 func leaseLeases(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_LEASES), false)))
+	kvShard().AsyncRead(append(in, QUERY_LEASE_LEASES), []byte(`leaseLeases`), false)
+	return
 }
 
 func leaseTimeToLive(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Read(append(in, QUERY_LEASE_TIME_TO_LIVE), false)))
+	kvShard().AsyncRead(append(in, QUERY_LEASE_TIME_TO_LIVE), []byte(`leaseTimeToLive`), false)
+	return
 }

@@ -8,3 +8,5 @@ require (
 	github.com/pantopic/wazero-grpc-server/sdk-go v0.0.13
 	github.com/pantopic/wazero-shard-client/sdk-go v0.0.1
 )
+
+require github.com/aperturerobotics/json-iterator-lite v1.1.0 // indirect

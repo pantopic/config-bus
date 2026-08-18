@@ -606,8 +606,11 @@ func testInsert(t *testing.T) {
 		assert.Greater(t, resp.Header.Revision, int64(0))
 	})
 	t.Run("get", func(t *testing.T) {
-		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
-			Key: put.Key,
+		var resp *internal.RangeResponse
+		timeout(t, time.Second, func() {
+			resp, err = svcKv.Range(ctx, &internal.RangeRequest{
+				Key: put.Key,
+			})
 		})
 		require.Nil(t, err, err)
 		assert.NotNil(t, resp)
@@ -637,6 +640,30 @@ func testInsert(t *testing.T) {
 				require.NotNil(t, err)
 				assert.Nil(t, resp)
 				assert.Equal(t, internal.ErrGRPCKeyTooLong.Error(), err.Error())
+			}
+		})
+	})
+	t.Run("huge-val", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte("z"),
+				Value: []byte(strings.Repeat("0123456789abcdef", 95*1024)), // 1.4MB
+			})
+			require.Nil(t, err)
+			assert.NotNil(t, resp)
+		})
+		t.Run("failure", func(t *testing.T) {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   []byte("z"),
+				Value: []byte(strings.Repeat("0123456789abcdef", 96*1024)), // 1.6MB
+			})
+			if parity {
+				require.Nil(t, err)
+				assert.NotNil(t, resp)
+			} else {
+				require.NotNil(t, err)
+				assert.Nil(t, resp)
+				assert.Contains(t, err.Error(), "message too large")
 			}
 		})
 	})
@@ -768,9 +795,9 @@ func testRange(t *testing.T) {
 		assert.NotNil(t, resp)
 		if parity {
 			// INVEST: Why does range all return more results for parity?
-			require.Equal(t, 5, len(resp.Kvs))
+			require.Equal(t, 6, len(resp.Kvs))
 		} else {
-			require.Equal(t, 4, len(resp.Kvs))
+			require.Equal(t, 5, len(resp.Kvs))
 		}
 	})
 	t.Run("basic", func(t *testing.T) {
@@ -1068,6 +1095,23 @@ func testRange(t *testing.T) {
 				assert.Equal(t, int64(100), resp.Count)
 			}
 		})
+	})
+	t.Run("huge-response", func(t *testing.T) {
+		var revs []int64
+		for i := range 100 {
+			resp, err := svcKv.Put(ctx, &internal.PutRequest{
+				Key:   fmt.Appendf(nil, `test-huge-%03d`, i),
+				Value: bytes.Repeat([]byte(`0123456789abcdef`), 1<<10),
+			})
+			revs = append(revs, resp.Header.Revision)
+			require.Nil(t, err, err)
+		}
+		resp, err := svcKv.Range(ctx, &internal.RangeRequest{
+			Key:      []byte(`test-huge-000`),
+			RangeEnd: []byte(`test-huge-100`),
+		})
+		require.Nil(t, err, err)
+		assert.NotNil(t, resp)
 	})
 }
 
