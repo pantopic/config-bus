@@ -23,13 +23,13 @@ integration:
 	@go test ./...
 
 parity:
-	@PCB_PARITY_CHECK=true go test -v
+	@PARITY_CHECK=true go test -v
 
 test-cluster:
-	@PCB_CLUSTER_CHECK=true go test -v
+	@CLUSTER_CHECK=true go test -v
 
 test-cluster-zig:
-	@PCB_CLUSTER_CHECK=true PCB_ZIG=true go test -v
+	@CLUSTER_CHECK=true ZIG=true go test -v
 
 bench:
 	@go test -bench=. -run=_ -v
@@ -67,7 +67,9 @@ cloc-native:
 cloc-wasm:
 	@cloc ./module --exclude-dir=_example,_dist,internal,patch --exclude-ext=pb.go
 
-gen:
+gen: gen-host gen-lite gen-zig
+
+gen-host:
 	@protoc internal/*.proto \
 		--go_out=internal \
 		--go_opt=paths=source_relative \

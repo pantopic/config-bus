@@ -22,14 +22,12 @@ pub const DbLeaseKey = struct {
     }
 
     pub fn put(self: DbLeaseKey, txn: lmdb.Txn, id: u64, key: []const u8) !void {
-        var kbuf: [util.max_varint_len + types.PCB_LIMIT_KEY_LENGTH]u8 = undefined;
+        var kbuf: [util.max_varint_len + types.LIMIT_KEY_LENGTH]u8 = undefined;
         const k = keyOf(id, key, &kbuf);
         var vbuf: [4]u8 = undefined;
         return txn.put(self.db.i, k, self.db.addChecksum(k, "", &vbuf), 0);
     }
 
-    /// Deletes and returns up to `max_batch` keys attached to the lease.
-    /// Returned keys are allocated from `allocator`.
     pub fn sweep(self: DbLeaseKey, txn: lmdb.Txn, allocator: std.mem.Allocator, id: u64, max_batch: usize) ![][]const u8 {
         var batch = std.ArrayList([]const u8).empty;
         const cur = try txn.openCursor(self.db.i);
@@ -55,7 +53,7 @@ pub const DbLeaseKey = struct {
     }
 
     pub fn del(self: DbLeaseKey, txn: lmdb.Txn, id: u64, key: []const u8) !void {
-        var kbuf: [util.max_varint_len + types.PCB_LIMIT_KEY_LENGTH]u8 = undefined;
+        var kbuf: [util.max_varint_len + types.LIMIT_KEY_LENGTH]u8 = undefined;
         return txn.del(self.db.i, keyOf(id, key, &kbuf), "");
     }
 };

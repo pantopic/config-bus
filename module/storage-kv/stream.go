@@ -19,6 +19,15 @@ var (
 	watchEventSync      = &internal.WatchEventSync{}
 )
 
+func streamOpen() {
+	range_watch.GroupStart()
+}
+
+func streamClosed() {
+	// TODO: Clean up watchCache: range_watch.Each(func(w *range_watch.Watch) { watchCache.Del(w.id) })
+	range_watch.GroupStop()
+}
+
 func streamRecv(data []byte) {
 	watchRequest.Reset()
 	if err := watchRequest.UnmarshalVT(data); err != nil {
@@ -51,7 +60,6 @@ func streamRecv(data []byte) {
 		if len(minWatchIdBytes) == 8 {
 			minWatchId = binary.BigEndian.Uint64(minWatchIdBytes)
 		}
-		// println(`WatchMessageType_NOTIFY`, minWatchId, rev)
 		sendCodeHeader(minWatchId, WatchMessageType_NOTIFY, rev)
 	}
 }
@@ -126,13 +134,7 @@ func watchStart(req *internal.WatchCreateRequest) (err error) {
 	return
 }
 
-var filtered = map[uint8]bool{}
-
 func watchScan(req *internal.WatchCreateRequest, since uint64, start bool) (rev uint64, sent int, err error) {
-	defer clear(filtered)
-	for _, f := range req.Filters {
-		filtered[uint8(f)] = true
-	}
 	err = lmdb.View(func(txn lmdb.Txn) (err error) {
 		rev, err = dbMeta.getRevision(txn)
 		if err != nil {
@@ -144,17 +146,20 @@ func watchScan(req *internal.WatchCreateRequest, since uint64, start bool) (rev 
 		if since == 0 {
 			return
 		}
+	scan:
 		for evt := range kvStore.scan(txn, since) {
-			if _, ok := filtered[evt.etype()]; ok {
-				continue
-			}
 			switch bytes.Compare(evt.key, req.Key) {
+			case -1:
+				continue
 			case 1:
 				if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
 					continue
 				}
-			case -1:
-				continue
+			}
+			for _, f := range req.Filters {
+				if evt.etype() == uint8(f) {
+					continue scan
+				}
 			}
 			var current, prev kv
 			if evt.rev.isdel() {
@@ -193,15 +198,6 @@ func watchScan(req *internal.WatchCreateRequest, since uint64, start bool) (rev 
 		sendCodeMsg(0, WatchMessageType_EVENT_SYNC, watchEventSync)
 	}
 	return
-}
-
-func streamOpen() {
-	range_watch.GroupStart()
-}
-
-func streamClosed() {
-	// range_watch.Each(func(w *range_watch.Watch) { watchCache.Del(w.id) })
-	range_watch.GroupStop()
 }
 
 func rangeWatchRecv(notices []range_watch.Notice) {
@@ -290,12 +286,12 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 					}
 				}
 				switch bytes.Compare(evt.key, req.Key) {
+				case -1:
+					continue watches
 				case 1:
 					if bytes.Compare(evt.key, req.RangeEnd) >= 0 {
 						continue watches
 					}
-				case -1:
-					continue watches
 				}
 				if !req.PrevKv {
 					watchEventBatch.WatchIds = append(watchEventBatch.WatchIds, int64(watchID))

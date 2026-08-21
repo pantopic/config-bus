@@ -32,10 +32,10 @@ pub const KvStore = struct {
     };
 
     fn putEvent(self: KvStore, txn: lmdb.Txn, rev_key: []const u8, epoch: u64, key: []const u8) !void {
-        var data: [util.max_varint_len + types.PCB_LIMIT_KEY_LENGTH]u8 = undefined;
+        var data: [util.max_varint_len + types.LIMIT_KEY_LENGTH]u8 = undefined;
         const n = util.putUvarint(&data, epoch);
         @memcpy(data[n .. n + key.len], key);
-        var out: [util.max_varint_len + types.PCB_LIMIT_KEY_LENGTH + 4]u8 = undefined;
+        var out: [util.max_varint_len + types.LIMIT_KEY_LENGTH + 4]u8 = undefined;
         try txn.put(self.evt.i, rev_key, self.evt.addChecksum(rev_key, data[0 .. n + key.len], &out), 0);
     }
 
@@ -56,7 +56,7 @@ pub const KvStore = struct {
         if (key.len == 0) {
             return errors.Error.GRPCEmptyKey;
         }
-        if (key.len > types.PCB_LIMIT_KEY_LENGTH) {
+        if (key.len > types.LIMIT_KEY_LENGTH) {
             return errors.Error.GRPCKeyTooLong;
         }
         const cur = try txn.openCursor(self.rev.i);
@@ -90,7 +90,7 @@ pub const KvStore = struct {
             try self.putEvent(txn, rev_key, epoch, key);
             return res;
         }
-        if (krec.rev.upper() == rev and !types.PCB_TXN_MULTI_WRITE_ENABLED.get()) {
+        if (krec.rev.upper() == rev and !types.TXN_MULTI_WRITE_ENABLED.get()) {
             return errors.Error.GRPCDuplicateKey;
         }
         var prev_rev_key_buf: [8]u8 = undefined;
@@ -111,7 +111,7 @@ pub const KvStore = struct {
         if (ignore_lease) {
             res.next.lease = res.prev.lease;
         }
-        if (types.PCB_PATCH_ENABLED and !krec.rev.isdel()) {
+        if (types.PATCH_ENABLED and !krec.rev.isdel()) {
             const buf = try res.prev.bytes(allocator, val);
             res.patched = buf.len < v.len;
             if (res.patched) {
@@ -174,7 +174,7 @@ pub const KvStore = struct {
             var rev = krec.rev;
             if (!count_only and limit > 0 and items.items.len == limit) {
                 more = true;
-                if (!types.PCB_RANGE_COUNT_FULL.get() and !types.PCB_RANGE_COUNT_FAKE.get()) {
+                if (!types.RANGE_COUNT_FULL.get() and !types.RANGE_COUNT_FAKE.get()) {
                     return .{ .items = items.items, .count = count, .more = more };
                 }
                 count_only = true;
@@ -198,7 +198,7 @@ pub const KvStore = struct {
                 rev = krec.rev;
             }
             adv: {
-                if (not_found) break :adv; // goto next
+                if (not_found) break :adv;
                 if (min_mod > 0 and rev.upper() < min_mod) break :adv;
                 if (max_mod > 0 and rev.upper() > max_mod) break :adv;
                 if (!rev.isdel()) {
@@ -225,7 +225,7 @@ pub const KvStore = struct {
                             break :adv;
                         }
                         try items.append(allocator, item);
-                    } else if (types.PCB_RANGE_COUNT_FAKE.get()) {
+                    } else if (types.RANGE_COUNT_FAKE.get()) {
                         break :outer;
                     }
                 }
@@ -274,7 +274,7 @@ pub const KvStore = struct {
             const prev_rec = try Keyrecord.fromBytes(k, entry.val);
             if (!prev_rec.rev.isdel()) {
                 const tombstone = Keyrev.init(rev, subrev, true);
-                if (prev_rec.rev.upper() == rev and !types.PCB_TXN_MULTI_WRITE_ENABLED.get()) {
+                if (prev_rec.rev.upper() == rev and !types.TXN_MULTI_WRITE_ENABLED.get()) {
                     return errors.Error.GRPCDuplicateKey;
                 }
                 const tkrec = Keyrecord{ .rev = tombstone, .key = k };

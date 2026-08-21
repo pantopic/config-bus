@@ -130,14 +130,14 @@ pub const Kv = struct {
             try util.appendUvarint(&buf, allocator, kv.created);
             try util.appendUvarint(&buf, allocator, kv.version);
             try util.appendUvarint(&buf, allocator, kv.lease);
-            if (next != null and types.PCB_PATCH_ENABLED) {
+            if (next != null and types.PATCH_ENABLED) {
                 const p = try patch.generate(allocator, next.?, kv.val);
                 if (p.len < kv.val.len) {
                     kv.val = p;
                     kv.flags |= types.KV_FLAG_PATCH;
                 }
             }
-            if (types.PCB_COMPRESSION_ENABLED and kv.val.len > 16) {
+            if (types.COMPRESSION_ENABLED and kv.val.len > 16) {
                 const p = try snappy.encode(allocator, kv.val);
                 if (p.len < kv.val.len) {
                     kv.val = p;

@@ -31,7 +31,8 @@ pub const ATOMIC_UINT64_SET = enum(u32) {
     WATCH_REV,
 };
 pub const ATOMIC_UINT64_GLOBAL = enum(u64) {
-    WATCH_ID,
+    WATCH_ID_SEQ,
+    WATCH_PROGRESS,
 };
 pub const SMALL_CACHE = enum(u64) {
     WATCH_CREATE_REQ,
@@ -47,7 +48,10 @@ pub const watchCache = small_cache
     .newLocal(@intFromEnum(SMALL_CACHE.WATCH_CREATE_REQ));
 pub const watchID = atomic.Uint64Set
     .init(@intFromEnum(ATOMIC_UINT64_SET.GLOBAL))
-    .find(@intFromEnum(ATOMIC_UINT64_GLOBAL.WATCH_ID));
+    .find(@intFromEnum(ATOMIC_UINT64_GLOBAL.WATCH_ID_SEQ));
+pub const watchProgress = atomic.Uint64Set
+    .init(@intFromEnum(ATOMIC_UINT64_SET.GLOBAL))
+    .find(@intFromEnum(ATOMIC_UINT64_GLOBAL.WATCH_PROGRESS));
 pub const watchRev = atomic.Uint64Set
     .init(@intFromEnum(ATOMIC_UINT64_SET.WATCH_REV));
 
@@ -66,8 +70,9 @@ comptime {
 }
 
 export fn _start() void {
+    range_watch.init(read_arena_state.allocator());
     statemachine.persistent(&open, &update, &finish, &read);
-    statemachine.streaming(&stream.streamOpen, &stream.streamRecv, &stream.streamClosed);
+    statemachine.streaming(&stream.open, &stream.recv, &stream.close);
     range_watch.receive(&stream.rangeWatchRecv) catch unreachable;
 }
 
@@ -106,7 +111,6 @@ fn open() u64 {
 fn update(index: u64, cmd: []u8) statemachine.Result {
     new_index = index;
     if (txn.id == 0) {
-        _ = batch_arena_state.reset(.retain_capacity);
         txn = lmdb.begin(0) catch |err| {
             std.debug.panic("Unable to open txn: {s}", .{@errorName(err)});
         };
@@ -288,7 +292,7 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
             dbMeta.setEpoch(txn, epoch) catch |err| {
                 std.debug.panic("Unable to set epoch: {s}", .{@errorName(err)});
             };
-            // lease expire
+            // lease expiration
             var scan = dbLeaseExp.scan(txn, epoch);
             defer scan.close();
             while (scan.next()) |id| {
@@ -300,7 +304,7 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
                     range_watch.queue(new_rev, rr.keys);
                 }
             }
-            // revision compact
+            // amortized compaction
             const min = dbMeta.getRevisionMin(txn) catch |err| {
                 return .{ .data = errors.msg(err) };
             };
@@ -342,6 +346,7 @@ fn update(index: u64, cmd: []u8) statemachine.Result {
 }
 
 fn finish() void {
+    defer _ = batch_arena_state.reset(.retain_capacity);
     dbMeta.setIndex(txn, new_index) catch |err| {
         range_watch.clear() catch unreachable;
         std.debug.panic("Unable to set index: {s}", .{@errorName(err)});
@@ -361,7 +366,7 @@ fn finish() void {
 }
 
 fn read(query: []u8) statemachine.Result {
-    _ = read_arena_state.reset(.retain_capacity);
+    defer _ = read_arena_state.reset(.retain_capacity);
     const arena = read_arena_state.allocator();
     var rev: u64 = 0;
     switch (query[query.len - 1]) {
@@ -427,7 +432,14 @@ fn read(query: []u8) statemachine.Result {
             };
             return .{ .value = 1, .data = data };
         },
-        types.QUERY_WATCH_PROGRESS, types.QUERY_HEADER => {
+        types.QUERY_WATCH_PROGRESS => {
+            const resp = responseHeader(watchProgress.load());
+            const data = encodeToOut(resp, arena) catch |err| {
+                return .{ .data = errors.msg(err) };
+            };
+            return .{ .value = 1, .data = data };
+        },
+        types.QUERY_HEADER => {
             blk: {
                 const t = lmdb.begin(lmdb.readonly) catch break :blk;
                 defer t.abort();
@@ -763,7 +775,7 @@ pub fn queryRange(
         req.count_only,
         req.keys_only,
     );
-    if (req.count_only or types.PCB_RANGE_COUNT_FULL.get() or types.PCB_RANGE_COUNT_FAKE.get()) {
+    if (req.count_only or types.RANGE_COUNT_FULL.get() or types.RANGE_COUNT_FAKE.get()) {
         res.count = @intCast(rr.count);
     }
     if (!req.count_only) {

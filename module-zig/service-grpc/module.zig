@@ -11,6 +11,7 @@ const lease = @import("service_lease.zig");
 const maintenance = @import("service_maintenance.zig");
 const types = @import("types.zig");
 const watch = @import("service_watch.zig");
+const util = @import("util.zig");
 
 pub const BUFFER_POOL_WATCH_EVENT: u64 = 0;
 
@@ -90,11 +91,23 @@ comptime {
 }
 
 export fn _start() void {
-    shard_client.RegisterStreamRecv(&watch.shardRecv) catch unreachable;
+    shard_client.RegisterStreamRecv(&watch.shardRecv) catch |err| {
+        std.debug.panic("RegisterStreamRecv failed: {s}", .{@errorName(err)});
+    };
+    shard_client.RegisterAsyncRecv(&asyncRecv) catch |err| {
+        std.debug.panic("RegisterAsyncRecv failed: {s}", .{@errorName(err)});
+    };
     bufferPoolWatchEvent = buffer_pool.MultiValueSet.init(
         BUFFER_POOL_WATCH_EVENT,
         .{ .size_limit = types.PCB_RESPONSE_SIZE_MAX },
     );
+}
+
+pub fn asyncRecv(name: []const u8, data: []const u8, val: u64, err: ?[]const u8) void {
+    _ = name;
+    util.autoSend(val, data, err) catch |e| {
+        std.debug.panic("autoSend failed: {s}", .{@errorName(e)});
+    };
 }
 
 fn httpHandler(method: []const u8, path: []const u8, body: []const u8) grpc_server.HttpResponse {

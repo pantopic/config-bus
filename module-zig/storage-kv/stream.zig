@@ -1,5 +1,3 @@
-//! Mirrors module/storage-kv/stream.go
-
 const std = @import("std");
 const atomic = @import("atomic");
 const lmdb = @import("lmdb");
@@ -31,45 +29,20 @@ fn decode(comptime T: type, b: []const u8) !T {
     return T.decode(&reader, arena());
 }
 
-var filtered = [_]bool{false} ** 256;
-
-pub fn rangeWatchRecv(watch_id_bytes: []const u8, revisions: []u64) void {
-    _ = arena_state.reset(.retain_capacity);
-    const watch_id = std.mem.readInt(u64, watch_id_bytes[0..8], .big);
-    const last = module.watchRev.load(watch_id);
-    const b = module.watchCache.get(watch_id_bytes);
-    if (b.len == 0) {
-        std.debug.print("watchCache not found: {d}\n", .{watch_id});
-        return;
-    }
-    var i: u32 = 0;
-    while (i < revisions.len and revisions[i] <= last) {
-        i += 1;
-    }
-    if (i < revisions.len) {
-        const req = decode(pb.WatchCreateRequest, b) catch @panic("Watch request malformed");
-        const r = watchScanRevs(&req, revisions[i..]) catch |err| {
-            std.debug.panic("Error reading events: {s}", .{@errorName(err)});
-        };
-        module.watchRev.store(watch_id, r.rev);
-        if (r.sent == 0 and req.progress_notify) {
-            sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_NOTIFY, r.rev);
-        }
-    }
-}
-
-pub fn streamOpen() void {
+pub fn open() void {
     range_watch.groupStart();
 }
 
-pub fn streamClosed() void {
+pub fn close() void {
+    // TODO: Clean up watchCache: range_watch.Each(func(w *range_watch.Watch) { watchCache.Del(w.id) })
     range_watch.groupStop();
 }
 
-pub fn streamRecv(data: []u8) void {
-    _ = arena_state.reset(.retain_capacity);
-    const req = decode(pb.WatchRequest, data) catch
+pub fn recv(data: []u8) void {
+    defer _ = arena_state.reset(.retain_capacity);
+    const req = decode(pb.WatchRequest, data) catch {
         std.debug.panic("Invalid command: {s}", .{data});
+    };
     if (req.request_union) |ut| switch (ut) {
         .create_request => |cr| {
             var create = cr;
@@ -109,123 +82,6 @@ const WatchScanResult = struct {
     sent: usize = 0,
 };
 
-fn watchScan(req: *const pb.WatchCreateRequest, since: u64) !WatchScanResult {
-    defer @memset(&filtered, false);
-    for (req.filters.items) |f| {
-        const v: u8 = @truncate(@as(u32, @bitCast(@intFromEnum(f))));
-        filtered[v] = true;
-    }
-    var res = WatchScanResult{};
-    {
-        const txn = try lmdb.begin(lmdb.readonly);
-        defer txn.abort();
-        res.rev = try dbMeta.getRevision(txn);
-        if (since != 0) {
-            var it = kvStore.scan(txn, scan_arena_state.allocator(), since);
-            defer it.close();
-            while (true) {
-                _ = scan_arena_state.reset(.retain_capacity);
-                const evt = it.next() orelse break;
-                if (!std.mem.eql(u8, evt.key, req.key)) {
-                    if (req.range_end.len == 0 or std.mem.eql(u8, req.key, req.range_end)) {
-                        continue;
-                    }
-                    if (std.mem.order(u8, evt.key, req.key) == .lt) {
-                        continue;
-                    }
-                    if (std.mem.order(u8, evt.key, req.range_end) != .lt) {
-                        continue;
-                    }
-                }
-                if (filtered[evt.etype()]) {
-                    continue;
-                }
-                var current = kvpkg.Kv{};
-                var prev = kvpkg.Kv{};
-                if (evt.rev.isdel()) {
-                    current = .{ .key = evt.key, .rev = evt.rev };
-                    if (req.prev_kv) {
-                        const g = try kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv);
-                        prev = g.prev;
-                    }
-                } else {
-                    const g = kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv) catch {
-                        std.debug.panic("Error getting event kv: {s}", .{evt.key});
-                    };
-                    current = g.item;
-                    prev = g.prev;
-                }
-                var event = pb.Event{
-                    .type = @enumFromInt(evt.etype()),
-                };
-                if (current.rev.upper() > 0) {
-                    event.kv = current.toProto();
-                }
-                if (prev.rev.upper() > 0) {
-                    event.prev_kv = prev.toProto();
-                }
-                sendCodeRevMsg(util.u64Of(req.watch_id), types.WatchMessageType_EVENT, res.rev, event);
-                res.sent += 1;
-            }
-        }
-    }
-    if (res.sent > 0) {
-        sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_SYNC, res.rev);
-    }
-    return res;
-}
-
-fn watchScanRevs(req: *const pb.WatchCreateRequest, revisions: []u64) !WatchScanResult {
-    defer @memset(&filtered, false);
-    for (req.filters.items) |f| {
-        const v: u8 = @truncate(@as(u32, @bitCast(@intFromEnum(f))));
-        filtered[v] = true;
-    }
-    var res = WatchScanResult{ .rev = revisions[revisions.len - 1] };
-    const txn = try lmdb.begin(lmdb.readonly);
-    defer txn.abort();
-    const rev: u64 = try dbMeta.getRevision(txn);
-    var it = kvStore.revScan(txn, scan_arena_state.allocator(), revisions);
-    defer it.close();
-    while (true) {
-        _ = scan_arena_state.reset(.retain_capacity);
-        const evt = it.next() orelse break;
-        if (filtered[evt.etype()]) {
-            continue;
-        }
-        var current = kvpkg.Kv{};
-        var prev = kvpkg.Kv{};
-        if (evt.rev.isdel()) {
-            current = .{ .key = evt.key, .rev = evt.rev };
-            if (req.prev_kv) {
-                const g = try kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv);
-                prev = g.prev;
-            }
-        } else {
-            const g = kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv) catch {
-                std.debug.panic("Error getting event kv: {s}", .{evt.key});
-            };
-            current = g.item;
-            prev = g.prev;
-        }
-        var event = pb.Event{
-            .type = @enumFromInt(evt.etype()),
-        };
-        if (current.rev.upper() > 0) {
-            event.kv = current.toProto();
-        }
-        if (prev.rev.upper() > 0) {
-            event.prev_kv = prev.toProto();
-        }
-        sendCodeRevMsg(util.u64Of(req.watch_id), types.WatchMessageType_EVENT, rev, event);
-        res.sent += 1;
-    }
-    if (res.sent > 0) {
-        sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_SYNC, rev);
-    }
-    return res;
-}
-
 fn watchStart(req: *pb.WatchCreateRequest) void {
     const since = util.u64Of(req.start_revision);
     var min: u64 = 0;
@@ -261,25 +117,230 @@ fn watchStart(req: *pb.WatchCreateRequest) void {
         sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_ERR_COMPACTED, min);
         return;
     }
-    sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_INIT, 0);
-    var r = watchScan(req, since) catch |err| {
+    var res = watchScan(req, since, true) catch |err| {
         std.debug.panic("Error in event scan 1: {s}", .{@errorName(err)});
-    };
-    range_watch.open(&watch_id_bytes, req.key, req.range_end) catch |err| {
-        std.debug.panic("Error starting range watch: {s}", .{@errorName(err)});
-    };
-    r = watchScan(req, r.rev + 1) catch |err| {
-        std.debug.panic("Error in event scan 2: {s}", .{@errorName(err)});
     };
     var writer = std.Io.Writer.fixed(&out);
     req.encode(&writer, arena()) catch |err| {
         std.debug.panic("Error marshaling watch create request: {s}", .{@errorName(err)});
     };
-    module.watchRev.store(util.u64Of(req.watch_id), r.rev);
-    module.watchCache.put(&watch_id_bytes, writer.buffered());
-    range_watch.start(&watch_id_bytes) catch |err| {
-        std.debug.panic("Error starting range watch: {s}", .{@errorName(err)});
+    if (since == 0) {
+        module.watchRev.store(util.u64Of(req.watch_id), res.rev);
+        module.watchCache.put(&watch_id_bytes, writer.buffered());
+        range_watch.openstart(&watch_id_bytes, req.key, req.range_end) catch |err| {
+            std.debug.panic("Error starting range watch: {s}", .{@errorName(err)});
+        };
+    } else {
+        range_watch.open(&watch_id_bytes, req.key, req.range_end) catch |err| {
+            std.debug.panic("Error starting range watch: {s}", .{@errorName(err)});
+        };
+        res = watchScan(req, res.rev + 1, false) catch |err| {
+            std.debug.panic("Error in event scan 2: {s}", .{@errorName(err)});
+        };
+        module.watchRev.store(util.u64Of(req.watch_id), res.rev);
+        module.watchCache.put(&watch_id_bytes, writer.buffered());
+        range_watch.start(&watch_id_bytes) catch |err| {
+            std.debug.panic("Error starting range watch: {s}", .{@errorName(err)});
+        };
+    }
+    if (req.progress_notify) {
+        sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_NOTIFY, res.rev);
+    }
+}
+
+fn watchScan(req: *const pb.WatchCreateRequest, since: u64, start: bool) !WatchScanResult {
+    var res = WatchScanResult{};
+    {
+        const txn = try lmdb.begin(lmdb.readonly);
+        defer txn.abort();
+        res.rev = try dbMeta.getRevision(txn);
+        if (start) {
+            sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_INIT, res.rev);
+        }
+        if (since == 0) {
+            return res;
+        }
+        var it = kvStore.scan(txn, scan_arena_state.allocator(), since);
+        defer it.close();
+        scan: while (true) {
+            _ = scan_arena_state.reset(.retain_capacity);
+            const evt = it.next() orelse break;
+            const evt_type: pb.Event.EventType = @enumFromInt(evt.etype());
+            for (req.filters.items) |f| {
+                if (evt.etype() == @as(u8, @intCast(@intFromEnum(f)))) continue :scan;
+            }
+            switch (std.mem.order(u8, evt.key, req.key)) {
+                .lt => continue :scan,
+                .gt => if (std.mem.order(u8, evt.key, req.range_end) != .lt) continue :scan,
+                .eq => {},
+            }
+            var current = kvpkg.Kv{};
+            var prev = kvpkg.Kv{};
+            if (evt.rev.isdel()) {
+                current = .{ .key = evt.key, .rev = evt.rev };
+                if (req.prev_kv) {
+                    const g = try kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv);
+                    prev = g.prev;
+                }
+            } else {
+                const g = kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), req.prev_kv) catch {
+                    std.debug.panic("Error getting event kv: {s}", .{evt.key});
+                };
+                current = g.item;
+                prev = g.prev;
+            }
+            var event = pb.Event{ .type = evt_type };
+            if (current.rev.upper() > 0) {
+                event.kv = current.toProto();
+            }
+            if (prev.rev.upper() > 0) {
+                event.prev_kv = prev.toProto();
+            }
+            var watchEventBatch = pb.WatchEventBatch{ .event = event };
+            watchEventBatch.revision = res.rev;
+            watchEventBatch.watch_ids = try std.ArrayList(i64).initCapacity(scan_arena_state.allocator(), 1);
+            watchEventBatch.watch_ids.appendAssumeCapacity(req.watch_id);
+            sendCodeMsg(util.u64Of(req.watch_id), types.WatchMessageType_EVENT_BATCH, watchEventBatch);
+            res.sent += 1;
+        }
+    }
+    if (res.sent > 0) {
+        var watchEventSync = pb.WatchEventSync{ .revision = res.rev };
+        watchEventSync.IDs = try std.ArrayList(i64).initCapacity(scan_arena_state.allocator(), 1);
+        watchEventSync.IDs.appendAssumeCapacity(req.watch_id);
+        sendCodeMsg(0, types.WatchMessageType_EVENT_SYNC, watchEventSync);
+    }
+    return res;
+}
+
+pub fn rangeWatchRecv(notices: []range_watch.Notice) void {
+    defer _ = arena_state.reset(.retain_capacity);
+    var reqs = std.AutoHashMap(u64, pb.WatchCreateRequest).init(arena());
+    var mins = std.AutoHashMap(u64, u64).init(arena());
+    var sent = std.AutoHashMap(u64, u32).init(arena());
+    var watch_event_sync = pb.WatchEventSync{};
+    const revs = arena().alloc(u64, notices.len) catch |err| {
+        std.debug.panic("Error allocating revisions: {s}", .{@errorName(err)});
     };
+    const prev_counts = arena().alloc(u32, notices.len) catch |err| {
+        std.debug.panic("Error allocating prev counts: {s}", .{@errorName(err)});
+    };
+    for (notices, 0..) |notice, ni| {
+        revs[ni] = notice.val;
+        prev_counts[ni] = 0;
+        for (notice.ids) |watch_id_bytes| {
+            const watch_id = std.mem.readInt(u64, watch_id_bytes[0..8], .big);
+            watch_event_sync.IDs.append(arena(), util.i64Of(watch_id)) catch |err| {
+                std.debug.panic("Error appending sync watch id: {s}", .{@errorName(err)});
+            };
+            if (!reqs.contains(watch_id)) {
+                const b = module.watchCache.get(watch_id_bytes);
+                if (b.len == 0) {
+                    std.debug.panic("Watch request not found: {d}", .{watch_id});
+                }
+                const req = decode(pb.WatchCreateRequest, b) catch @panic("Watch request malformed");
+                reqs.put(watch_id, req) catch |err| {
+                    std.debug.panic("Error tracking watch request: {s}", .{@errorName(err)});
+                };
+                mins.put(watch_id, module.watchRev.load(watch_id)) catch |err| {
+                    std.debug.panic("Error tracking watch min revision: {s}", .{@errorName(err)});
+                };
+            }
+            if (reqs.get(watch_id).?.prev_kv) prev_counts[ni] += 1;
+        }
+    }
+    var watch_event_batch = pb.WatchEventBatch{};
+    {
+        const txn = lmdb.begin(lmdb.readonly) catch |err| {
+            std.debug.panic("Error reading events: {s}", .{@errorName(err)});
+        };
+        defer txn.abort();
+        var it = kvStore.revScan(txn, scan_arena_state.allocator(), revs);
+        defer it.close();
+        var n: u64 = 0;
+        var idx: usize = 0;
+        while (true) {
+            _ = scan_arena_state.reset(.retain_capacity);
+            const evt = it.next() orelse break;
+            if (n != evt.rev.upper()) {
+                if (n > 0) idx += 1;
+                n = evt.rev.upper();
+            }
+            const evt_type: pb.Event.EventType = @enumFromInt(evt.etype());
+            var current = kvpkg.Kv{};
+            var previous = kvpkg.Kv{};
+            if (evt.rev.isdel()) {
+                current = .{ .key = evt.key, .rev = evt.rev };
+                if (prev_counts[idx] > 0) {
+                    const g = kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), true) catch |err| {
+                        std.debug.panic("Error getting event kv: {s}", .{@errorName(err)});
+                    };
+                    previous = g.prev;
+                }
+            } else {
+                const g = kvStore.getRev(txn, scan_arena_state.allocator(), evt.key, evt.rev.upper(), prev_counts[idx] > 0) catch {
+                    std.debug.panic("Error getting event kv: {s}", .{evt.key});
+                };
+                current = g.item;
+                previous = g.prev;
+            }
+            var event = pb.Event{ .type = evt_type };
+            if (current.rev.upper() > 0) {
+                event.kv = current.toProto();
+            }
+            if (prev_counts[idx] > 0 and previous.rev.upper() > 0) {
+                event.prev_kv = previous.toProto();
+            }
+            watch_event_batch.watch_ids.clearRetainingCapacity();
+            watch_event_batch.watch_ids_prev.clearRetainingCapacity();
+            watch_event_batch.event = event;
+            watch_event_batch.revision = revs[revs.len - 1];
+            const notice = notices[idx];
+            watches: for (notice.ids) |watch_id_bytes| {
+                const watch_id = std.mem.readInt(u64, watch_id_bytes[0..8], .big);
+                const req = reqs.get(watch_id) orelse continue :watches;
+                const min = mins.get(watch_id) orelse 0;
+                if (min > 0 and evt.rev.upper() <= min) continue :watches;
+                for (req.filters.items) |f| {
+                    if (evt.etype() == @as(u8, @intCast(@intFromEnum(f)))) continue :watches;
+                }
+                switch (std.mem.order(u8, evt.key, req.key)) {
+                    .lt => continue :watches,
+                    .gt => if (std.mem.order(u8, evt.key, req.range_end) != .lt) continue :watches,
+                    .eq => {},
+                }
+                if (!req.prev_kv) {
+                    watch_event_batch.watch_ids.append(arena(), util.i64Of(watch_id)) catch |err| {
+                        std.debug.panic("Error appending watch id: {s}", .{@errorName(err)});
+                    };
+                } else {
+                    watch_event_batch.watch_ids_prev.append(arena(), util.i64Of(watch_id)) catch |err| {
+                        std.debug.panic("Error appending watch id: {s}", .{@errorName(err)});
+                    };
+                }
+                const gop = sent.getOrPut(watch_id) catch |err| {
+                    std.debug.panic("Error tracking sent count: {s}", .{@errorName(err)});
+                };
+                if (!gop.found_existing) gop.value_ptr.* = 0;
+                gop.value_ptr.* += 1;
+            }
+            if (watch_event_batch.watch_ids.items.len > 0 or watch_event_batch.watch_ids_prev.items.len > 0) {
+                sendCodeMsg(0, types.WatchMessageType_EVENT_BATCH, watch_event_batch);
+            }
+        }
+    }
+    if (watch_event_sync.IDs.items.len > 0) {
+        watch_event_sync.revision = revs[revs.len - 1];
+        sendCodeMsg(0, types.WatchMessageType_EVENT_SYNC, watch_event_sync);
+    }
+    var reqs_it = reqs.iterator();
+    while (reqs_it.next()) |entry| {
+        const watch_id = entry.key_ptr.*;
+        if ((sent.get(watch_id) orelse 0) == 0 and entry.value_ptr.progress_notify) {
+            sendCodeHeader(watch_id, types.WatchMessageType_NOTIFY, revs[revs.len - 1]);
+        }
+    }
+    module.watchProgress.store(revs[revs.len - 1]);
 }
 
 fn sendCodeHeader(val: u64, code: u8, rev: u64) void {
@@ -293,12 +354,11 @@ fn sendCodeHeader(val: u64, code: u8, rev: u64) void {
     statemachine.streamSend(val, buf[0 .. 1 + writer.buffered().len]);
 }
 
-fn sendCodeRevMsg(val: u64, code: u8, rev: u64, msg: anytype) void {
+fn sendCodeMsg(val: u64, code: u8, msg: anytype) void {
     out[0] = code;
-    std.mem.writeInt(u64, out[1..9], rev, .big);
-    var writer = std.Io.Writer.fixed(out[9..]);
-    msg.encode(&writer, scan_arena_state.allocator()) catch |err| {
-        std.debug.panic("Error serializing event kv: {s}", .{@errorName(err)});
+    var writer = std.Io.Writer.fixed(out[1..]);
+    msg.encode(&writer, arena()) catch |err| {
+        std.debug.panic("Error serializing message: {s}", .{@errorName(err)});
     };
-    statemachine.streamSend(val, out[0 .. 9 + writer.buffered().len]);
+    statemachine.streamSend(val, out[0 .. 1 + writer.buffered().len]);
 }

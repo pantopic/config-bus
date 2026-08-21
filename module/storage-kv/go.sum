@@ -1,13 +1,7 @@
-github.com/aperturerobotics/json-iterator-lite v1.1.0 h1:ZLLqHhHTKYlmCAP873ras2e/yVU/THtwC+ji3tXLMMg=
-github.com/aperturerobotics/json-iterator-lite v1.1.0/go.mod h1:SvGGBv3OVxUyqO0ZxA/nvs6z3cg7NIbZ64TnbV2OISo=
 github.com/aperturerobotics/protobuf-go-lite v0.17.0 h1:paEC3KNvw+JnIyKAQZlMLh2h4nY6P/Hm0oc20eubYe4=
 github.com/aperturerobotics/protobuf-go-lite v0.17.0/go.mod h1:3Ay/E7iaw2KWLirK3+dDdNJZHK0hu8Y1/kKeYeUa+8s=
-github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
-github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/golang/snappy v1.0.0 h1:Oy607GVXHs7RtbggtPBnr2RmDArIsAefDwvrdWvRhGs=
 github.com/golang/snappy v1.0.0/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
-github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
-github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/pantopic/wazero-atomic/sdk-go v0.0.3 h1:bFRWDzHGBIabQw/v5I53kaAZT3REhTtTk98ya5FV6Oo=
 github.com/pantopic/wazero-atomic/sdk-go v0.0.3/go.mod h1:IAoBYxydbgxUXIecfZM/rJOL9lFgZt0QyLj5KgI9lH8=
 github.com/pantopic/wazero-global/sdk-go v0.0.2 h1:AEKINPqUInItWyLyE+hzNFN1ww2f/2Gzp6Qnft+yUWI=
@@ -22,9 +16,3 @@ github.com/pantopic/wazero-small-cache/sdk-go v0.0.1 h1:uF5sR9+9mUBNiENCRkQPApbz
 github.com/pantopic/wazero-small-cache/sdk-go v0.0.1/go.mod h1:8L3C98Ev6RHZ3jXuJBqO3B+cPVtFfQwnZEI6cZmaLqE=
 github.com/pantopic/wazero-state-machine/sdk-go v0.0.1 h1:6E7XCR+Gb6x/fuo6vCUZwokZPctRYdR6z/Sm9jnjy9o=
 github.com/pantopic/wazero-state-machine/sdk-go v0.0.1/go.mod h1:NP9GvVIm9pTT5By8S/H0gx8ZUQAyxmZFlYu7EVxB2Yg=
-github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
-github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
-github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
-gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

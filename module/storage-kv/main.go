@@ -801,7 +801,7 @@ func queryRange(
 	if err != nil {
 		return nil, err
 	}
-	if req.CountOnly || PCB_RANGE_COUNT_FULL() || PCB_RANGE_COUNT_FAKE() {
+	if req.CountOnly || RANGE_COUNT_FULL() || RANGE_COUNT_FAKE() {
 		res.Count = int64(count)
 	}
 	if !req.CountOnly {

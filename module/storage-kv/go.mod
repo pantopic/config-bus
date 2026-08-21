@@ -13,5 +13,3 @@ require (
 	github.com/pantopic/wazero-small-cache/sdk-go v0.0.1
 	github.com/pantopic/wazero-state-machine/sdk-go v0.0.1
 )
-
-require github.com/aperturerobotics/json-iterator-lite v1.1.0 // indirect

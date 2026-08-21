@@ -18,26 +18,21 @@ pub fn range(in: []const u8) anyerror!void {
         try module.server.sendErr(errors.code_invalid_argument, @errorName(err));
         return;
     };
-    const r = util.kvShard().Read(util.withSuffix(in, types.QUERY_KV_RANGE), req.serializable);
-    return util.autoSend(r.val, r.res, r.err);
+    return util.kvShard().AsyncRead(util.withSuffix(in, types.QUERY_KV_RANGE), "kvRange", req.serializable);
 }
 
 pub fn put(in: []const u8) anyerror!void {
-    const r = util.kvShard().Apply(util.withSuffix(in, types.CMD_KV_PUT));
-    return util.autoSend(r.val, r.res, r.err);
+    return util.kvShard().AsyncApply(util.withSuffix(in, types.CMD_KV_PUT), "kvPut");
 }
 
 pub fn deleteRange(in: []const u8) anyerror!void {
-    const r = util.kvShard().Apply(util.withSuffix(in, types.CMD_KV_DELETE_RANGE));
-    return util.autoSend(r.val, r.res, r.err);
+    return util.kvShard().AsyncApply(util.withSuffix(in, types.CMD_KV_DELETE_RANGE), "kvDeleteRange");
 }
 
 pub fn txn(in: []const u8) anyerror!void {
-    const r = util.kvShard().Apply(util.withSuffix(in, types.CMD_KV_TXN));
-    return util.autoSend(r.val, r.res, r.err);
+    return util.kvShard().AsyncApply(util.withSuffix(in, types.CMD_KV_TXN), "kvTxn");
 }
 
 pub fn compact(in: []const u8) anyerror!void {
-    const r = util.kvShard().Apply(util.withSuffix(in, types.CMD_KV_COMPACT));
-    return util.autoSend(r.val, r.res, r.err);
+    return util.kvShard().AsyncApply(util.withSuffix(in, types.CMD_KV_COMPACT), "kvCompact");
 }
