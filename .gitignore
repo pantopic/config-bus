@@ -3,3 +3,6 @@ _data
 _dist
 _logs
 cmd/**/*.wasm
+module-zig/**/zig-out
+module-zig/**/.zig-cache
+zig-pkg

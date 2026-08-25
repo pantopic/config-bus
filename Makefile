@@ -4,11 +4,17 @@ dev:
 cluster:
 	@go build -ldflags="-s -w" -o _dist/cluster ./cmd/cluster && cd cmd/cluster && docker compose up --build
 
+cluster-zig:
+	@go build -ldflags="-s -w" -o _dist/cluster-zig ./cmd/cluster-zig && cd cmd/cluster-zig && docker compose up --build
+
 build:
 	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/standalone
 
 build-cluster:
 	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster
+
+build-cluster-zig:
+	@go build -ldflags="-s -w" -o _dist/pcb ./cmd/cluster-zig
 
 test:
 	@go test -v
@@ -17,10 +23,13 @@ integration:
 	@go test ./...
 
 parity:
-	@PCB_PARITY_CHECK=true go test -v
+	@PARITY_CHECK=true go test -v
 
 test-cluster:
-	@PCB_CLUSTER_CHECK=true go test -v
+	@CLUSTER_CHECK=true go test -v
+
+test-cluster-zig:
+	@CLUSTER_CHECK=true ZIG=true go test -v
 
 bench:
 	@go test -bench=. -run=_ -v
@@ -58,7 +67,9 @@ cloc-native:
 cloc-wasm:
 	@cloc ./module --exclude-dir=_example,_dist,internal,patch --exclude-ext=pb.go
 
-gen:
+gen: gen-host gen-lite gen-zig
+
+gen-host:
 	@protoc internal/*.proto \
 		--go_out=internal \
 		--go_opt=paths=source_relative \
@@ -95,5 +106,27 @@ wasm-prod: wasm-storage-kv wasm-service-grpc
 wasm-storage: wasm-storage-kv wasm-storage-kv-dev
 wasm-service: wasm-service-grpc wasm-service-grpc-dev
 wasm: wasm-dev wasm-prod
+
+wasm-zig-storage-kv:
+	@cd module-zig/storage-kv && zig build --release=small
+	@cp module-zig/storage-kv/zig-out/bin/storage-kv.wasm embed/storage-kv.zig.wasm
+wasm-zig-storage-kv-dev:
+	@cd module-zig/storage-kv && zig build
+	@cp module-zig/storage-kv/zig-out/bin/storage-kv.wasm embed/storage-kv.zig.dev.wasm
+wasm-zig-service-grpc:
+	@cd module-zig/service-grpc && zig build --release=small
+	@cp module-zig/service-grpc/zig-out/bin/service-grpc.wasm embed/service-grpc.zig.wasm
+wasm-zig-service-grpc-dev:
+	@cd module-zig/service-grpc && zig build
+	@cp module-zig/service-grpc/zig-out/bin/service-grpc.wasm embed/service-grpc.zig.dev.wasm
+wasm-zig-dev: wasm-zig-storage-kv-dev wasm-zig-service-grpc-dev
+wasm-zig-prod: wasm-zig-storage-kv wasm-zig-service-grpc
+wasm-zig-storage: wasm-zig-storage-kv wasm-zig-storage-kv-dev
+wasm-zig-service: wasm-zig-service-grpc wasm-zig-service-grpc-dev
+wasm-zig: wasm-zig-dev wasm-zig-prod
+
+gen-zig:
+	@cd module-zig/service-grpc && zig build gen-proto
+	@cd module-zig/storage-kv && zig build gen-proto
 
 .PHONY: test

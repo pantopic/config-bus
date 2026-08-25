@@ -20,22 +20,23 @@ const (
 	ATOMIC_UINT64_SET_WATCH_REV
 )
 const (
-	ATOMIC_UINT64_GLOBAL_WATCH_ID = iota
+	ATOMIC_UINT64_GLOBAL_WATCH_ID_SEQ = iota
+	ATOMIC_UINT64_GLOBAL_WATCH_PROGRESS
 )
 const (
 	SMALL_CACHE_WATCH_CREATE_REQ = iota
 )
 
 var (
-	epoch      uint64
-	keys       [][]byte
-	newIndex   uint64
-	newRev     uint64
-	oldRev     uint64
-	txn        lmdb.Txn
-	watchCache = small_cache.NewLocal(SMALL_CACHE_WATCH_CREATE_REQ)
-	watchID    = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_ID)
-	watchRev   = atomic.NewUint64Set(ATOMIC_UINT64_SET_WATCH_REV)
+	epoch         uint64
+	newIndex      uint64
+	newRev        uint64
+	oldRev        uint64
+	txn           lmdb.Txn
+	watchCache    = small_cache.NewLocal(SMALL_CACHE_WATCH_CREATE_REQ)
+	watchID       = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_ID_SEQ)
+	watchProgress = atomic.NewUint64Set(ATOMIC_UINT64_SET_GLOBAL).Find(ATOMIC_UINT64_GLOBAL_WATCH_PROGRESS)
+	watchRev      = atomic.NewUint64Set(ATOMIC_UINT64_SET_WATCH_REV)
 )
 
 func init() {
@@ -118,6 +119,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		res.Header = responseHeader(newRev)
 		data, err = res.MarshalVT()
@@ -125,7 +127,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = val
-		keys = append(keys, affected...)
 	case CMD_KV_DELETE_RANGE:
 		var req = &internal.DeleteRangeRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -138,6 +139,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		resDel.Header = responseHeader(newRev)
 		data, err = resDel.MarshalVT()
@@ -145,7 +147,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = 1
-		keys = append(keys, affected...)
 	case CMD_KV_COMPACT:
 		var req = &internal.CompactionRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -187,6 +188,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		if err == ErrGRPCDuplicateKey ||
 			err == ErrGRPCKeyTooLong ||
@@ -202,7 +204,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 				panic(`Unable to marshal response: ` + err.Error())
 			}
 			value = 1
-			keys = append(keys, affected...)
 		}
 	case CMD_LEASE_GRANT:
 		var req = &internal.LeaseGrantRequest{}
@@ -232,6 +233,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 		}
 		if len(affected) > 0 {
 			newRev++
+			range_watch.Queue(newRev, affected)
 		}
 		data, err = (&internal.LeaseRevokeResponse{
 			Header: responseHeader(newRev),
@@ -240,7 +242,6 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			panic(`Unable to marshal response: ` + err.Error())
 		}
 		value = val
-		keys = append(keys, affected...)
 	case CMD_LEASE_KEEP_ALIVE:
 		var req = &internal.LeaseKeepAliveRequest{}
 		if err = req.UnmarshalVT(cmd[:len(cmd)-1]); err != nil {
@@ -299,7 +300,7 @@ func update(index uint64, cmd []byte) (value uint64, data []byte) {
 			}
 			if len(affected) > 0 {
 				newRev++
-				keys = append(keys, affected...)
+				range_watch.Queue(newRev, affected)
 			}
 		}
 		// revision compact
@@ -364,10 +365,7 @@ func finish() {
 	if err := txn.Commit(); err != nil {
 		panic(`Unable to commit transaction: ` + err.Error())
 	}
-	if newRev > oldRev {
-		range_watch.Emit(oldRev, keys)
-	}
-	keys = keys[:0]
+	range_watch.Flush()
 	txn = 0
 }
 
@@ -455,14 +453,8 @@ func read(query []byte) (value uint64, data []byte) {
 		}
 		value = 1
 	case QUERY_WATCH_PROGRESS:
-		err := lmdb.View(func(txn lmdb.Txn) (err error) {
-			rev, err = dbMeta.getRevision(txn)
-			if err != nil {
-				return
-			}
-			return
-		})
-		resp := responseHeader(rev)
+		var err error
+		resp := responseHeader(watchProgress.Load())
 		data, err = resp.MarshalVT()
 		if err != nil {
 			data = []byte(err.Error())
@@ -809,7 +801,7 @@ func queryRange(
 	if err != nil {
 		return nil, err
 	}
-	if req.CountOnly || PCB_RANGE_COUNT_FULL() || PCB_RANGE_COUNT_FAKE() {
+	if req.CountOnly || RANGE_COUNT_FULL() || RANGE_COUNT_FAKE() {
 		res.Count = int64(count)
 	}
 	if !req.CountOnly {

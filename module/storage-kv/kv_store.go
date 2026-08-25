@@ -30,7 +30,7 @@ func (db kvStoreImpl) put(
 		err = ErrGRPCEmptyKey
 		return
 	}
-	if len(key) > PCB_LIMIT_KEY_LENGTH {
+	if len(key) > LIMIT_KEY_LENGTH {
 		err = ErrGRPCKeyTooLong
 		return
 	}
@@ -75,7 +75,7 @@ func (db kvStoreImpl) put(
 		}
 		return
 	}
-	if krec.rev.upper() == rev && !PCB_TXN_MULTI_WRITE_ENABLED() {
+	if krec.rev.upper() == rev && !TXN_MULTI_WRITE_ENABLED() {
 		err = ErrGRPCDuplicateKey
 		return
 	}
@@ -99,7 +99,7 @@ func (db kvStoreImpl) put(
 	if ignoreLease {
 		next.lease = prev.lease
 	}
-	if PCB_PATCH_ENABLED && !krec.rev.isdel() {
+	if PATCH_ENABLED && !krec.rev.isdel() {
 		buf := prev.Bytes(val, nil)
 		patched = len(buf) < len(v)
 		if patched {
@@ -143,7 +143,7 @@ func (db kvStoreImpl) getRange(
 	var k, b, v []byte
 	var isFullScan = bytes.Equal(key, []byte{0}) && bytes.Equal(end, []byte{0})
 	k = append(k[:0], key...)
-	k, b, err = cur.Get(k, b, lmdb.SetRange)
+	k, b, err = cur.Get(k, b[:0], lmdb.SetRange)
 	for !lmdb.IsNotFound(err) {
 		if err != nil {
 			return
@@ -160,7 +160,7 @@ func (db kvStoreImpl) getRange(
 		rev = krec.rev
 		if !countOnly && limit > 0 && len(items) == int(limit) {
 			more = true
-			if !PCB_RANGE_COUNT_FULL() && !PCB_RANGE_COUNT_FAKE() {
+			if !RANGE_COUNT_FULL() && !RANGE_COUNT_FAKE() {
 				return
 			}
 			countOnly = true
@@ -217,8 +217,8 @@ func (db kvStoreImpl) getRange(
 					count--
 					goto next
 				}
-				items = append(items, item)
-			} else if PCB_RANGE_COUNT_FAKE() {
+				items = append(items, item) // TODO: Replace slice response with iterator yield for RangeStream
+			} else if RANGE_COUNT_FAKE() {
 				break
 			}
 		}
@@ -262,7 +262,7 @@ func (db kvStoreImpl) deleteRange(txn lmdb.Txn, rev, subrev, epoch uint64, key, 
 		prev, err = prev.FromBytes(k, v)
 		if !prev.rev.isdel() {
 			tombstone = newkeyrev(rev, subrev, true)
-			if prev.rev.upper() == rev && !PCB_TXN_MULTI_WRITE_ENABLED() {
+			if prev.rev.upper() == rev && !TXN_MULTI_WRITE_ENABLED() {
 				err = ErrGRPCDuplicateKey
 				return
 			}
@@ -428,7 +428,9 @@ func (db kvStoreImpl) compact(txn lmdb.Txn, max uint64) (last uint64, err error)
 			clear(keys)
 		}
 	}
-	println(`compacted`, scanned, keycount)
+	if keycount > 0 {
+		println(`compacted`, scanned, keycount)
+	}
 	return
 }
 
@@ -537,11 +539,43 @@ func (db kvStoreImpl) scan(txn lmdb.Txn, revision uint64) iter.Seq[kvEvent] {
 				panic(err)
 			}
 			if !yield(evt) {
-				break
+				return
 			}
 			k, v, err = cur.Get(k[:0], v[:0], lmdb.NextDup)
 			if lmdb.IsNotFound(err) {
 				k, v, err = cur.Get(k[:0], v[:0], lmdb.Next)
+			}
+		}
+	}
+}
+
+func (db kvStoreImpl) revScan(txn lmdb.Txn, revisions []uint64) iter.Seq[kvEvent] {
+	cur, err := txn.OpenCursor(db.evt.i)
+	if err != nil {
+		return nil
+	}
+	var evt kvEvent
+	var k, v []byte
+	return func(yield func(kvEvent) bool) {
+		defer cur.Close()
+		for _, rev := range revisions {
+			k = binary.BigEndian.AppendUint64(k[:0], rev<<12)
+			k, v, err = cur.Get(k, v[:0], lmdb.SetRange)
+			if lmdb.IsNotFound(err) {
+				panic(err)
+			}
+			if err != nil {
+				panic(err)
+			}
+			for !lmdb.IsNotFound(err) {
+				evt, err = db.evtFromBytes(k, v)
+				if err != nil {
+					panic(err)
+				}
+				if !yield(evt) {
+					return
+				}
+				k, v, err = cur.Get(k[:0], v[:0], lmdb.NextDup)
 			}
 		}
 	}

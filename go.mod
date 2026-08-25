@@ -22,7 +22,7 @@ require (
 	github.com/pantopic/wazero-small-cache/host v0.0.1
 	github.com/pantopic/wazero-state-machine/host v0.0.1
 	github.com/soheilhy/cmux v0.1.5
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tetratelabs/wazero v1.11.0
 	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.82.1
@@ -33,6 +33,7 @@ require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/VictoriaMetrics/metrics v1.18.1 // indirect
+	github.com/aperturerobotics/protobuf-go-lite v0.17.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect

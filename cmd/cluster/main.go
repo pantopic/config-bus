@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -37,17 +39,21 @@ import (
 	"github.com/pantopic/turbokube/embed"
 )
 
-const (
-	PCB_STATE_MACHINE_WASM = true
-)
-
 type extension interface {
 	Register(context.Context, wazero.Runtime) error
 	InitContext(context.Context, api.Module) (context.Context, error)
 	ContextCopy(dst, src context.Context) context.Context
 }
 
+var (
+	wasmKv  = turbokube.StorageKvDevWasm
+	wasmSvc = turbokube.ServiceGrpcDevWasm
+)
+
 func main() {
+	go func() {
+		slog.Info("pprof server", "err", http.ListenAndServe(":6060", nil))
+	}()
 	zongzi.SetLogLevel(zongzi.LogLevelInfo)
 	var cfg = getConfig()
 	var ctx = context.Background()
@@ -66,66 +72,63 @@ func main() {
 		panic(err)
 	}
 	hostModGlobal := wazero_global.New()
-	if !PCB_STATE_MACHINE_WASM {
-		// TODO: remove partial wasm migration
-		agent.StateMachineRegister(turbokube.StorageKvName, pcb.NewStateMachineFactory(log, cfg.Dir+"/data"))
-	} else {
-		runtimeStorageKv := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-		wasi_snapshot_preview1.MustInstantiate(ctx, runtimeStorageKv)
-		hostModLMDB := wazero_lmdb.New()
-		storageExtensions := []extension{
-			hostModLMDB,
-			hostModGlobal,
-			wazero_atomic.New(),
-			wazero_range_watch.New(),
-			wazero_small_cache.New(),
-			wazero_state_machine.New(),
-		}
-		var ctxCopy []func(dst, src context.Context) context.Context
-		for _, m := range storageExtensions {
-			if err = m.Register(ctx, runtimeStorageKv); err != nil {
-				panic(err)
-			}
-			ctxCopy = append(ctxCopy, m.ContextCopy)
-		}
-		poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, turbokube.StorageKvWasm,
-			wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
-			wazeropool.WithLimit(runtime.NumCPU()),
-			wazeropool.WithName(turbokube.StorageKvName),
-			wazeropool.WithVersion(turbokube.Version))
-		if err != nil {
+	runtimeStorageKv := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	wasi_snapshot_preview1.MustInstantiate(ctx, runtimeStorageKv)
+	hostModLMDB := wazero_lmdb.New()
+	storageExtensions := []extension{
+		hostModLMDB,
+		hostModGlobal,
+		wazero_atomic.New(),
+		wazero_range_watch.New(),
+		wazero_small_cache.New(),
+		wazero_state_machine.New(),
+	}
+	var ctxCopy []func(dst, src context.Context) context.Context
+	for _, m := range storageExtensions {
+		if err = m.Register(ctx, runtimeStorageKv); err != nil {
 			panic(err)
 		}
-		ctx = wazeropool.ContextSet(ctx, poolStorageKv)
-		poolStorageKv.Run(func(mod api.Module) {
-			for _, m := range storageExtensions {
-				if ctx, err = m.InitContext(ctx, mod); err != nil {
-					panic(err)
-				}
-			}
-		})
-		logger := zongzi.GetLogger(`statemachine`)
-		ctxInit := func(ctx context.Context, shardID, replicaID uint64) context.Context {
-			dir := fmt.Sprintf("%s/data/%d/%d", cfg.Dir, shardID, replicaID)
-			return wazero_lmdb.EnvRegisterDir(ctx, dir)
-		}
-		poolProvider := func(shardID uint64) wazeropool.Instance {
-			return poolStorageKv
-		}
-		fsmFactory := wazero_state_machine.FactoryPersistent(ctx, ctxInit, ctxCopy, logger, poolProvider, hostModLMDB)
-		agent.StateMachineRegister(turbokube.StorageKvName, fsmFactory)
-		go func() {
-			for {
-				time.Sleep(5 * time.Second)
-				if stats := poolStorageKv.Stats(); stats.Active > 0 {
-					log.Info("poolStorageKv.Stats", "total", stats.Total,
-						"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
-						"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
-					)
-				}
-			}
-		}()
+		ctxCopy = append(ctxCopy, m.ContextCopy)
 	}
+	poolStorageKv, err := wazeropool.New(ctx, runtimeStorageKv, wasmKv,
+		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
+		wazeropool.WithLimit(runtime.NumCPU()),
+		// wazeropool.WithBurst(runtime.NumCPU()),
+		wazeropool.WithMemoryLimit(32<<20),
+		wazeropool.WithName(turbokube.StorageKvName),
+		wazeropool.WithVersion(turbokube.Version))
+	if err != nil {
+		panic(err)
+	}
+	ctx = wazeropool.ContextSet(ctx, poolStorageKv)
+	poolStorageKv.Run(func(mod api.Module) {
+		for _, m := range storageExtensions {
+			if ctx, err = m.InitContext(ctx, mod); err != nil {
+				panic(err)
+			}
+		}
+	})
+	logger := zongzi.GetLogger(`statemachine`)
+	ctxInit := func(ctx context.Context, shardID, replicaID uint64) context.Context {
+		dir := fmt.Sprintf("%s/data/%d/%d", cfg.Dir, shardID, replicaID)
+		return wazero_lmdb.EnvRegisterDir(ctx, dir)
+	}
+	poolProvider := func(shardID uint64) wazeropool.Instance {
+		return poolStorageKv
+	}
+	fsmFactory := wazero_state_machine.FactoryPersistent(ctx, ctxInit, ctxCopy, logger, poolProvider, hostModLMDB)
+	agent.StateMachineRegister(turbokube.StorageKvName, fsmFactory)
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			stats := poolStorageKv.Stats()
+			log.Info("poolStorageKv", "total", stats.Total,
+				"memAvg", (stats.MemSize/max(stats.Total, 1))>>20, "memMax", stats.MemMax>>20, "memMin", stats.MemMin>>20,
+				"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+				"recycled", stats.Recycled, "limit", stats.Limit,
+			)
+		}
+	}()
 	if err = agent.Start(ctx); err != nil {
 		panic(err)
 	}
@@ -174,14 +177,14 @@ func main() {
 		wazero_buffer_pool.New(),
 		wazero_shard_client.New(agent),
 	}
-	var serviceContextCopiers []func(dst, src context.Context) context.Context
+	var svcCtxCopy []func(dst, src context.Context) context.Context
 	for _, m := range serviceExtensions {
 		if err = m.Register(ctx, runtimeServiceGrpc); err != nil {
 			panic(err)
 		}
-		serviceContextCopiers = append(serviceContextCopiers, m.ContextCopy)
+		svcCtxCopy = append(svcCtxCopy, m.ContextCopy)
 	}
-	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, turbokube.ServiceGrpcWasm,
+	poolServiceGrpc, err := wazeropool.New(ctx, runtimeServiceGrpc, wasmSvc,
 		wazeropool.WithModuleConfig(wazero.NewModuleConfig().WithStdout(os.Stdout)),
 		wazeropool.WithLimit(runtime.NumCPU()),
 		wazeropool.WithName(turbokube.ServiceGrpcName),
@@ -197,21 +200,21 @@ func main() {
 			}
 		}
 	})
-	serviceContextCopiers = append(serviceContextCopiers, wazero_cluster.NewResolver(`default`, `turbokube`))
+	svcCtxCopy = append(svcCtxCopy, wazero_cluster.NewResolver(`default`, `turbokube`))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.PortApi))
 	if err != nil {
 		panic(err)
 	}
-	hostModGrpcServer.ServerStart(ctx, lis, cfg.TlsCrt, cfg.TlsKey, poolServiceGrpc, serviceContextCopiers...)
+	hostModGrpcServer.ServerStart(ctx, lis, cfg.TlsCrt, cfg.TlsKey, poolServiceGrpc, svcCtxCopy...)
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			if stats := poolServiceGrpc.Stats(); stats.Active > 0 {
-				log.Info("poolServiceGrpc.Stats", "total", stats.Total,
-					"avgMemSize", stats.MemSize/max(stats.Total, 1), "memMax", stats.MemMax, "memMin", stats.MemMin,
-					"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
-				)
-			}
+			stats := poolServiceGrpc.Stats()
+			log.Info("poolServiceGrpc", "total", stats.Total,
+				"memAvg", (stats.MemSize/max(stats.Total, 1))>>20, "memMax", stats.MemMax>>20, "memMin", stats.MemMin>>20,
+				"active", stats.Active/max(stats.Total, 1), "actMax", stats.ActMax, "actMin", stats.ActMin,
+				"recycled", stats.Recycled, "limit", stats.Limit,
+			)
 		}
 	}()
 

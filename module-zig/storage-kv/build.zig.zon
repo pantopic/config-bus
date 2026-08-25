@@ -1,0 +1,30 @@
+.{
+    .name = .storage_kv,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0x9d4ac85a78de4647,
+    .dependencies = .{
+        .lmdb_sdk_zig = .{
+            .path = "../../../wazero-lmdb/sdk-zig",
+        },
+        .atomic_sdk_zig = .{
+            .path = "../../../wazero-atomic/sdk-zig",
+        },
+        .global_sdk_zig = .{
+            .path = "../../../wazero-global/sdk-zig",
+        },
+        .range_watch_sdk_zig = .{
+            .path = "../../../wazero-range-watch/sdk-zig",
+        },
+        .protobuf = .{
+            .url = "git+https://github.com/Arwalk/zig-protobuf?ref=v5.0.0#1f6cb06156b3ff4f52f98bc14f829c0b8393a6fc",
+            .hash = "protobuf-5.0.0-0e82avKUKAAVwTWJzTIEZ14Fu0zC11_lElR8tE6H__y1",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "module.zig",
+        "pb",
+    },
+}

@@ -1,0 +1,73 @@
+version: '3.8'
+
+x-variables:
+  common: &common
+    build:
+      context: ../..
+      dockerfile: cmd/cluster-zig/Dockerfile
+      target: cluster-zig
+    networks:
+      - pcb
+    volumes:
+      - type: tmpfs
+        target: /var/lib/pantopic/turbokube
+        tmpfs:
+          mode: 01777
+
+services:
+  pcb-0:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-0
+      PCB_HOST_TAGS: pantopic:turbokube=member
+    ports:
+      - 19100:19000
+      - 6160:6060
+
+  pcb-1:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-1
+      PCB_HOST_TAGS: pantopic:turbokube=member
+    ports:
+      - 19101:19000
+      - 6161:6060
+
+  pcb-2:
+    <<: *common
+    environment:
+      PCB_HOST_NAME: pcb-2
+      PCB_HOST_TAGS: pantopic:turbokube=member
+    ports:
+      - 19102:19000
+      - 6162:6060
+
+  # pcb-3:
+  #   <<: *common
+  #   environment:
+  #     PCB_HOST_NAME: pcb-3
+  #     PCB_HOST_TAGS: pantopic/turbokube=nonvoting
+  #   ports:
+  #     - 19103:19000
+  #     - 6163:6060
+
+  # pcb-4:
+  #   <<: *common
+  #   environment:
+  #     PCB_HOST_NAME: pcb-4
+  #     PCB_HOST_TAGS: pantopic/turbokube=nonvoting
+  #   ports:
+  #     - 19104:19000
+  #     - 6164:6060
+
+  # pcb-5:
+  #   <<: *common
+  #   environment:
+  #     PCB_HOST_NAME: pcb-5
+  #     PCB_HOST_TAGS: pantopic/turbokube=nonvoting
+  #   ports:
+  #     - 19105:19000
+  #     - 6165:6060
+
+networks:
+  pcb: {}
