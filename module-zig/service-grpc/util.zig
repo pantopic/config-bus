@@ -11,16 +11,12 @@ pub const shard_name_kv = "kv";
 
 var suffix_buf: [(2 << 20) + 1]u8 = undefined;
 
-/// Copies `in` into a scratch buffer with a trailing command/query byte
-/// (equivalent of Go's `append(in, CMD_X)`). Valid until the next call.
 pub fn withSuffix(in: []const u8, c: u8) []const u8 {
     @memcpy(suffix_buf[0..in.len], in);
     suffix_buf[in.len] = c;
     return suffix_buf[0 .. in.len + 1];
 }
 
-/// Mirrors autoSend(grpcError(...)): panics on host errors, translates
-/// non-success results into gRPC status errors by message lookup.
 pub fn autoSend(val: u64, res: []const u8, err: ?[]const u8) anyerror!void {
     if (err) |e| {
         std.debug.panic("{s}", .{e});

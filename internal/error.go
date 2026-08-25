@@ -24,6 +24,7 @@ import (
 // Added
 var (
 	ErrGRPCKeyTooLong = status.New(codes.InvalidArgument, "etcdserver: key too long").Err()
+	ErrGRPCValTooLong = status.New(codes.InvalidArgument, "etcdserver: value too long").Err()
 )
 
 // mvcc

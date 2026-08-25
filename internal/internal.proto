@@ -4,6 +4,8 @@ package etcdserverpb;
 
 option go_package = "github.com/pantopic/turbokube/internal";
 
+import "api.proto";
+
 message TickRequest {
   uint64 term = 1;
 }
@@ -15,4 +17,24 @@ message TermRequest {
   uint64 term = 1;
 }
 message TermResponse {
+}
+
+message LeaseKeepAliveBatchRequest {
+  repeated int64 IDs = 1;
+}
+message LeaseKeepAliveBatchResponse {
+  ResponseHeader header = 1;
+  repeated int64 TTLs = 2;
+}
+
+message WatchEventBatch {
+  Event event = 1;
+  uint64 revision = 2;
+  repeated int64 watch_ids = 3;
+  repeated int64 watch_ids_prev = 4;
+}
+
+message WatchEventSync {
+  repeated int64 IDs = 1;
+  uint64 revision = 2;
 }

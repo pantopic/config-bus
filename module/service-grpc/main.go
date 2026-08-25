@@ -16,6 +16,7 @@ var (
 
 func init() {
 	shard_client.RegisterStreamRecv(shardRecv)
+	shard_client.RegisterAsyncRecv(asyncRecv)
 	bufferPoolWatchEvent = buffer_pool.NewMultiValueSet(BUFFER_POOL_WATCH_EVENT, buffer_pool.WithSizeLimit(PCB_RESPONSE_SIZE_MAX))
 	grpc_server.Init(
 		grpc_server.WithBufferCap(256, 1.5*1024*1024),
@@ -53,6 +54,10 @@ func init() {
 }
 
 func main() {
+}
+
+func asyncRecv(name, data []byte, val uint64, err error) {
+	autoSend(grpcError(val, data, err))
 }
 
 func httpHandler(method, path, body []byte) (code int, res []byte) {

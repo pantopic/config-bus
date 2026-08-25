@@ -17,21 +17,26 @@ func kvRange(in []byte) (err error) {
 		grpc_server.SendErr(codes.InvalidArgument, []byte(err.Error()))
 		return
 	}
-	return autoSend(grpcError(kvShard().Read(append(in, QUERY_KV_RANGE), rangeRequest.Serializable)))
+	kvShard().AsyncRead(append(in, QUERY_KV_RANGE), []byte("kvRange"), rangeRequest.Serializable)
+	return
 }
 
 func kvPut(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_KV_PUT))))
+	kvShard().AsyncApply(append(in, CMD_KV_PUT), []byte("kvPut"))
+	return
 }
 
 func kvDeleteRange(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_KV_DELETE_RANGE))))
+	kvShard().AsyncApply(append(in, CMD_KV_DELETE_RANGE), []byte("kvDeleteRange"))
+	return
 }
 
 func kvTxn(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_KV_TXN))))
+	kvShard().AsyncApply(append(in, CMD_KV_TXN), []byte("kvTxn"))
+	return
 }
 
 func kvCompact(in []byte) (err error) {
-	return autoSend(grpcError(kvShard().Apply(append(in, CMD_KV_COMPACT))))
+	kvShard().AsyncApply(append(in, CMD_KV_COMPACT), []byte("kvCompact"))
+	return
 }

@@ -32,8 +32,6 @@ pub const Db = struct {
         return body;
     }
 
-    /// Writes val followed by its checksum into out, returning the result.
-    /// out must have room for val.len + 4 bytes.
     pub fn addChecksum(db: Db, key: []const u8, val: []const u8, out: []u8) []const u8 {
         _ = db;
         @memcpy(out[0..val.len], val);
