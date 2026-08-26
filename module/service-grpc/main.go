@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/pantopic/wazero-buffer-pool/sdk-go"
-	"github.com/pantopic/wazero-grpc-server/sdk-go"
+	"github.com/pantopic/ext-buffer/sdk-go"
+	"github.com/pantopic/ext-grpc-server/sdk-go"
 	"github.com/pantopic/wazero-shard-client/sdk-go"
 )
 
@@ -11,13 +11,13 @@ const (
 )
 
 var (
-	bufferPoolWatchEvent buffer_pool.MultiValueSet
+	bufferPoolWatchEvent buffer.MultiValueSet
 )
 
 func init() {
 	shard_client.RegisterStreamRecv(shardRecv)
 	shard_client.RegisterAsyncRecv(asyncRecv)
-	bufferPoolWatchEvent = buffer_pool.NewMultiValueSet(BUFFER_POOL_WATCH_EVENT, buffer_pool.WithSizeLimit(PCB_RESPONSE_SIZE_MAX))
+	bufferPoolWatchEvent = buffer.NewMultiValueSet(BUFFER_POOL_WATCH_EVENT, buffer.WithSizeLimit(int(PCB_RESPONSE_SIZE_MAX)))
 	grpc_server.Init(
 		grpc_server.WithBufferCap(256, 1.5*1024*1024),
 		grpc_server.WithHttpHandler(httpHandler),

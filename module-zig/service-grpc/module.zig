@@ -1,7 +1,7 @@
 //! Mirrors module/service-grpc/main.go
 
 const std = @import("std");
-const buffer_pool = @import("buffer_pool");
+const buffer = @import("buffer");
 const grpc_server = @import("grpc_server");
 const shard_client = @import("shard_client");
 
@@ -15,7 +15,7 @@ const util = @import("util.zig");
 
 pub const BUFFER_POOL_WATCH_EVENT: u64 = 0;
 
-pub var bufferPoolWatchEvent: buffer_pool.MultiValueSet = undefined;
+pub var bufferPoolWatchEvent: buffer.MultiValueSet = undefined;
 
 pub const server = grpc_server.Server(.{
     .method_cap = 256,
@@ -97,7 +97,7 @@ export fn _start() void {
     shard_client.RegisterAsyncRecv(&asyncRecv) catch |err| {
         std.debug.panic("RegisterAsyncRecv failed: {s}", .{@errorName(err)});
     };
-    bufferPoolWatchEvent = buffer_pool.MultiValueSet.init(
+    bufferPoolWatchEvent = buffer.MultiValueSet.init(
         BUFFER_POOL_WATCH_EVENT,
         .{ .size_limit = types.PCB_RESPONSE_SIZE_MAX },
     );

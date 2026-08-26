@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const pb = @import("pb/etcdserverpb.pb.zig");
-const buffer_pool = @import("buffer_pool");
+const buffer = @import("buffer");
 
 const errors = @import("error.zig");
 const module = @import("module.zig");
@@ -11,6 +11,7 @@ const util = @import("util.zig");
 
 var arena_state = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
 var out: [1536 * 1024 + 8]u8 = undefined;
+var resp_buffer: [types.PCB_RESPONSE_SIZE_MAX]u8 = undefined;
 
 fn decode(comptime T: type, b: []const u8) !T {
     var reader = std.Io.Reader.fixed(b);
@@ -162,13 +163,13 @@ fn sendEvent(watch_id: i64, rev: u64, data: []const u8) !void {
     }
 }
 
-fn clearEvents(events: buffer_pool.MultiValue, watch_id: i64, rev: u64, sync: bool) !void {
+fn clearEvents(events: buffer.MultiValue, watch_id: i64, rev: u64, sync: bool) !void {
     var resp = pb.WatchResponse{
         .header = .{},
         .watch_id = @bitCast(watch_id),
     };
     var last_rev: u64 = 0;
-    var it = events.iterator();
+    var it = events.iterator(&resp_buffer);
     while (it.next()) |b| {
         const rev_bytes: *const [8]u8 = @ptrCast(b[b.len - 8 ..].ptr);
         last_rev = std.mem.readInt(u64, rev_bytes, .big);

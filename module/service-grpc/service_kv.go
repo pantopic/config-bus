@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/pantopic/wazero-grpc-server/sdk-go"
-	"github.com/pantopic/wazero-grpc-server/sdk-go/codes"
+	"github.com/pantopic/ext-grpc-server/sdk-go"
+	"github.com/pantopic/ext-grpc-server/sdk-go/codes"
 
 	internal "github.com/pantopic/turbokube/module/service-grpc/internal"
 )

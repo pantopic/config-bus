@@ -5,10 +5,10 @@
     .fingerprint = 0xe5075160d50fc915,
     .dependencies = .{
         .grpc_sdk_zig = .{
-            .path = "../../../wazero-grpc-server/sdk-zig",
+            .path = "../../../ext-grpc-server/sdk-zig",
         },
-        .buffer_pool_sdk_zig = .{
-            .path = "../../../wazero-buffer-pool/sdk-zig",
+        .buffer_sdk_zig = .{
+            .path = "../../../ext-buffer/sdk-zig",
         },
         .protobuf = .{
             .url = "git+https://github.com/Arwalk/zig-protobuf?ref=v5.0.0#1f6cb06156b3ff4f52f98bc14f829c0b8393a6fc",

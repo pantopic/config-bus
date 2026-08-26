@@ -10,11 +10,11 @@ require (
 	github.com/kevburnsjr/batchy v0.0.1
 	github.com/logbn/byteinterval v0.0.2
 	github.com/logbn/zongzi v0.0.21
+	github.com/pantopic/ext-buffer/host-wazero v0.0.2
+	github.com/pantopic/ext-grpc-server/host-wazero v0.0.0-20260825184516-817255fbbbd9
 	github.com/pantopic/wazero-atomic/host v0.0.3
-	github.com/pantopic/wazero-buffer-pool/host v0.0.1
 	github.com/pantopic/wazero-cluster/host v0.0.0-20260703160550-ba6a44a5f868
 	github.com/pantopic/wazero-global/host v0.0.2
-	github.com/pantopic/wazero-grpc-server/host v0.0.12
 	github.com/pantopic/wazero-lmdb/host v0.0.9
 	github.com/pantopic/wazero-pool v0.0.6
 	github.com/pantopic/wazero-range-watch/host v0.0.4
@@ -33,7 +33,6 @@ require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/VictoriaMetrics/metrics v1.18.1 // indirect
-	github.com/aperturerobotics/protobuf-go-lite v0.17.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect

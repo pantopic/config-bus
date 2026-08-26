@@ -1,5 +1,3 @@
-//! Mirrors module/storage-kv/types.go
-
 const global = @import("global");
 
 pub const KV_FLAG_PATCH: u8 = 1 << 0;
@@ -56,18 +54,20 @@ pub const RANGE_COUNT_FAKE = global.newBool("RANGE_COUNT_FAKE", false);
 pub const RANGE_COUNT_FILTER_CORRECT = true;
 
 /// PATCH_ENABLED determines whether to enable patches for non-current key revisions
-/// Enabled by default due to transparently.
+/// Enabled by default.
 pub const PATCH_ENABLED = true;
 
 /// COMPRESSION_ENABLED determines whether to snappy compress values
-/// Enabled by default due to transparently.
+/// Enabled by default.
 pub const COMPRESSION_ENABLED = true;
 
 /// TXN_MULTI_WRITE_ENABLED determines whether to allow multiple writes to a single key during a transaction.
 /// Disabled by default for parity.
 pub const TXN_MULTI_WRITE_ENABLED = global.newBool("TXN_MULTI_WRITE_ENABLED", false);
 
-/// WATCH_ID_ZERO_INDEX determines whether to start watch IDs at 0 rather than 1.
+/// WATCH_ID_ZERO_INDEX determines whether to start watch IDs at 0 rather than 1. Starting at 0 is bad API design
+/// because it confuses the zero value with the empty state. Sending an explicit watchID in a create request will
+/// fail if a watch with that ID already exists EXCEPT when the ID is 0 which will generate a new ID.
 /// Disabled by default. !!! VIOLATES PARITY !!!
 pub const WATCH_ID_ZERO_INDEX = false;
 
@@ -83,7 +83,10 @@ pub const RESPONSE_SIZE_MAX: u64 = 10 << 20;
 /// Matches etcd by default.
 pub const WATCH_PROGRESS_NOTIFY_INTERVAL_NS: u64 = 10 * 60 * 1000 * 1000 * 1000;
 
-/// READ_LOCAL forces Linearizable range requests to be served as Serializable (stale) if available.
+/// READ_LOCAL forces Linearizable range requests to be served as Serializable (stale) if:
+/// 1. The client requests a specific revision
+/// 2. That revision is available locally
+/// This works because revisions are immutable.
 /// Enabled by default.
 pub const READ_LOCAL = true;
 

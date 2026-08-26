@@ -437,6 +437,7 @@ fn read(query: []u8) statemachine.Result {
             const data = encodeToOut(resp, arena) catch |err| {
                 return .{ .data = errors.msg(err) };
             };
+            stream.printStdout("progress query {d} {d}\n", .{ 0, rev });
             return .{ .value = 1, .data = data };
         },
         types.QUERY_HEADER => {

@@ -507,6 +507,7 @@ func (sm *stateMachine) Query(ctx context.Context, query []byte) (res *Result) {
 			return
 		}
 		res.Value = 1
+		println(`progress request`, rev)
 	case QUERY_HEADER:
 		err := sm.env.View(func(txn *lmdb.Txn) (err error) {
 			rev, err = sm.dbMeta.getRevision(txn)
@@ -710,6 +711,7 @@ func (sm *stateMachine) watch(ctx context.Context, req *internal.WatchCreateRequ
 					}
 					res.Value = uint64(req.WatchId)
 					result <- res
+					println(`progress sync notify`, rev, req.WatchId)
 				}
 			}
 		}
@@ -815,6 +817,7 @@ func (sm *stateMachine) Stream(ctx context.Context, in <-chan []byte, out chan<-
 			minWatchId, _, _ := watches.Min()
 			res.Value = uint64(minWatchId)
 			out <- res
+			println(`progress watch request notify`, rev, minWatchId)
 		default:
 			sm.log.Error("Invalid request", "req", req)
 			return

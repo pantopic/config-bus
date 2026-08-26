@@ -5,8 +5,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/pantopic/wazero-buffer-pool/sdk-go"
-	"github.com/pantopic/wazero-grpc-server/sdk-go"
+	"github.com/pantopic/ext-buffer/sdk-go"
+	"github.com/pantopic/ext-grpc-server/sdk-go"
 
 	internal "github.com/pantopic/turbokube/module/service-grpc/internal"
 )
@@ -14,6 +14,7 @@ import (
 var evtPool = sync.Pool{New: func() any { return &internal.Event{} }}
 var watchEventBatch = &internal.WatchEventBatch{Event: &internal.Event{}}
 var watchEventSync = &internal.WatchEventSync{}
+var watch_buffer = make([]byte, PCB_RESPONSE_SIZE_MAX)
 
 func shardRecv(_, data []byte, id uint64) {
 	var err error
@@ -139,13 +140,13 @@ func sendEvent(id int64, rev uint64, b []byte) {
 	}
 }
 
-func clearEvents(events buffer_pool.MultiValue, id int64, rev uint64, sync bool) {
+func clearEvents(events buffer.MultiValue, id int64, rev uint64, sync bool) {
 	var lastRev uint64
 	respHeader.Reset()
 	watchResp.Reset()
 	watchResp.Header = respHeader
 	watchResp.WatchId = int64(id)
-	for b := range events.Iter() {
+	for b := range events.Iter(watch_buffer[:0]) {
 		evt := evtPool.Get().(*internal.Event)
 		if err := evt.UnmarshalVT(b[:len(b)-8]); err != nil {
 			panic(`Unable to unmarshal event B: ` + err.Error())

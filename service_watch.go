@@ -307,6 +307,9 @@ type watch struct {
 }
 
 func (w *watch) Close() {
+	if w == nil || w.cancel == nil {
+		return
+	}
 	w.cancel()
 	<-w.done
 }

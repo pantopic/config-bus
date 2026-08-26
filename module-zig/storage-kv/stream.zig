@@ -29,6 +29,14 @@ fn decode(comptime T: type, b: []const u8) !T {
     return T.decode(&reader, arena());
 }
 
+pub fn printStdout(comptime fmt: []const u8, args: anytype) void {
+    var buf: [64]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, fmt, args) catch return;
+    const iovs = [_]std.os.wasi.ciovec_t{.{ .base = msg.ptr, .len = msg.len }};
+    var nwritten: usize = undefined;
+    _ = std.os.wasi.fd_write(1, &iovs, iovs.len, &nwritten);
+}
+
 pub fn open() void {
     range_watch.groupStart();
 }
@@ -72,6 +80,7 @@ pub fn recv(data: []u8) void {
             if (min_watch_id_bytes.len == 8) {
                 min_watch_id = std.mem.readInt(u64, min_watch_id_bytes[0..8], .big);
             }
+            printStdout("progress request {d} {d}\n", .{ min_watch_id, rev });
             sendCodeHeader(min_watch_id, types.WatchMessageType_NOTIFY, rev);
         },
     };
@@ -144,6 +153,7 @@ fn watchStart(req: *pb.WatchCreateRequest) void {
         };
     }
     if (req.progress_notify) {
+        printStdout("progress watchStart notify {d} {d}\n", .{ req.watch_id, res.rev });
         sendCodeHeader(util.u64Of(req.watch_id), types.WatchMessageType_NOTIFY, res.rev);
     }
 }
@@ -238,7 +248,9 @@ pub fn rangeWatchRecv(notices: []range_watch.Notice) void {
                 if (b.len == 0) {
                     std.debug.panic("Watch request not found: {d}", .{watch_id});
                 }
-                const req = decode(pb.WatchCreateRequest, b) catch @panic("Watch request malformed");
+                const req = decode(pb.WatchCreateRequest, b) catch |err| {
+                    std.debug.panic("Watch request malformed: {s}", .{@errorName(err)});
+                };
                 reqs.put(watch_id, req) catch |err| {
                     std.debug.panic("Error tracking watch request: {s}", .{@errorName(err)});
                 };
@@ -337,6 +349,7 @@ pub fn rangeWatchRecv(notices: []range_watch.Notice) void {
     while (reqs_it.next()) |entry| {
         const watch_id = entry.key_ptr.*;
         if ((sent.get(watch_id) orelse 0) == 0 and entry.value_ptr.progress_notify) {
+            printStdout("progress rangeWatchRecv notify {d} {d}\n", .{ watch_id, revs[revs.len - 1] });
             sendCodeHeader(watch_id, types.WatchMessageType_NOTIFY, revs[revs.len - 1]);
         }
     }

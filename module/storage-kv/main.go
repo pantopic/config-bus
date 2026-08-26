@@ -461,6 +461,7 @@ func read(query []byte) (value uint64, data []byte) {
 			return
 		}
 		value = 1
+		println(`progress query`, watchProgress.Load())
 	case QUERY_HEADER:
 		err := lmdb.View(func(txn lmdb.Txn) (err error) {
 			rev, err = dbMeta.getRevision(txn)

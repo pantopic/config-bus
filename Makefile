@@ -105,7 +105,7 @@ wasm-dev: wasm-storage-kv-dev wasm-service-grpc-dev
 wasm-prod: wasm-storage-kv wasm-service-grpc
 wasm-storage: wasm-storage-kv wasm-storage-kv-dev
 wasm-service: wasm-service-grpc wasm-service-grpc-dev
-wasm: wasm-dev wasm-prod
+wasm-go: wasm-dev wasm-prod
 
 wasm-zig-storage-kv:
 	@cd module-zig/storage-kv && zig build --release=small
@@ -124,6 +124,8 @@ wasm-zig-prod: wasm-zig-storage-kv wasm-zig-service-grpc
 wasm-zig-storage: wasm-zig-storage-kv wasm-zig-storage-kv-dev
 wasm-zig-service: wasm-zig-service-grpc wasm-zig-service-grpc-dev
 wasm-zig: wasm-zig-dev wasm-zig-prod
+
+wasm: wasm-go wasm-zig
 
 gen-zig:
 	@cd module-zig/service-grpc && zig build gen-proto

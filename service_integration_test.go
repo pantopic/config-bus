@@ -32,11 +32,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/logbn/zongzi"
+	"github.com/pantopic/ext-buffer/host-wazero"
+	"github.com/pantopic/ext-grpc-server/host-wazero"
 	"github.com/pantopic/wazero-atomic/host"
-	"github.com/pantopic/wazero-buffer-pool/host"
 	"github.com/pantopic/wazero-cluster/host"
 	"github.com/pantopic/wazero-global/host"
-	"github.com/pantopic/wazero-grpc-server/host"
 	"github.com/pantopic/wazero-lmdb/host"
 	"github.com/pantopic/wazero-pool"
 	"github.com/pantopic/wazero-range-watch/host"
@@ -537,7 +537,7 @@ func setupCluster(t *testing.T) {
 	serviceExtensions := []extService{
 		extGlobal,
 		hostModGrpcServer,
-		wazero_buffer_pool.New(),
+		wazero_buffer.New(),
 		wazero_shard_client.New(agents[0]),
 	}
 	var svcCtxCopiers []wazero_grpc_server.ContextCopy
@@ -1263,6 +1263,7 @@ func testCompact(t *testing.T) {
 		})
 		require.Nil(t, err, err)
 		assert.Equal(t, 9, len(resp2.Kvs))
+		time.Sleep(100 * time.Millisecond) // Wait for compaction to complete
 		// Ensure querying compacted revision is not possible
 		resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-00`),
@@ -1270,6 +1271,7 @@ func testCompact(t *testing.T) {
 			Revision: revs[9],
 		})
 		require.NotNil(t, err, err)
+		time.Sleep(100 * time.Millisecond) // Wait for compaction to complete
 		// Ensure ranging at future revision is not possible
 		resp2, err = svcKv.Range(ctx, &internal.RangeRequest{
 			Key:      []byte(`test-key-compact-00`),

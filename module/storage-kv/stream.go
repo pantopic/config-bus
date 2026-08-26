@@ -60,6 +60,7 @@ func streamRecv(data []byte) {
 		if len(minWatchIdBytes) == 8 {
 			minWatchId = binary.BigEndian.Uint64(minWatchIdBytes)
 		}
+		println(`progress request`, minWatchId, rev)
 		sendCodeHeader(minWatchId, WatchMessageType_NOTIFY, rev)
 	}
 }
@@ -129,6 +130,7 @@ func watchStart(req *internal.WatchCreateRequest) (err error) {
 		}
 	}
 	if req.ProgressNotify {
+		println(`progress watchStart notify`, req.WatchId, rev)
 		sendCodeHeader(uint64(req.WatchId), WatchMessageType_NOTIFY, rev)
 	}
 	return
@@ -267,8 +269,8 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 				e.PrevKv = previous.ToProto(eventKvPrevResponse)
 			}
 			watchEventBatch.Event = e
-			watchEventBatch.Revision = revs[len(revs)-1]
-			// watchEventBatch.Revision = uint64(e.Kv.ModRevision)
+			// watchEventBatch.Revision = revs[len(revs)-1]
+			watchEventBatch.Revision = uint64(e.Kv.ModRevision)
 		watches:
 			for _, watchIdBytes := range notice.IDs {
 				watchID := binary.BigEndian.Uint64(watchIdBytes)
@@ -315,6 +317,7 @@ func rangeWatchRecv(notices []range_watch.Notice) {
 	}
 	for id, req := range reqs {
 		if sent[id] == 0 && req.ProgressNotify {
+			println(`progress rangeWatchRecv notify`, id, revs[len(revs)-1])
 			sendCodeHeader(id, WatchMessageType_NOTIFY, revs[len(revs)-1])
 		}
 	}
